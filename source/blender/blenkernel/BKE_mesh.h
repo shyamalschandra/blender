@@ -198,6 +198,11 @@ typedef struct MLoopsNorSpaces {
 } MLoopsNorSpaces;
 void BKE_init_loops_normal_spaces(MLoopsNorSpaces *lnors_spaces, const int numLoops);
 void BKE_free_loops_normal_spaces(MLoopsNorSpaces *lnors_spaces);
+MLoopNorSpace *BKE_lnor_space_create(MLoopsNorSpaces *lnors_spaces);
+void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3], float vec_ref[3], float vec_other[3]);
+void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_space, const int ml_index, const bool add_to_list);
+void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_custom_lnor[3], const float clnor_data[2]);
+void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float custom_lnor[3], float r_clnor_data[2]);
 
 void BKE_mesh_normals_loop_split(
         struct MVert *mverts, const int numVerts, struct MEdge *medges, const int numEdges,

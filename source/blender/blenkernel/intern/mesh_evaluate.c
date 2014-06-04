@@ -329,7 +329,7 @@ void BKE_free_loops_normal_spaces(MLoopsNorSpaces *lnors_spaces)
 	lnors_spaces->mem = NULL;
 }
 
-static MLoopNorSpace *lnor_space_create(MLoopsNorSpaces *lnors_spaces)
+MLoopNorSpace *BKE_lnor_space_create(MLoopsNorSpaces *lnors_spaces)
 {
 	return BLI_memarena_calloc(lnors_spaces->mem, sizeof(MLoopNorSpace));
 }
@@ -338,7 +338,7 @@ static MLoopNorSpace *lnor_space_create(MLoopsNorSpaces *lnors_spaces)
  * Beware, this modifies ref_vec and other_vec in place!
  * Might set *lnor_space to NULL in case no valid space can be generated.
  */
-static void lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3], float vec_ref[3], float vec_other[3])
+void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3], float vec_ref[3], float vec_other[3])
 {
 	float tvec[3], dtp;
 	const float pi2 = (float)M_PI * 2.0f;
@@ -382,20 +382,19 @@ static void lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3], fl
 	}
 }
 
-static void lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_space, MLoop *ml, int ml_index)
+void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_space, const int ml_index, const bool add_to_list)
 {
 	if (lnor_space == NULL) {
 		return;
 	}
 
 	lnors_spaces->lspaces[ml_index] = lnor_space;
-	if (ml && lnor_space) {
+	if (add_to_list && lnor_space) {
 		BLI_linklist_prepend_arena(&lnor_space->loops, SET_INT_IN_POINTER(ml_index), lnors_spaces->mem);
 	}
 }
 
-static void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_custom_lnor[3],
-                                                 const float clnor_data[2])
+void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_custom_lnor[3], const float clnor_data[2])
 {
 	/* NOP custom normal data or invalid lnor space, return. */
 	if (clnor_data[0] == 1.0f || lnor_space->angle == 0.0f) {
@@ -422,12 +421,11 @@ static void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, floa
 	}
 }
 
-static void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float custom_lnor[3],
-                                                 float r_custom_data[2])
+void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float custom_lnor[3], float r_clnor_data[2])
 {
 	if (equals_v3v3(lnor_space->vec_lnor, custom_lnor)) {
-		r_custom_data[0] = 1.0f;
-		r_custom_data[1] = 0.0f;
+		r_clnor_data[0] = 1.0f;
+		r_clnor_data[1] = 0.0f;
 		return;
 	}
 
@@ -435,10 +433,10 @@ static void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, cons
 		const float co = dot_v3v3(lnor_space->vec_ref, custom_lnor);
 		const float pi2 = (float)M_PI * 2.0f;
 
-		r_custom_data[0] = dot_v3v3(lnor_space->vec_lnor, custom_lnor);
+		r_clnor_data[0] = dot_v3v3(lnor_space->vec_lnor, custom_lnor);
 
 		if (co > (1.0f - 1e-6f)) {
-			r_custom_data[1] = 0.0f;
+			r_clnor_data[1] = 0.0f;
 		}
 		else {
 			float phi = saacos(co);
@@ -448,10 +446,10 @@ static void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, cons
 			}
 
 			if (phi > lnor_space->angle) {
-				r_custom_data[1] = -(pi2 - phi) / (pi2 - lnor_space->angle);
+				r_clnor_data[1] = -(pi2 - phi) / (pi2 - lnor_space->angle);
 			}
 			else {
-				r_custom_data[1] = phi / lnor_space->angle;
+				r_clnor_data[1] = phi / lnor_space->angle;
 			}
 		}
 	}
@@ -596,7 +594,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 			const int *e2l_curr = edge_to_loops[ml_curr->e];
 			const int *e2l_prev = edge_to_loops[ml_prev->e];
 
-			if (!IS_EDGE_SHARP(e2l_curr) && (!sharp_verts || sharp_verts[ml_curr->v])) {
+			if (!IS_EDGE_SHARP(e2l_curr) && (!r_lnor_spaces || sharp_verts[ml_curr->v])) {
 				/* A smooth edge, and we are not generating lnor_spaces, or the related vertex is sharp.
 				 * We skip it because it is either:
 				 * - in the middle of a 'smooth fan' already computed (or that will be as soon as we hit
@@ -617,7 +615,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 				/* If needed, generate this (simple!) lnor space. */
 				if (r_lnor_spaces) {
 					float vec_curr[3], vec_prev[3];
-					MLoopNorSpace *lnor_space = lnor_space_create(r_lnor_spaces);
+					MLoopNorSpace *lnor_space = BKE_lnor_space_create(r_lnor_spaces);
 
 					{
 						const unsigned int mv_pivot_index = ml_curr->v;  /* The vertex we are "fanning" around! */
@@ -633,9 +631,9 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 						normalize_v3(vec_prev);
 					}
 
-					lnor_space_define(lnor_space, *lnors, vec_curr, vec_prev);
+					BKE_lnor_space_define(lnor_space, *lnors, vec_curr, vec_prev);
 					/* We know there is only one loop in this space, no need to create a linklist in this case... */
-					lnor_space_add_loop(r_lnor_spaces, lnor_space, NULL, ml_curr_index);
+					BKE_lnor_space_add_loop(r_lnor_spaces, lnor_space, ml_curr_index, false);
 
 					if (clnors_data) {
 						BKE_lnor_space_custom_data_to_normal(lnor_space, *lnors, clnors_data[ml_curr_index]);
@@ -669,7 +667,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 				/* mlfan_vert_index: the loop of our current edge might not be the loop of our current vertex! */
 				int mlfan_curr_index, mlfan_vert_index, mpfan_curr_index;
 
-				MLoopNorSpace *lnor_space = r_lnor_spaces ? lnor_space_create(r_lnor_spaces) : NULL;
+				MLoopNorSpace *lnor_space = r_lnor_spaces ? BKE_lnor_space_create(r_lnor_spaces) : NULL;
 
 				e2lfan_curr = e2l_prev;
 				mlfan_curr = ml_prev;
@@ -722,7 +720,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 
 					if (r_lnor_spaces) {
 						/* Assign current lnor space to current 'vertex' loop. */
-						lnor_space_add_loop(r_lnor_spaces, lnor_space, &mloops[mlfan_vert_index], mlfan_vert_index);
+						BKE_lnor_space_add_loop(r_lnor_spaces, lnor_space, mlfan_vert_index, true);
 					}
 
 					if (IS_EDGE_SHARP(e2lfan_curr) || (me_curr == me_org)) {
@@ -780,7 +778,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 
 					/* If we are generating lnor spaces, we can now define the one for this fan. */
 					if (r_lnor_spaces) {
-						lnor_space_define(lnor_space, lnor, vec_curr, vec_org);
+						BKE_lnor_space_define(lnor_space, lnor, vec_org, vec_curr);
 					}
 
 					if (clnors_data) {
@@ -810,8 +808,11 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	MEM_freeN(edge_to_loops);
 	MEM_freeN(loop_to_poly);
 
-	if (r_lnor_spaces == &_lnors_spaces) {
-		BKE_free_loops_normal_spaces(r_lnor_spaces);
+	if (r_lnor_spaces) {
+		MEM_freeN(sharp_verts);
+		if (r_lnor_spaces == &_lnors_spaces) {
+			BKE_free_loops_normal_spaces(r_lnor_spaces);
+		}
 	}
 
 #ifdef DEBUG_TIME

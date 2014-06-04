@@ -2555,7 +2555,7 @@ void CDDM_calc_loop_normals(DerivedMesh *dm, const float split_angle)
 		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 		                            mpolys, pnors, numPolys, split_angle, &lnors_spaces, clnor_data);
 		for (i = 0; i < numLoops; i++) {
-			if (lnors_spaces.lspaces[i]) {
+			if (lnors_spaces.lspaces[i]->angle != 0.0f) {
 				LinkNode *loops = lnors_spaces.lspaces[i]->loops;
 				printf("Loop %d uses lnor space %p:\n", i, lnors_spaces.lspaces[i]);
 				print_v3("\tfinal lnor:", lnors[i]);
