@@ -90,7 +90,7 @@ static void rna_Mesh_calc_normals_split(Mesh *mesh, float min_angle)
 
 	BKE_mesh_normals_loop_split(mesh->mvert, mesh->totvert, mesh->medge, mesh->totedge,
 	                            mesh->mloop, r_loopnors, mesh->totloop, mesh->mpoly, polynors, mesh->totpoly,
-	                            min_angle);
+	                            min_angle, NULL, NULL);
 
 	if (free_polynors) {
 		MEM_freeN(polynors);

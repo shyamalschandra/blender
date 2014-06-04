@@ -2542,8 +2542,39 @@ void CDDM_calc_loop_normals(DerivedMesh *dm, const float split_angle)
 
 	dm->dirty &= ~DM_DIRTY_NORMALS;
 
-	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
-	                            mpolys, pnors, numPolys, split_angle);
+	{
+		MLoopsNorSpaces lnors_spaces = {NULL};
+		int i;
+		float (*clnor_data)[2] = MEM_mallocN(sizeof(*clnor_data) * (size_t)numLoops, __func__);
+
+		for (i = 0; i < numLoops; i++) {
+			clnor_data[i][0] = 0.7f;
+			clnor_data[i][1] = 0.5f;
+		}
+
+		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
+		                            mpolys, pnors, numPolys, split_angle, &lnors_spaces, clnor_data);
+		for (i = 0; i < numLoops; i++) {
+			if (lnors_spaces.lspaces[i]) {
+				LinkNode *loops = lnors_spaces.lspaces[i]->loops;
+				printf("Loop %d uses lnor space %p:\n", i, lnors_spaces.lspaces[i]);
+				print_v3("\tfinal lnor:", lnors[i]);
+				print_v3("\tauto lnor:", lnors_spaces.lspaces[i]->vec_lnor);
+				print_v3("\tref_vec:", lnors_spaces.lspaces[i]->vec_ref);
+				printf("\tangle: %f\n\tloops: %p\n", lnors_spaces.lspaces[i]->angle, lnors_spaces.lspaces[i]->loops);
+				printf("\t\t(shared with loops");
+				while(loops) {
+					printf(" %d", GET_INT_FROM_POINTER(loops->link));
+					loops = loops->next;
+				}
+				printf(")\n");
+			}
+			else {
+				printf("Loop %d has no lnor space\n", i);
+			}
+		}
+		BKE_free_loops_normal_spaces(&lnors_spaces);
+	}
 }
 
 
