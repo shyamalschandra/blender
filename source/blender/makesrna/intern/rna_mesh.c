@@ -338,6 +338,17 @@ static void rna_MeshLoop_normal_get(PointerRNA *ptr, float *values)
 	}
 }
 
+static void rna_MeshLoop_normal_set(PointerRNA *ptr, const float *values)
+{
+	Mesh *me = rna_mesh(ptr);
+	MLoop *ml = (MLoop *)ptr->data;
+	float (*vec)[3] = CustomData_get(&me->ldata, (int)(ml - me->mloop), CD_NORMAL);
+
+	if (vec) {
+		normalize_v3_v3(vec, values);
+	}
+}
+
 static void rna_MeshLoop_tangent_get(PointerRNA *ptr, float *values)
 {
 	Mesh *me = rna_mesh(ptr);
@@ -1976,8 +1987,8 @@ static void rna_def_mloop(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "normal", PROP_FLOAT, PROP_DIRECTION);
 	RNA_def_property_array(prop, 3);
 	RNA_def_property_range(prop, -1.0f, 1.0f);
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-	RNA_def_property_float_funcs(prop, "rna_MeshLoop_normal_get", NULL, NULL);
+	//RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_float_funcs(prop, "rna_MeshLoop_normal_get", "rna_MeshLoop_normal_set", NULL);
 	RNA_def_property_ui_text(prop, "Normal",
 	                         "Local space unit length split normal vector of this vertex for this polygon "
 	                         "(must be computed beforehand using calc_normals_split or calc_tangents)");

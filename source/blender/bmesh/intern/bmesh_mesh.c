@@ -451,7 +451,7 @@ static void bm_mesh_edges_sharp_tag(BMesh *bm, const float (*vnos)[3], const flo
 	}
 
 	{
-		char hflag = BM_LOOP;
+		char htype = BM_LOOP;
 		if (fnos) {
 			htype |= BM_FACE;
 		}

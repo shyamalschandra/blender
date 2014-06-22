@@ -2543,17 +2543,14 @@ void CDDM_calc_loop_normals(DerivedMesh *dm, const float split_angle)
 	dm->dirty &= ~DM_DIRTY_NORMALS;
 
 	{
-		MLoopsNorSpaces lnors_spaces = {NULL};
-		int i;
-		float (*clnor_data)[2] = MEM_mallocN(sizeof(*clnor_data) * (size_t)numLoops, __func__);
-
-		for (i = 0; i < numLoops; i++) {
-			clnor_data[i][0] = 0.7f;
-			clnor_data[i][1] = 0.5f;
-		}
+		//MLoopsNorSpaces lnors_spaces = {NULL};
+		//int i;
+		const float (*clnor_data)[2] = CustomData_get_layer(ldata, CD_CUSTOMLOOPNORMAL);
 
 		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
-		                            mpolys, pnors, numPolys, split_angle, &lnors_spaces, clnor_data);
+		                            mpolys, (const float (*)[3])pnors, numPolys, split_angle,
+		                            NULL /* &lnors_spaces */, clnor_data, NULL);
+#if 0
 		for (i = 0; i < numLoops; i++) {
 			if (lnors_spaces.lspaces[i]->angle != 0.0f) {
 				LinkNode *loops = lnors_spaces.lspaces[i]->loops;
@@ -2574,6 +2571,7 @@ void CDDM_calc_loop_normals(DerivedMesh *dm, const float split_angle)
 			}
 		}
 		BKE_free_loops_normal_spaces(&lnors_spaces);
+#endif
 	}
 }
 

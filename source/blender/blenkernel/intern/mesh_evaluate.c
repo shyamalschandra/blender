@@ -389,7 +389,7 @@ void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_
 	}
 
 	lnors_spaces->lspaces[ml_index] = lnor_space;
-	if (add_to_list && lnor_space) {
+	if (add_to_list) {
 		BLI_linklist_prepend_arena(&lnor_space->loops, SET_INT_IN_POINTER(ml_index), lnors_spaces->mem);
 	}
 }
@@ -423,9 +423,13 @@ void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_cus
 
 void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float custom_lnor[3], float r_clnor_data[2])
 {
+	print_v3("auto lnor", lnor_space->vec_lnor);
+	print_v3("custom lnor", custom_lnor);
+
 	if (equals_v3v3(lnor_space->vec_lnor, custom_lnor)) {
 		r_clnor_data[0] = 1.0f;
 		r_clnor_data[1] = 0.0f;
+		printf("same nors\n");
 		return;
 	}
 
@@ -453,6 +457,7 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 			}
 		}
 	}
+	print_v2("encoded clnor", r_clnor_data);
 }
 
 /**
@@ -461,8 +466,9 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
  */
 void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
                                  MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
-                                 MPoly *mpolys, float (*polynors)[3], const int numPolys, float split_angle,
-                                 MLoopsNorSpaces *r_lnor_spaces, const float (*clnors_data)[2])
+                                 MPoly *mpolys, const float (*polynors)[3], const int numPolys, float split_angle,
+                                 MLoopsNorSpaces *r_lnor_spaces, const float (*clnors_data)[2],
+                                 int *r_loop_to_poly)
 {
 #define INDEX_UNSET INT_MIN
 #define INDEX_INVALID -1
@@ -481,13 +487,13 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	int (*edge_to_loops)[2] = MEM_callocN(sizeof(int[2]) * (size_t)numEdges, __func__);
 
 	/* Simple mapping from a loop to its polygon index. */
-	int *loop_to_poly = MEM_mallocN(sizeof(int) * (size_t)numLoops, __func__);
+	int *loop_to_poly = r_loop_to_poly ? r_loop_to_poly : MEM_mallocN(sizeof(int) * (size_t)numLoops, __func__);
 
 	MPoly *mp;
 	int mp_index, me_index;
 	const bool check_angle = (split_angle < (float)M_PI);
 
-	bool *sharp_verts = NULL;
+	bool *sharp_verts = NULL;  /* Maybe we could use a BLI_bitmap here? */
 	MLoopsNorSpaces _lnors_spaces = {NULL};
 
 	/* Temp normal stack. */
@@ -602,7 +608,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 				 * - the related vertex is a "full smooth" one, in which case pre-populated normals from vertex
 				 *   are just fine!
 				 */
-				printf("Skipping loop %d / edge %d / vert %d(%d)\n", ml_curr_index, ml_curr->e, ml_curr->v, sharp_verts[ml_curr->v]);
+				/* printf("Skipping loop %d / edge %d / vert %d(%d)\n", ml_curr_index, ml_curr->e, ml_curr->v, sharp_verts[ml_curr->v]); */
 			}
 			else if (IS_EDGE_SHARP(e2l_curr) && IS_EDGE_SHARP(e2l_prev)) {
 				/* Simple case (both edges around that vertex are sharp in current polygon),
@@ -610,7 +616,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 				 */
 				copy_v3_v3(*lnors, polynors[mp_index]);
 
-				printf("BASIC: handling loop %d / edge %d / vert %d\n", ml_curr_index, ml_curr->e, ml_curr->v);
+				/* printf("BASIC: handling loop %d / edge %d / vert %d\n", ml_curr_index, ml_curr->e, ml_curr->v); */
 
 				/* If needed, generate this (simple!) lnor space. */
 				if (r_lnor_spaces) {
@@ -646,7 +652,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 			 * Since we consider edges having neighbor polys with inverted (flipped) normals as sharp, we are sure that
 			 * no fan will be skipped, even only considering the case (sharp curr_edge, smooth prev_edge), and not the
 			 * alternative (smooth curr_edge, sharp prev_edge).
-			 * All this due/thanks to link between normals and loop ordering.
+			 * All this due/thanks to link between normals and loop ordering (i.e. winding).
 			 */
 			else {
 				/* Gah... We have to fan around current vertex, until we find the other non-smooth edge,
@@ -688,7 +694,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 					copy_v3_v3(vec_prev, vec_org);
 				}
 
-				printf("FAN: vert %d, start edge %d\n", mv_pivot_index, ml_curr->e);
+				/* printf("FAN: vert %d, start edge %d\n", mv_pivot_index, ml_curr->e); */
 
 				while (true) {
 					const MEdge *me_curr = &medges[mlfan_curr->e];
@@ -705,7 +711,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 						normalize_v3(vec_curr);
 					}
 
-					printf("\thandling edge %d / loop %d\n", mlfan_curr->e, mlfan_curr_index);
+					/* printf("\thandling edge %d / loop %d\n", mlfan_curr->e, mlfan_curr_index); */
 
 					{
 						/* Code similar to accumulate_vertex_normals_poly. */
@@ -727,7 +733,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 						/* Current edge is sharp and we have finished with this fan of faces around this vert,
 						 * or this vert is smooth, and we have completed a full turn around it.
 						 */
-						printf("FAN: Finished!\n");
+						/* printf("FAN: Finished!\n"); */
 						break;
 					}
 
@@ -806,7 +812,9 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	}
 
 	MEM_freeN(edge_to_loops);
-	MEM_freeN(loop_to_poly);
+	if (!r_loop_to_poly) {
+		MEM_freeN(loop_to_poly);
+	}
 
 	if (r_lnor_spaces) {
 		MEM_freeN(sharp_verts);
@@ -824,6 +832,91 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 #undef IS_EDGE_SHARP
 }
 
+/**
+ * Compute internal representation of given custom normals (as an array of float[2]).
+ * It also make sure the mesh matches those custom normals, by setting sharp edges fag as needed to get a
+ * same custom lnor for all loops sharing a same smooth fan.
+ */
+void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
+                                      MLoop *mloops, const float (*custom_loopnors)[3], const int numLoops,
+                                      MPoly *mpolys, const float (*polynors)[3], const int numPolys,
+                                      float (*r_clnors_data)[2])
+{
+	/* We *may* make that poor BKE_mesh_normals_loop_split() even more complex by making it handling that
+	 * feature too, would probably be more efficient in absolute.
+	 * However, this function *is not* performance-critical, since it is mostly expected to be called
+	 * by io addons when importing custom normals (and perhaps from some editing tools later?).
+	 * So better to keep some simplicity here, and just call BKE_mesh_normals_loop_split() twice!
+	 */
+	MLoopsNorSpaces lnors_spaces = {NULL};
+	float (*lnors)[3] = MEM_callocN(sizeof(*lnors) * (size_t)numLoops, __func__);
+	int *loop_to_poly = MEM_mallocN(sizeof(int) * (size_t)numLoops, __func__);
+	BLI_bitmap *done_loops = BLI_BITMAP_NEW((size_t)numLoops, __func__);
+	int i;
+	const float split_angle = (float)M_PI;  /* In this case we do not want to use angle to define smooth fans! */
+
+	printf("%s\n", __func__);
+
+	/* Compute current lnor spaces. */
+	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
+	                            mpolys, polynors, numPolys, split_angle, &lnors_spaces, NULL, loop_to_poly);
+
+	/* Now, check each current smooth fan (one lnor space per smooth fan!), and if all its matching custom lnors
+	 * are not (enough) equal, add sharp edges as needed.
+	 * This way, next time we run BKE_mesh_normals_loop_split(), we'll get lnor spaces/smooth fans matching
+	 * given custom lnors.
+	 * Note this code *will never* unsharpen edges!
+	 */
+	for (i = 0; i < numLoops; i++) {
+		if (!BLI_BITMAP_TEST_BOOL(done_loops, i)) {
+			/* Notes:
+			 *     * In case of mono-loop smooth fan, loops is NULL, so everything is fine (we have nothing to do).
+			 *     * Loops in this linklist are ordered (in reversed order compared to how they were discovered by
+			 *       BKE_mesh_normals_loop_split(), but this is not a problem). Hence, we just have to compare
+			 *       current value to the previous one!
+			 */
+			LinkNode *loops = lnors_spaces.lspaces[i]->loops;
+			const float *prev_nor = NULL;
+			MLoop *prev_ml = NULL;
+			while (loops) {
+				const int lidx = GET_INT_FROM_POINTER(loops->link);
+				const float *nor = custom_loopnors[lidx];
+				MLoop *ml = &mloops[lidx];
+
+				if (prev_ml) print_v3("prev_nor", prev_nor), print_v3("nor", nor);
+
+				if (prev_ml && dot_v3v3(prev_nor, nor) < 1.0f - 1e-6f) {
+					/* Not equal enough normals, we have to tag the edge between those two loops' faces as sharp.
+					 * We know those two loops do not point to the same edge, since we do not allow reversed winding
+					 * in a same smooth fan.
+					 */
+					const MPoly *mp = &mpolys[loop_to_poly[lidx]];
+					const MLoop *mlp = &mloops[(lidx == mp->loopstart) ? mp->loopstart + mp->totloop - 1 : lidx - 1];
+					medges[(prev_ml->e == mlp->e) ? prev_ml->e : ml->e].flag |= ME_SHARP;
+				}
+
+				prev_nor = nor;
+				prev_ml = ml;
+				loops = loops->next;
+				BLI_BITMAP_ENABLE(done_loops, lidx);
+			}
+		}
+	}
+
+	/* And now, recompute our new auto lnors and lnor spaces! */
+	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
+	                            mpolys, polynors, numPolys, split_angle, &lnors_spaces, NULL, loop_to_poly);
+
+	/* And we just have to convert plain object-space custom normals to our lnor space-encoded ones. */
+	for (i = 0; i < numLoops; i++) {
+		BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], custom_loopnors[i], r_clnors_data[i]);
+	}
+
+	MEM_freeN(lnors);
+	MEM_freeN(loop_to_poly);
+	MEM_freeN(done_loops);
+	BKE_free_loops_normal_spaces(&lnors_spaces);
+}
 
 /** \} */
 
