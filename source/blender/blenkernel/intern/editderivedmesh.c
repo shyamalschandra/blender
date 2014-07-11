@@ -209,7 +209,9 @@ static void emDM_calcLoopNormals(DerivedMesh *dm, const float split_angle)
 				BMLoop *l_iter, *l_first;
 				l_iter = l_first = BM_FACE_FIRST_LOOP(efa);
 				do {
+					//const float dummy[2] = {0.5f, 0.5f};
 					copy_v2_v2(*clnor, CustomData_bmesh_get(ldata, l_iter->head.data, CD_CUSTOMLOOPNORMAL));
+					//copy_v2_v2(*clnor, dummy);
 					++clnor;
 				} while ((l_iter = l_iter->next) != l_first);
 			}
@@ -219,13 +221,14 @@ static void emDM_calcLoopNormals(DerivedMesh *dm, const float split_angle)
 		                          NULL /* &lnors_spaces */, (const float (*)[2])clnor_data);
 #if 0
 		for (i = 0; i < numLoops; i++) {
-			if (lnors_spaces.lspaces[i]->angle != 0.0f) {
+			//if (i != 1) continue;
+			if (lnors_spaces.lspaces[i]->ref_alpha != 0.0f) {
 				LinkNode *loops = lnors_spaces.lspaces[i]->loops;
 				printf("Loop %d uses lnor space %p:\n", i, lnors_spaces.lspaces[i]);
 				print_v3("\tfinal lnor:", loopNos[i]);
 				print_v3("\tauto lnor:", lnors_spaces.lspaces[i]->vec_lnor);
 				print_v3("\tref_vec:", lnors_spaces.lspaces[i]->vec_ref);
-				printf("\tangle: %f\n\tloops: %p\n", lnors_spaces.lspaces[i]->angle, lnors_spaces.lspaces[i]->loops);
+				printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", lnors_spaces.lspaces[i]->ref_alpha, lnors_spaces.lspaces[i]->ref_beta, lnors_spaces.lspaces[i]->loops);
 				printf("\t\t(shared with loops");
 				while(loops) {
 					printf(" %d", GET_INT_FROM_POINTER(loops->link));

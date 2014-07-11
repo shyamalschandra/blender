@@ -2549,16 +2549,16 @@ void CDDM_calc_loop_normals(DerivedMesh *dm, const float split_angle)
 
 		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 		                            mpolys, (const float (*)[3])pnors, numPolys, split_angle,
-		                            NULL /* &lnors_spaces */, clnor_data, NULL);
+		                            NULL /* &lnors_spaces */ , clnor_data, NULL);
 #if 0
 		for (i = 0; i < numLoops; i++) {
-			if (lnors_spaces.lspaces[i]->angle != 0.0f) {
+			if (lnors_spaces.lspaces[i]->ref_alpha != 0.0f) {
 				LinkNode *loops = lnors_spaces.lspaces[i]->loops;
 				printf("Loop %d uses lnor space %p:\n", i, lnors_spaces.lspaces[i]);
-				print_v3("\tfinal lnor:", lnors[i]);
-				print_v3("\tauto lnor:", lnors_spaces.lspaces[i]->vec_lnor);
-				print_v3("\tref_vec:", lnors_spaces.lspaces[i]->vec_ref);
-				printf("\tangle: %f\n\tloops: %p\n", lnors_spaces.lspaces[i]->angle, lnors_spaces.lspaces[i]->loops);
+				print_v3("\tfinal lnor", lnors[i]);
+				print_v3("\tauto lnor", lnors_spaces.lspaces[i]->vec_lnor);
+				print_v3("\tref_vec", lnors_spaces.lspaces[i]->vec_ref);
+				printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", lnors_spaces.lspaces[i]->ref_alpha, lnors_spaces.lspaces[i]->ref_beta, lnors_spaces.lspaces[i]->loops);
 				printf("\t\t(shared with loops");
 				while(loops) {
 					printf(" %d", GET_INT_FROM_POINTER(loops->link));

@@ -338,51 +338,65 @@ MLoopNorSpace *BKE_lnor_space_create(MLoopsNorSpaces *lnors_spaces)
  * Beware, this modifies ref_vec and other_vec in place!
  * Might set *lnor_space to NULL in case no valid space can be generated.
  */
-void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3], float vec_ref[3], float vec_other[3])
+void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
+                           float vec_ref[3], float vec_other[3], BLI_Stack *edge_vectors)
 {
-	float tvec[3], dtp;
 	const float pi2 = (float)M_PI * 2.0f;
+	float tvec[3], dtp;
+	const float dtp_ref = dot_v3v3(vec_ref, lnor);
+	const float dtp_other = dot_v3v3(vec_other, lnor);
 
-	/* Project ref_vec on lnor's ortho plane. */
-	dtp = dot_v3v3(vec_ref, lnor);
-	if (fabsf(dtp) > (1.0f - 1e-8f)) {
-		/* If ref_vec is too much aligned with lnor, we can't build lnor space, tag it as invalid and abort. */
-		lnor_space->angle = 0.0f;
+	if (fabsf(dtp_ref) > (1.0f - 1e-8f) || fabsf(dtp_other) > (1.0f - 1e-8f)) {
+		/* If vec_ref or vec_other are too much aligned with lnor, we can't build lnor space,
+		 * tag it as invalid and abort.
+		 */
+		lnor_space->ref_alpha = lnor_space->ref_beta = 0.0f;
 		return;
 	}
-	mul_v3_v3fl(tvec, lnor, dtp);
-	sub_v3_v3(vec_ref, tvec);
-	normalize_v3_v3(lnor_space->vec_ref, vec_ref);
 
 	copy_v3_v3(lnor_space->vec_lnor, lnor);
+
+	/* Compute ref alpha, average angle of all available edge vectors to lnor. */
+	if (edge_vectors) {
+		float vec[3];
+		float alpha = 0.0f;
+		int nbr = 0;
+		while (!BLI_stack_is_empty(edge_vectors)) {
+			BLI_stack_pop(edge_vectors, vec);
+			alpha += saacosf(dot_v3v3(vec, lnor));
+			++nbr;
+		}
+		lnor_space->ref_alpha = alpha / (float)nbr;
+	}
+	else {
+		lnor_space->ref_alpha = (saacosf(dot_v3v3(vec_ref, lnor)) + saacosf(dot_v3v3(vec_other, lnor))) / 2.0f;
+	}
+
+	/* Project vec_ref on lnor's ortho plane. */
+	mul_v3_v3fl(tvec, lnor, dtp_ref);
+	sub_v3_v3(vec_ref, tvec);
+	normalize_v3_v3(lnor_space->vec_ref, vec_ref);
 
 	cross_v3_v3v3(tvec, lnor, lnor_space->vec_ref);
 	normalize_v3_v3(lnor_space->vec_ortho, tvec);
 
-	lnor_space->angle = pi2;
+	/* Project other_vec on lnor's ortho plane. */
+	mul_v3_v3fl(tvec, lnor, dtp_other);
+	sub_v3_v3(vec_other, tvec);
+	normalize_v3(vec_other);
 
-	if (vec_other) {
-		/* Project other_vec on lnor's ortho plane. */
-		dtp = dot_v3v3(vec_other, lnor);
-		if (fabsf(dtp) > (1.0f - 1e-8f)) {
-			/* If other_vec is too much aligned with lnor, we can't build lnor space, tag it as invalid and abort. */
-			lnor_space->angle = 0.0f;
-			return;
-		}
-		mul_v3_v3fl(tvec, lnor, dtp);
-		sub_v3_v3(vec_other, tvec);
-		normalize_v3(vec_other);
-
-		/* Angle between ref_vec and other_vec. */
-		dtp = dot_v3v3(vec_ref, vec_other);
-		if (dtp < (1.0f - 1e-8f)) {
-			const float angle = saacos(dtp);
-			lnor_space->angle = (dot_v3v3(lnor_space->vec_ortho, vec_other) < 0.0f) ? pi2 - angle : angle;
-		}
+	/* Beta is angle between ref_vec and other_vec, around lnor. */
+	lnor_space->ref_beta = pi2;
+	dtp = dot_v3v3(lnor_space->vec_ref, vec_other);
+	/* This threshold is a bit touchy (usual float precision issue), this value seems OK. */
+	if (dtp < (1.0f - 1e-6f)) {
+		const float beta = saacos(dtp);
+		lnor_space->ref_beta = (dot_v3v3(lnor_space->vec_ortho, vec_other) < 0.0f) ? pi2 - beta : beta;
 	}
 }
 
-void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_space, const int ml_index, const bool add_to_list)
+void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_space, const int ml_index,
+                             const bool add_to_list)
 {
 	if (lnor_space == NULL) {
 		return;
@@ -397,26 +411,27 @@ void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_
 void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_custom_lnor[3], const float clnor_data[2])
 {
 	/* NOP custom normal data or invalid lnor space, return. */
-	if (clnor_data[0] == 1.0f || lnor_space->angle == 0.0f) {
+	if (clnor_data[0] == 0.0f || lnor_space->ref_alpha == 0.0f || lnor_space->ref_beta == 0.0f) {
 		copy_v3_v3(r_custom_lnor, lnor_space->vec_lnor);
 		return;
 	}
 
 	{
-		const float cosfac = clnor_data[0];
-		const float sinfac = sqrtf(1.0f - cosfac * cosfac);
-		const float phifac = clnor_data[1];
+		/* TODO Check whether using sincosf() gives any noticeable benefit! */
 		const float pi2 = (float)M_PI * 2.0f;
+		const float alpha = lnor_space->ref_alpha * clnor_data[0];
+		const float betafac = clnor_data[1];
 
-		mul_v3_v3fl(r_custom_lnor, lnor_space->vec_lnor, cosfac);
+		mul_v3_v3fl(r_custom_lnor, lnor_space->vec_lnor, cosf(alpha));
 
-		if (phifac == 0.0f) {
-			madd_v3_v3fl(r_custom_lnor, lnor_space->vec_ref, sinfac);
+		if (betafac == 0.0f) {
+			madd_v3_v3fl(r_custom_lnor, lnor_space->vec_ref, sinf(alpha));
 		}
 		else {
-			const float phi = phifac * (phifac > 0.0f ? lnor_space->angle : pi2 - lnor_space->angle);
-			madd_v3_v3fl(r_custom_lnor, lnor_space->vec_ref, sinfac * cosf(phi));
-			madd_v3_v3fl(r_custom_lnor, lnor_space->vec_ortho, sinfac * sinf(phi));
+			const float sinalpha = sinf(alpha);
+			const float beta = (betafac > 0.0f ? lnor_space->ref_beta : pi2 - lnor_space->ref_beta) * betafac;
+			madd_v3_v3fl(r_custom_lnor, lnor_space->vec_ref, sinalpha * cosf(beta));
+			madd_v3_v3fl(r_custom_lnor, lnor_space->vec_ortho, sinalpha * sinf(beta));
 		}
 	}
 }
@@ -427,33 +442,39 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 	print_v3("custom lnor", custom_lnor);
 
 	if (equals_v3v3(lnor_space->vec_lnor, custom_lnor)) {
-		r_clnor_data[0] = 1.0f;
-		r_clnor_data[1] = 0.0f;
+		zero_v2(r_clnor_data);
 		printf("same nors\n");
 		return;
 	}
 
 	{
-		const float co = dot_v3v3(lnor_space->vec_ref, custom_lnor);
 		const float pi2 = (float)M_PI * 2.0f;
+		const float cos_alpha = dot_v3v3(lnor_space->vec_lnor, custom_lnor);
+		float vec[3], cos_beta;
 
-		r_clnor_data[0] = dot_v3v3(lnor_space->vec_lnor, custom_lnor);
+		r_clnor_data[0] = saacosf(cos_alpha) / lnor_space->ref_alpha;
 
-		if (co > (1.0f - 1e-6f)) {
+		/* Project custom lnor on (vec_ref, vec_ortho) plane. */
+		mul_v4_v4fl(vec, lnor_space->vec_lnor, -cos_alpha);
+		add_v3_v3(vec, custom_lnor);
+		normalize_v3(vec);
+
+		cos_beta = dot_v3v3(lnor_space->vec_ref, vec);
+
+		if (cos_beta > (1.0f - 1e-6f)) {
 			r_clnor_data[1] = 0.0f;
 		}
 		else {
-			float phi = saacos(co);
-
-			if (dot_v3v3(lnor_space->vec_ortho, custom_lnor) < 0.0f) {
-				phi = pi2 - phi;
+			float beta = saacosf(cos_beta);
+			if (dot_v3v3(lnor_space->vec_ortho, vec) < 0.0f) {
+				beta = pi2 - beta;
 			}
 
-			if (phi > lnor_space->angle) {
-				r_clnor_data[1] = -(pi2 - phi) / (pi2 - lnor_space->angle);
+			if (beta > lnor_space->ref_beta) {
+				r_clnor_data[1] = -(pi2 - beta) / (pi2 - lnor_space->ref_beta);
 			}
 			else {
-				r_clnor_data[1] = phi / lnor_space->angle;
+				r_clnor_data[1] = beta / lnor_space->ref_beta;
 			}
 		}
 	}
@@ -467,7 +488,7 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
                                  MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
                                  MPoly *mpolys, const float (*polynors)[3], const int numPolys, float split_angle,
-                                 MLoopsNorSpaces *r_lnor_spaces, const float (*clnors_data)[2],
+                                 MLoopsNorSpaces *r_lnors_spaces, const float (*clnors_data)[2],
                                  int *r_loop_to_poly)
 {
 #define INDEX_UNSET INT_MIN
@@ -496,8 +517,10 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	bool *sharp_verts = NULL;  /* Maybe we could use a BLI_bitmap here? */
 	MLoopsNorSpaces _lnors_spaces = {NULL};
 
-	/* Temp normal stack. */
+	/* Temp loop normal stack. */
 	BLI_SMALLSTACK_DECLARE(normal, float *);
+	/* Temp edge vectors stack, only used when computing lnor spaces. */
+	BLI_Stack *edge_vectors = NULL;
 
 #ifdef DEBUG_TIME
 	TIMEIT_START(BKE_mesh_normals_loop_split);
@@ -507,16 +530,17 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 		split_angle = cosf(split_angle);
 	}
 
-	if (!r_lnor_spaces && clnors_data) {
+	if (!r_lnors_spaces && clnors_data) {
 		/* We need to compute lnor spaces if some custom lnor data are given to us! */
-		r_lnor_spaces = &_lnors_spaces;
+		r_lnors_spaces = &_lnors_spaces;
 	}
-	if (r_lnor_spaces) {
-		if (!r_lnor_spaces->mem) {
-			BKE_init_loops_normal_spaces(r_lnor_spaces, numLoops);
+	if (r_lnors_spaces) {
+		if (!r_lnors_spaces->mem) {
+			BKE_init_loops_normal_spaces(r_lnors_spaces, numLoops);
 		}
 
 		sharp_verts = MEM_callocN(sizeof(bool) * (size_t)numVerts, __func__);
+		edge_vectors = BLI_stack_new(sizeof(float[3]), __func__);
 	}
 
 	/* This first loop check which edges are actually smooth, and compute edge vectors. */
@@ -570,7 +594,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 		}
 	}
 
-	if (r_lnor_spaces) {
+	if (r_lnors_spaces) {
 		/* Tag vertices that have at least one sharp edge as 'sharp' (used for the lnor spaces computation). */
 		/* XXX This third loop over edges is *very* disappointing, could not find any other way yet. */
 		for (me_index = 0; me_index < numEdges; me_index++) {
@@ -600,7 +624,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 			const int *e2l_curr = edge_to_loops[ml_curr->e];
 			const int *e2l_prev = edge_to_loops[ml_prev->e];
 
-			if (!IS_EDGE_SHARP(e2l_curr) && (!r_lnor_spaces || sharp_verts[ml_curr->v])) {
+			if (!IS_EDGE_SHARP(e2l_curr) && (!r_lnors_spaces || sharp_verts[ml_curr->v])) {
 				/* A smooth edge, and we are not generating lnor_spaces, or the related vertex is sharp.
 				 * We skip it because it is either:
 				 * - in the middle of a 'smooth fan' already computed (or that will be as soon as we hit
@@ -619,9 +643,9 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 				/* printf("BASIC: handling loop %d / edge %d / vert %d\n", ml_curr_index, ml_curr->e, ml_curr->v); */
 
 				/* If needed, generate this (simple!) lnor space. */
-				if (r_lnor_spaces) {
+				if (r_lnors_spaces) {
 					float vec_curr[3], vec_prev[3];
-					MLoopNorSpace *lnor_space = BKE_lnor_space_create(r_lnor_spaces);
+					MLoopNorSpace *lnor_space = BKE_lnor_space_create(r_lnors_spaces);
 
 					{
 						const unsigned int mv_pivot_index = ml_curr->v;  /* The vertex we are "fanning" around! */
@@ -637,9 +661,9 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 						normalize_v3(vec_prev);
 					}
 
-					BKE_lnor_space_define(lnor_space, *lnors, vec_curr, vec_prev);
+					BKE_lnor_space_define(lnor_space, *lnors, vec_curr, vec_prev, NULL);
 					/* We know there is only one loop in this space, no need to create a linklist in this case... */
-					BKE_lnor_space_add_loop(r_lnor_spaces, lnor_space, ml_curr_index, false);
+					BKE_lnor_space_add_loop(r_lnors_spaces, lnor_space, ml_curr_index, false);
 
 					if (clnors_data) {
 						BKE_lnor_space_custom_data_to_normal(lnor_space, *lnors, clnors_data[ml_curr_index]);
@@ -673,7 +697,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 				/* mlfan_vert_index: the loop of our current edge might not be the loop of our current vertex! */
 				int mlfan_curr_index, mlfan_vert_index, mpfan_curr_index;
 
-				MLoopNorSpace *lnor_space = r_lnor_spaces ? BKE_lnor_space_create(r_lnor_spaces) : NULL;
+				MLoopNorSpace *lnor_space = r_lnors_spaces ? BKE_lnor_space_create(r_lnors_spaces) : NULL;
 
 				e2lfan_curr = e2l_prev;
 				mlfan_curr = ml_prev;
@@ -685,6 +709,8 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 				BLI_assert(mlfan_vert_index >= 0);
 				BLI_assert(mpfan_curr_index >= 0);
 
+				BLI_assert((edge_vectors == NULL) || BLI_stack_is_empty(edge_vectors));
+
 				/* Only need to compute previous edge's vector once, then we can just reuse old current one! */
 				{
 					const MVert *mv_2 = (me_org->v1 == mv_pivot_index) ? &mverts[me_org->v2] : &mverts[me_org->v1];
@@ -692,6 +718,10 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 					sub_v3_v3v3(vec_org, mv_2->co, mv_pivot->co);
 					normalize_v3(vec_org);
 					copy_v3_v3(vec_prev, vec_org);
+
+					if (r_lnors_spaces) {
+						BLI_stack_push(edge_vectors, vec_org);
+					}
 				}
 
 				/* printf("FAN: vert %d, start edge %d\n", mv_pivot_index, ml_curr->e); */
@@ -724,9 +754,13 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 					/* We store here a pointer to all loop-normals processed. */
 					BLI_SMALLSTACK_PUSH(normal, &(r_loopnors[mlfan_vert_index][0]));
 
-					if (r_lnor_spaces) {
+					if (r_lnors_spaces) {
 						/* Assign current lnor space to current 'vertex' loop. */
-						BKE_lnor_space_add_loop(r_lnor_spaces, lnor_space, mlfan_vert_index, true);
+						BKE_lnor_space_add_loop(r_lnors_spaces, lnor_space, mlfan_vert_index, true);
+						if (me_curr != me_org) {
+							/* We store here all edges-normalized vectors processed. */
+							BLI_stack_push(edge_vectors, vec_curr);
+						}
 					}
 
 					if (IS_EDGE_SHARP(e2lfan_curr) || (me_curr == me_org)) {
@@ -777,31 +811,44 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 					e2lfan_curr = edge_to_loops[mlfan_curr->e];
 				}
 
-				/* In case we get a zero normal here, just use vertex normal already set! */
-				if (LIKELY(normalize_v3(lnor) != 0.0f)) {
-					/* Copy back the final computed normal into all related loop-normals. */
-					float *nor;
+				{
+					float lnor_len = normalize_v3(lnor);
 
-					/* If we are generating lnor spaces, we can now define the one for this fan. */
-					if (r_lnor_spaces) {
-						BKE_lnor_space_define(lnor_space, lnor, vec_org, vec_curr);
+					/* If we are generating lnor spaces, we can now define the one for this fan,
+					 * and optionally compute final lnor from custom data too!
+					 */
+					if (r_lnors_spaces) {
+						if (UNLIKELY(lnor_len == 0.0f)) {
+							/* Use vertex normal as fallback! */
+							copy_v3_v3(lnor, r_loopnors[mlfan_vert_index]);
+							lnor_len = 1.0f;
+						}
+
+						BKE_lnor_space_define(lnor_space, lnor, vec_org, vec_curr, edge_vectors);
+
+						if (clnors_data) {
+							/* We know all custom data of those loops are the same (else, it's a bug!). */
+							BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, clnors_data[ml_curr_index]);
+						}
 					}
 
-					if (clnors_data) {
-						/* We know all custom data of those loops are the same (else, it's a bug!). */
-						BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, clnors_data[ml_curr_index]);
+					/* In case we get a zero normal here, just use vertex normal already set! */
+					if (LIKELY(lnor_len != 0.0f)) {
+						/* Copy back the final computed normal into all related loop-normals. */
+						float *nor;
+
+						while ((nor = BLI_SMALLSTACK_POP(normal))) {
+							copy_v3_v3(nor, lnor);
+						}
 					}
-					while ((nor = BLI_SMALLSTACK_POP(normal))) {
-						copy_v3_v3(nor, lnor);
+					else {
+						/* We still have to consume the stack! */
+						while (BLI_SMALLSTACK_POP(normal));
 					}
-				}
-				else {
-					/* We still have to clear the stack! */
-					while (BLI_SMALLSTACK_POP(normal));
 				}
 
 				/* Tag related vertex as sharp, to avoid fanning around it again (in case it was a smooth one). */
-				if (r_lnor_spaces) {
+				if (r_lnors_spaces) {
 					sharp_verts[ml_curr->v] = true;
 				}
 			}
@@ -816,10 +863,11 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 		MEM_freeN(loop_to_poly);
 	}
 
-	if (r_lnor_spaces) {
+	if (r_lnors_spaces) {
 		MEM_freeN(sharp_verts);
-		if (r_lnor_spaces == &_lnors_spaces) {
-			BKE_free_loops_normal_spaces(r_lnor_spaces);
+		BLI_stack_free(edge_vectors);
+		if (r_lnors_spaces == &_lnors_spaces) {
+			BKE_free_loops_normal_spaces(r_lnors_spaces);
 		}
 	}
 

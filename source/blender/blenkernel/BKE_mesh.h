@@ -182,14 +182,17 @@ void BKE_mesh_loop_tangents_ex(
 void BKE_mesh_loop_tangents(
         struct Mesh *mesh, const char *uvmap, float (*r_looptangents)[4], struct ReportList *reports);
 
+/* XXX This is ugly! */
 #include "BLI_linklist.h"
 #include "BLI_memarena.h"
+#include "BLI_stack.h"
 
 typedef struct MLoopNorSpace {
 	float vec_lnor[3];   /* Automatically computed loop normal. */
 	float vec_ref[3];    /* Reference vector, orthogonal to vec_lnor. */
 	float vec_ortho[3];  /* Third vector, orthogonal to vec_lnor and vec_ref. */
-	float angle;         /* Reference angle, around vec_lnor, in ]0, 2pi] range (0.0 marks that space as invalid). */
+	float ref_alpha;     /* Reference angle, around vec_ortho, in ]0, pi] range (0.0 marks that space as invalid). */
+	float ref_beta;      /* Reference angle, around vec_lnor, in ]0, 2pi] range (0.0 marks that space as invalid). */
 	LinkNode *loops;     /* All indices (uint_in_ptr) of loops using this lnor space (i.e. smooth fan of loops). */
 } MLoopNorSpace;
 typedef struct MLoopsNorSpaces {
@@ -199,8 +202,10 @@ typedef struct MLoopsNorSpaces {
 void BKE_init_loops_normal_spaces(MLoopsNorSpaces *lnors_spaces, const int numLoops);
 void BKE_free_loops_normal_spaces(MLoopsNorSpaces *lnors_spaces);
 MLoopNorSpace *BKE_lnor_space_create(MLoopsNorSpaces *lnors_spaces);
-void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3], float vec_ref[3], float vec_other[3]);
-void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_space, const int ml_index, const bool add_to_list);
+void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3], float vec_ref[3], float vec_other[3],
+                           struct BLI_Stack *edge_vectors);
+void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_space, const int ml_index,
+                             const bool add_to_list);
 void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_custom_lnor[3], const float clnor_data[2]);
 void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float custom_lnor[3], float r_clnor_data[2]);
 
@@ -208,7 +213,7 @@ void BKE_mesh_normals_loop_split(
         struct MVert *mverts, const int numVerts, struct MEdge *medges, const int numEdges,
         struct MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
         struct MPoly *mpolys, const float (*polynors)[3], const int numPolys, float split_angle,
-        MLoopsNorSpaces *r_lnor_spaces, const float (*clnors_data)[2], int *r_loop_to_poly);
+        MLoopsNorSpaces *r_lnors_spaces, const float (*clnors_data)[2], int *r_loop_to_poly);
 
 void BKE_mesh_normals_loop_custom_set(
         struct MVert *mverts, const int numVerts, struct MEdge *medges, const int numEdges,

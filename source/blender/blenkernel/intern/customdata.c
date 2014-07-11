@@ -1078,19 +1078,7 @@ static void layerInterp_clnor(void **UNUSED(sources), const float *UNUSED(weight
 	 * would also imply we check all new custom normals are coherent (all loops of a same vert/same smooth fan
 	 * *must* have the same custom normal!!!).
 	 */
-	static float default_clnor[2] = {1.0f, 0.0f};
-	copy_v2_v2((float *)dest, default_clnor);
-}
-
-static void layerDefault_clnor(void *data, int count)
-{
-	static float default_clnor[2] = {1.0f, 0.0f};
-	float (*clnor)[2] = (float (*)[2])data;
-	int i;
-
-	for (i = 0; i < count; i++, clnor++) {
-		copy_v2_v2(*clnor, default_clnor);
-	}
+	zero_v2((float *)dest);
 }
 
 static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
@@ -1207,7 +1195,7 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	/* 40: CD_TESSLOOPNORMAL */
 	{sizeof(short[4][3]), "", 0, NULL, NULL, NULL, NULL, layerSwap_flnor, NULL},
 	/* 41: CD_CUSTOMLOOPNORMAL */
-	{sizeof(float[2]), "vec3f", 1, NULL, NULL, NULL, layerInterp_clnor, NULL, layerDefault_clnor},
+	{sizeof(float[2]), "vec3f", 1, NULL, NULL, NULL, layerInterp_clnor, NULL, NULL},
 };
 
 /* note, numbers are from trunk and need updating for bmesh */

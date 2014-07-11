@@ -1987,7 +1987,6 @@ static void rna_def_mloop(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "normal", PROP_FLOAT, PROP_DIRECTION);
 	RNA_def_property_array(prop, 3);
 	RNA_def_property_range(prop, -1.0f, 1.0f);
-	//RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_float_funcs(prop, "rna_MeshLoop_normal_get", "rna_MeshLoop_normal_set", NULL);
 	RNA_def_property_ui_text(prop, "Normal",
 	                         "Local space unit length split normal vector of this vertex for this polygon "

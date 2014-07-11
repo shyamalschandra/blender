@@ -531,6 +531,8 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 
 	/* Temp normal stack. */
 	BLI_SMALLSTACK_DECLARE(normal, float *);
+	/* Temp edge vectors stack, only used when computing lnor spaces. */
+	BLI_Stack *edge_vectors = NULL;
 
 	{
 		char htype = BM_LOOP;
@@ -551,6 +553,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 		if (!r_lnors_spaces->mem) {
 			BKE_init_loops_normal_spaces(r_lnors_spaces, bm->totloop);
 		}
+		edge_vectors = BLI_stack_new(sizeof(float[3]), __func__);
 	}
 
 	/* We now know edges that can be smoothed (they are tagged), and edges that will be hard (they aren't).
@@ -597,7 +600,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 						normalize_v3(vec_prev);
 					}
 
-					BKE_lnor_space_define(lnor_space, r_lnos[l_curr_index], vec_curr, vec_prev);
+					BKE_lnor_space_define(lnor_space, r_lnos[l_curr_index], vec_curr, vec_prev, NULL);
 					/* We know there is only one loop in this space, no need to create a linklist in this case... */
 					BKE_lnor_space_add_loop(r_lnors_spaces, lnor_space, l_curr_index, false);
 
@@ -634,6 +637,8 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 
 				MLoopNorSpace *lnor_space = r_lnors_spaces ? BKE_lnor_space_create(r_lnors_spaces) : NULL;
 
+				BLI_assert((edge_vectors == NULL) || BLI_stack_is_empty(edge_vectors));
+
 				lfan_pivot = l_curr;
 				lfan_pivot_index = BM_elem_index_get(lfan_pivot);
 				e_next = lfan_pivot->e;  /* Current edge here, actually! */
@@ -643,9 +648,13 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 					const BMVert *v_2 = BM_edge_other_vert(e_next, v_pivot);
 					const float *co_2 = vcos ? vcos[BM_elem_index_get(v_2)] : v_2->co;
 
-					sub_v3_v3v3(vec_curr, co_2, co_pivot);
-					normalize_v3(vec_curr);
-					copy_v3_v3(vec_org, vec_curr);
+					sub_v3_v3v3(vec_org, co_2, co_pivot);
+					normalize_v3(vec_org);
+					copy_v3_v3(vec_curr, vec_org);
+
+					if (r_lnors_spaces) {
+						BLI_stack_push(edge_vectors, vec_org);
+					}
 				}
 
 				while (true) {
@@ -688,6 +697,10 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 					if (r_lnors_spaces) {
 						/* Assign current lnor space to current 'vertex' loop. */
 						BKE_lnor_space_add_loop(r_lnors_spaces, lnor_space, lfan_pivot_index, true);
+						if (e_next != e_org) {
+							/* We store here all edges-normalized vectors processed. */
+							BLI_stack_push(edge_vectors, vec_next);
+						}
 					}
 
 					if (!BM_elem_flag_test_bool(e_next, BM_ELEM_TAG) || (e_next == e_org)) {
@@ -702,27 +715,38 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 					lfan_pivot_index = BM_elem_index_get(lfan_pivot);
 				}
 
-				/* In case we get a zero normal here, just use vertex normal already set! */
-				if (LIKELY(normalize_v3(lnor) != 0.0f)) {
-					/* Copy back the final computed normal into all related loop-normals. */
-					float *nor;
+				{
+					float lnor_len = normalize_v3(lnor);
 
 					/* If we are generating lnor spaces, we can now define the one for this fan. */
 					if (r_lnors_spaces) {
-						BKE_lnor_space_define(lnor_space, lnor, vec_org, vec_next);
+						if (UNLIKELY(lnor_len == 0.0f)) {
+							/* Use vertex normal as fallback! */
+							copy_v3_v3(lnor, r_lnos[lfan_pivot_index]);
+							lnor_len = 1.0f;
+						}
+
+						BKE_lnor_space_define(lnor_space, lnor, vec_org, vec_next, edge_vectors);
+
+						if (clnors_data) {
+							/* We know all custom data of those loops are the same (else, it's a bug!). */
+							BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, clnors_data[lfan_pivot_index]);
+						}
 					}
 
-					if (clnors_data) {
-						/* We know all custom data of those loops are the same (else, it's a bug!). */
-						BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, clnors_data[lfan_pivot_index]);
+					/* In case we get a zero normal here, just use vertex normal already set! */
+					if (LIKELY(lnor_len != 0.0f)) {
+						/* Copy back the final computed normal into all related loop-normals. */
+						float *nor;
+
+						while ((nor = BLI_SMALLSTACK_POP(normal))) {
+							copy_v3_v3(nor, lnor);
+						}
 					}
-					while ((nor = BLI_SMALLSTACK_POP(normal))) {
-						copy_v3_v3(nor, lnor);
+					else {
+						/* We still have to consume the stack! */
+						while (BLI_SMALLSTACK_POP(normal));
 					}
-				}
-				else {
-					/* We still have to clear the stack! */
-					while (BLI_SMALLSTACK_POP(normal));
 				}
 
 				/* Tag related vertex as sharp, to avoid fanning around it again (in case it was a smooth one). */
@@ -734,6 +758,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 	}
 
 	if (r_lnors_spaces) {
+		BLI_stack_free(edge_vectors);
 		if (r_lnors_spaces == &_lnors_spaces) {
 			BKE_free_loops_normal_spaces(r_lnors_spaces);
 		}
