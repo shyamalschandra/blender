@@ -254,13 +254,13 @@ void RNA_api_mesh(StructRNA *srna)
 	RNA_def_property_flag(parm, PROP_OUTPUT);
 
 	func = RNA_def_function(srna, "define_normals_split_custom", "rna_Mesh_define_normals_split_custom");
-	RNA_def_function_ui_description(func, "Define custom split normals of this mesh");
+	RNA_def_function_ui_description(func,
+	                                "Define custom split normals of this mesh (use NULL vectors to keep auto ones)");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
 	/* TODO, see how array size of 0 works, this shouldnt be used */
 	parm = RNA_def_float_array(func, "normals", 1, NULL, -1.0f, 1.0f, "", "Normals", 0.0f, 0.0f);
 	RNA_def_property_multi_array(parm, 2, normals_array_dim);
 	RNA_def_property_flag(parm, PROP_DYNAMIC | PROP_REQUIRED);
-
 
 	func = RNA_def_function(srna, "update", "ED_mesh_update");
 	RNA_def_boolean(func, "calc_edges", 0, "Calculate Edges", "Force recalculation of edges");

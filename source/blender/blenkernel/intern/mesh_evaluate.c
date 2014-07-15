@@ -441,7 +441,8 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 	print_v3("auto lnor", lnor_space->vec_lnor);
 	print_v3("custom lnor", custom_lnor);
 
-	if (equals_v3v3(lnor_space->vec_lnor, custom_lnor)) {
+	/* We use null vector as NOP custom normal (can be simpler than giving autocomputed lnor...). */
+	if (is_zero_v3(custom_lnor) || equals_v3v3(lnor_space->vec_lnor, custom_lnor)) {
 		zero_v2(r_clnor_data);
 		printf("same nors\n");
 		return;
