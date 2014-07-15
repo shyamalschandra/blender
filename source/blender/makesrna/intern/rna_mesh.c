@@ -345,7 +345,7 @@ static void rna_MeshLoop_normal_set(PointerRNA *ptr, const float *values)
 	float (*vec)[3] = CustomData_get(&me->ldata, (int)(ml - me->mloop), CD_NORMAL);
 
 	if (vec) {
-		normalize_v3_v3(vec, values);
+		normalize_v3_v3(*vec, values);
 	}
 }
 
