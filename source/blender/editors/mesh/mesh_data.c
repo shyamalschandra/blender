@@ -817,6 +817,42 @@ void MESH_OT_customdata_clear_skin(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
+/* Clear custom loop normals */
+static int mesh_customdata_clear_custom_splitnormals_poll(bContext *C)
+{
+	Object *ob = ED_object_context(C);
+
+	if (ob && ob->type == OB_MESH) {
+		Mesh *me = ob->data;
+		if (me->id.lib == NULL) {
+			CustomData *data = GET_CD_DATA(me, ldata);
+			if (CustomData_has_layer(data, CD_CUSTOMLOOPNORMAL)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+static int mesh_customdata_clear_custom_splitnormals_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	return mesh_customdata_clear_exec__internal(C, BM_LOOP, CD_CUSTOMLOOPNORMAL);
+}
+
+void MESH_OT_customdata_clear_custom_splitnormals(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Clear Custom Split Normals Data";
+	ot->idname = "MESH_OT_customdata_clear_custom_splitnormals";
+	ot->description = "Clear custom split normals layer";
+
+	/* api callbacks */
+	ot->exec = mesh_customdata_clear_custom_splitnormals_exec;
+	ot->poll = mesh_customdata_clear_custom_splitnormals_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
 /************************** Add Geometry Layers *************************/
 
 void ED_mesh_update(Mesh *mesh, bContext *C, int calc_edges, int calc_tessface)

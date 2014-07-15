@@ -370,6 +370,7 @@ class DATA_PT_customdata(MeshButtonsPanel, Panel):
 
         col.operator("mesh.customdata_clear_mask", icon='X')
         col.operator("mesh.customdata_clear_skin", icon='X')
+        col.operator("mesh.customdata_clear_custom_splitnormals", icon='X')
 
         col = layout.column()
 
