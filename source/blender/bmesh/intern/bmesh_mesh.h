@@ -42,7 +42,7 @@ void BM_mesh_normals_update(BMesh *bm);
 void BM_verts_calc_normal_vcos(BMesh *bm, const float (*fnos)[3], const float (*vcos)[3], float (*vnos)[3]);
 void BM_loops_calc_normal_vcos(BMesh *bm, const float (*vcos)[3], const float (*vnos)[3], const float (*pnos)[3],
                                const float split_angle, float (*r_lnos)[3],
-                               struct MLoopsNorSpaces *r_lnors_spaces, const float (*clnors_data)[2]);
+                               struct MLoopsNorSpaces *r_lnors_spaces, const int cd_loop_clnors_offset);
 
 void bmesh_edit_begin(BMesh *bm, const BMOpTypeFlag type_flag);
 void bmesh_edit_end(BMesh *bm, const BMOpTypeFlag type_flag);
