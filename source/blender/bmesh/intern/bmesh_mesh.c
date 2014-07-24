@@ -533,6 +533,8 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 
 	/* Temp normal stack. */
 	BLI_SMALLSTACK_DECLARE(normal, float *);
+	/* Temp clnors stack. */
+	BLI_SMALLSTACK_DECLARE(clnors, float *);
 	/* Temp edge vectors stack, only used when computing lnor spaces. */
 	BLI_Stack *edge_vectors = NULL;
 
@@ -637,6 +639,11 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 				float lnor[3] = {0.0f, 0.0f, 0.0f};
 				float vec_curr[3], vec_next[3], vec_org[3];
 
+				/* We validate clnors data on the fly - cheapest way to do! */
+				float clnors_avg[2] = {0.0f, 0.0f}, (*clnor_ref)[2] = NULL;
+				int clnors_nbr = 0;
+				bool clnors_invalid = false;
+
 				const float *co_pivot = vcos ? vcos[BM_elem_index_get(v_pivot)] : v_pivot->co;
 
 				MLoopNorSpace *lnor_space = r_lnors_spaces ? BKE_lnor_space_create(r_lnors_spaces) : NULL;
@@ -693,6 +700,22 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 						const float *no = fnos ? fnos[BM_elem_index_get(f)] : f->no;
 						/* Accumulate */
 						madd_v3_v3fl(lnor, no, fac);
+
+						if (has_clnors) {
+							/* Accumulate all clnors, if they are not all equal we have to fix that! */
+							float (*clnor)[2] = CustomData_bmesh_get_layer_n(&bm->ldata, lfan_pivot->head.data,
+							                                                 cd_loop_clnors_offset);
+							if (clnors_nbr) {
+								clnors_invalid |= !equals_v2v2(*clnor_ref, *clnor);
+							}
+							else {
+								clnor_ref = clnor;
+							}
+							add_v2_v2(clnors_avg, *clnor);
+							clnors_nbr++;
+							/* We store here a pointer to all custom lnors processed. */
+							BLI_SMALLSTACK_PUSH(clnors, (float *)*clnor);
+						}
 					}
 
 					/* We store here a pointer to all loop-normals processed. */
@@ -733,10 +756,23 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 						BKE_lnor_space_define(lnor_space, lnor, vec_org, vec_next, edge_vectors);
 
 						if (has_clnors) {
-							/* We know all custom data of those loops are the same (else, it's a bug!). */
-							const float (*clnor)[2] = CustomData_bmesh_get_layer_n(&bm->ldata, lfan_pivot->head.data,
-							                                                       cd_loop_clnors_offset);
-							BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, *clnor);
+							if (clnors_invalid) {
+								float *clnor;
+
+								mul_v2_fl(clnors_avg, 1.0f / clnors_nbr);
+								/* Fix/update all clnors of this fan with computed average value. */
+								printf("Invalid clnors in this fan!\n");
+								while ((clnor = BLI_SMALLSTACK_POP(clnors))) {
+									print_v2("org clnor", clnor);
+									copy_v2_v2(clnor, clnors_avg);
+								}
+								print_v2("new clnors", clnors_avg);
+							}
+							else {
+								/* We still have to consume the stack! */
+								while (BLI_SMALLSTACK_POP(clnors));
+							}
+							BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, *clnor_ref);
 						}
 					}
 
