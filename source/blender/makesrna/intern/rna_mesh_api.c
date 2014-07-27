@@ -170,7 +170,7 @@ static void rna_Mesh_define_normals_split_custom(Mesh *mesh, ReportList *reports
 
 	if (CustomData_has_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL)) {
 		clnors = CustomData_get_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL);
-		memset(clnors, 0, sizeof(float[2]) * numloops);
+		memset(clnors, 0, sizeof(*clnors) * numloops);
 	}
 	else {
 		clnors = CustomData_add_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL, CD_DEFAULT, NULL, numloops);

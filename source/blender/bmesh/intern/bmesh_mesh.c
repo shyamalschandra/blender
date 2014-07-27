@@ -817,8 +817,9 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 void BM_mesh_loop_normals_update(BMesh *bm, const float split_angle, float (*r_lnos)[3],
                                  MLoopsNorSpaces *r_lnors_spaces, const int cd_loop_clnors_offset)
 {
-	/* Tag smooth edges and set lnos from vnos when they might be completely smooth... */
-	bm_mesh_edges_sharp_tag(bm, NULL, NULL, split_angle, r_lnos);
+	/* Tag smooth edges and set lnos from vnos when they might be completely smooth...
+	 * When using custom loop normals, disable the angle feature! */
+	bm_mesh_edges_sharp_tag(bm, NULL, NULL, (cd_loop_clnors_offset == -1) ? split_angle : (float)M_PI, r_lnos);
 
 	/* Finish computing lnos by accumulating face normals in each fan of faces defined by sharp edges. */
 	bm_mesh_loops_calc_normals(bm, NULL, NULL, r_lnos, r_lnors_spaces, cd_loop_clnors_offset);
@@ -835,8 +836,9 @@ void BM_loops_calc_normal_vcos(BMesh *bm, const float (*vcos)[3], const float (*
                                const float split_angle, float (*r_lnos)[3],
                                MLoopsNorSpaces *r_lnors_spaces, const int cd_loop_clnors_offset)
 {
-	/* Tag smooth edges and set lnos from vnos when they might be completely smooth... */
-	bm_mesh_edges_sharp_tag(bm, vnos, fnos, split_angle, r_lnos);
+	/* Tag smooth edges and set lnos from vnos when they might be completely smooth...
+	 * When using custom loop normals, disable the angle feature! */
+	bm_mesh_edges_sharp_tag(bm, vnos, fnos, (cd_loop_clnors_offset == -1) ? split_angle : (float)M_PI, r_lnos);
 
 	/* Finish computing lnos by accumulating face normals in each fan of faces defined by sharp edges. */
 	bm_mesh_loops_calc_normals(bm, vcos, fnos, r_lnos, r_lnors_spaces, cd_loop_clnors_offset);

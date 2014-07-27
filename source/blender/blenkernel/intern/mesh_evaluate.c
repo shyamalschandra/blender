@@ -398,10 +398,6 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
 void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_space, const int ml_index,
                              const bool add_to_list)
 {
-	if (lnor_space == NULL) {
-		return;
-	}
-
 	lnors_spaces->lspaces[ml_index] = lnor_space;
 	if (add_to_list) {
 		BLI_linklist_prepend_arena(&lnor_space->loops, SET_INT_IN_POINTER(ml_index), lnors_spaces->mem);
@@ -456,7 +452,7 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 		r_clnor_data[0] = saacosf(cos_alpha) / lnor_space->ref_alpha;
 
 		/* Project custom lnor on (vec_ref, vec_ortho) plane. */
-		mul_v4_v4fl(vec, lnor_space->vec_lnor, -cos_alpha);
+		mul_v3_v3fl(vec, lnor_space->vec_lnor, -cos_alpha);
 		add_v3_v3(vec, custom_lnor);
 		normalize_v3(vec);
 
@@ -513,7 +509,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 
 	MPoly *mp;
 	int mp_index, me_index;
-	const bool check_angle = (split_angle < (float)M_PI);
+	bool check_angle = (split_angle < (float)M_PI);
 
 	bool *sharp_verts = NULL;  /* Maybe we could use a BLI_bitmap here? */
 	MLoopsNorSpaces _lnors_spaces = {NULL};
@@ -528,7 +524,13 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 #endif
 
 	if (check_angle) {
-		split_angle = cosf(split_angle);
+		/* When using custom loop normals, disable the angle feature! */
+		if (clnors_data) {
+			check_angle = false;
+		}
+		else {
+			split_angle = cosf(split_angle);
+		}
 	}
 
 	if (!r_lnors_spaces && clnors_data) {
@@ -596,8 +598,10 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	}
 
 	if (r_lnors_spaces) {
-		/* Tag vertices that have at least one sharp edge as 'sharp' (used for the lnor spaces computation). */
-		/* XXX This third loop over edges is *very* disappointing, could not find any other way yet. */
+		/* Tag vertices that have at least one sharp edge as 'sharp' (used for the lnor spaces computation).
+		/* XXX This third loop over edges is a bit disappointing, could not find any other way yet.
+		 *     Not really performance-critical anyway.
+		 */
 		for (me_index = 0; me_index < numEdges; me_index++) {
 			const int *e2l = edge_to_loops[me_index];
 			const MEdge *me = &medges[me_index];
@@ -914,10 +918,10 @@ void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *
 	 * are not (enough) equal, add sharp edges as needed.
 	 * This way, next time we run BKE_mesh_normals_loop_split(), we'll get lnor spaces/smooth fans matching
 	 * given custom lnors.
-	 * Note this code *will never* unsharpen edges!
+	 * Note this code *will never* unsharp edges!
 	 */
 	for (i = 0; i < numLoops; i++) {
-		if (!BLI_BITMAP_TEST_BOOL(done_loops, i)) {
+		if (!BLI_BITMAP_TEST_BOOL(done_loops, i) && lnors_spaces.lspaces[i]) {
 			/* Notes:
 			 *     * In case of mono-loop smooth fan, loops is NULL, so everything is fine (we have nothing to do).
 			 *     * Loops in this linklist are ordered (in reversed order compared to how they were discovered by
