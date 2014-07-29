@@ -207,6 +207,11 @@ static void rna_MeshAnyLayer_name_set(PointerRNA *ptr, const char *value)
 	rna_cd_layer_name_set(cd, (CustomDataLayer *)ptr->data, value);
 }
 
+static int rna_Mesh_has_custom_normals_get(PointerRNA *ptr)
+{
+	Mesh *me = ptr->data;
+	return (int)BKE_mesh_has_custom_loop_normals(me);
+}
 
 /* -------------------------------------------------------------------- */
 /* Update Callbacks */
@@ -3210,6 +3215,15 @@ static void rna_def_mesh(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Auto Smooth Angle",
 	                         "Maximum angle between face normals that 'Auto Smooth' will operate on");
 	RNA_def_property_update(prop, 0, "rna_Mesh_update_data");
+
+	RNA_define_verify_sdna(false);
+	prop = RNA_def_property(srna, "has_custom_normals", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "", 0);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Has Custom Normals",
+	                         "True if there are custom split normals data in this mesh");
+	RNA_def_property_boolean_funcs(prop, "rna_Mesh_has_custom_normals_get", NULL);
+	RNA_define_verify_sdna(true);
 
 	prop = RNA_def_property(srna, "show_double_sided", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", ME_TWOSIDED);

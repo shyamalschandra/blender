@@ -889,16 +889,19 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
  * Compute internal representation of given custom normals (as an array of float[2]).
  * It also make sure the mesh matches those custom normals, by setting sharp edges fag as needed to get a
  * same custom lnor for all loops sharing a same smooth fan.
+ * If use_vertices if true, custom_loopnors and custom_loopnors_facs are assumed to be per-vertex, not per-loop
+ * (this allows to set whole vert's normals at once, useful in some cases).
  */
-void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
-                                      MLoop *mloops, const float (*custom_loopnors)[3], const int numLoops,
-                                      MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                      float (*r_clnors_data)[2])
+static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
+                                         MLoop *mloops, float (*custom_loopnors)[3],
+                                         const float *custom_loopnors_facs, const int numLoops,
+                                         MPoly *mpolys, const float (*polynors)[3], const int numPolys,
+                                         float (*r_clnors_data)[2], const bool use_vertices)
 {
 	/* We *may* make that poor BKE_mesh_normals_loop_split() even more complex by making it handling that
 	 * feature too, would probably be more efficient in absolute.
 	 * However, this function *is not* performance-critical, since it is mostly expected to be called
-	 * by io addons when importing custom normals (and perhaps from some editing tools later?).
+	 * by io addons when importing custom normals, and modifier (and perhaps from some editing tools later?).
 	 * So better to keep some simplicity here, and just call BKE_mesh_normals_loop_split() twice!
 	 */
 	MLoopsNorSpaces lnors_spaces = {NULL};
@@ -943,10 +946,30 @@ void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *
 			LinkNode *loops = lnors_spaces.lspaces[i]->loops;
 			MLoop *prev_ml = NULL;
 			const float *org_nor = NULL;
+			if (!loops) {
+				MLoop *ml = &mloops[i];
+				const int idx = use_vertices ? (int)ml->v : i;
+				float *nor = custom_loopnors[idx];
+				const float fac = custom_loopnors_facs ? custom_loopnors_facs[idx] : 1.0f;
+
+				if (fac != 1.0f) {
+					/* Note: inplace modification to get final custom lnor! */
+					interp_v3_v3v3_slerp(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
+				}
+				BLI_BITMAP_ENABLE(done_loops, i);
+			}
+			/* Hidden else, avoids one indentation. ;) */
 			while (loops) {
 				const int lidx = GET_INT_FROM_POINTER(loops->link);
-				const float *nor = custom_loopnors[lidx];
 				MLoop *ml = &mloops[lidx];
+				const int idx = use_vertices ? (int)ml->v : lidx;
+				float *nor = custom_loopnors[idx];
+				const float fac = custom_loopnors_facs ? custom_loopnors_facs[idx] : 1.0f;
+
+				if (fac != 1.0f) {
+					/* Note: inplace modification to get final custom lnor! */
+					interp_v3_v3v3_slerp(nor, lnors_spaces.lspaces[lidx]->vec_lnor, nor, fac);
+				}
 
 				if (!org_nor) {
 					org_nor = nor;
@@ -968,7 +991,6 @@ void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *
 				loops = loops->next;
 				BLI_BITMAP_ENABLE(done_loops, lidx);
 			}
-			BLI_BITMAP_ENABLE(done_loops, i);  /* in case it's a single-loop case... */
 		}
 	}
 
@@ -999,7 +1021,8 @@ void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *
 				zero_v3(avg_nor);
 				while (loops) {
 					const int lidx = GET_INT_FROM_POINTER(loops->link);
-					const float *nor = custom_loopnors[lidx];
+					const int idx = use_vertices ? (int)mloops[lidx].v : lidx;
+					const float *nor = custom_loopnors[idx];
 
 					nbr_nors++;
 					add_v3_v3(avg_nor, nor);
@@ -1017,7 +1040,8 @@ void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *
 				}
 			}
 			else {
-				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], custom_loopnors[i], r_clnors_data[i]);
+				const int idx = use_vertices ? (int)mloops[i].v : i;
+				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], custom_loopnors[idx], r_clnors_data[i]);
 				BLI_BITMAP_DISABLE(done_loops, i);
 			}
 		}
@@ -1027,6 +1051,29 @@ void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *
 	MEM_freeN(loop_to_poly);
 	MEM_freeN(done_loops);
 	BKE_free_loops_normal_spaces(&lnors_spaces);
+}
+
+void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
+                                      MLoop *mloops, float (*custom_loopnors)[3],
+                                      const float *custom_loopnors_facs, const int numLoops,
+                                      MPoly *mpolys, const float (*polynors)[3], const int numPolys,
+                                      float (*r_clnors_data)[2])
+{
+	mesh_normals_loop_custom_set(mverts, numVerts, medges, numEdges, mloops, custom_loopnors,
+	                             custom_loopnors_facs, numLoops, mpolys, polynors, numPolys,
+	                             r_clnors_data, false);
+}
+
+void BKE_mesh_normals_loop_custom_from_vertices_set(MVert *mverts, float (*custom_vertnors)[3],
+                                                    const float *custom_vertnors_facs, const int numVerts,
+                                                    MEdge *medges, const int numEdges,
+                                                    MLoop *mloops, const int numLoops,
+                                                    MPoly *mpolys, const float (*polynors)[3], const int numPolys,
+                                                    float (*r_clnors_data)[2])
+{
+	mesh_normals_loop_custom_set(mverts, numVerts, medges, numEdges, mloops, custom_vertnors,
+	                             custom_vertnors_facs, numLoops, mpolys, polynors, numPolys,
+	                             r_clnors_data, true);
 }
 
 /** \} */

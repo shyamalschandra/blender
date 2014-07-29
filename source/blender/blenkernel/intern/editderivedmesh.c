@@ -204,9 +204,9 @@ static void emDM_calcLoopNormalsSpaces(DerivedMesh *dm, const float split_angle,
 	{
 		CustomData *ldata = dm->getLoopDataLayout(dm);
 		const int cd_loop_clnors_offset = CustomData_get_offset(ldata, CD_CUSTOMLOOPNORMAL);
-		const int numLoops = dm->getNumLoops(dm);
 
 #ifdef DEBUG_CLNORS
+		const int numLoops = dm->getNumLoops(dm);
 		float (*clnor_data)[2] = NULL;
 		/* XXX All this is really dirty!!! */
 		if (CustomData_has_layer(ldata, CD_CUSTOMLOOPNORMAL)) {

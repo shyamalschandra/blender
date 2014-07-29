@@ -818,36 +818,55 @@ void MESH_OT_customdata_clear_skin(wmOperatorType *ot)
 }
 
 /* Clear custom loop normals */
-static int mesh_customdata_clear_custom_splitnormals_poll(bContext *C)
+static int mesh_customdata_add_clear_custom_splitnormals_poll(bContext *C)
 {
 	Object *ob = ED_object_context(C);
 
 	if (ob && ob->type == OB_MESH) {
 		Mesh *me = ob->data;
 		if (me->id.lib == NULL) {
-			CustomData *data = GET_CD_DATA(me, ldata);
-			if (CustomData_has_layer(data, CD_CUSTOMLOOPNORMAL)) {
-				return true;
-			}
+			return true;
 		}
 	}
 	return false;
 }
-static int mesh_customdata_clear_custom_splitnormals_exec(bContext *C, wmOperator *UNUSED(op))
+
+static int mesh_customdata_add_clear_custom_splitnormals_exec(bContext *C, wmOperator *UNUSED(op))
 {
-	return mesh_customdata_clear_exec__internal(C, BM_LOOP, CD_CUSTOMLOOPNORMAL);
+	Object *ob = ED_object_context(C);
+	Mesh *me = ob->data;
+
+	if (BKE_mesh_has_custom_loop_normals(me)) {
+		return mesh_customdata_clear_exec__internal(C, BM_LOOP, CD_CUSTOMLOOPNORMAL);
+	}
+	else {
+		CustomData *data = GET_CD_DATA(me, ldata);
+
+		if (me->edit_btmesh) {
+			BM_data_layer_add(me->edit_btmesh->bm, data, CD_CUSTOMLOOPNORMAL);
+			
+		}
+		else {
+			CustomData_add_layer(data, CD_CUSTOMLOOPNORMAL, CD_DEFAULT, NULL, me->totloop);
+		}
+
+		DAG_id_tag_update(&me->id, 0);
+		WM_event_add_notifier(C, NC_GEOM | ND_DATA, me);
+
+		return OPERATOR_FINISHED;
+	}
 }
 
-void MESH_OT_customdata_clear_custom_splitnormals(wmOperatorType *ot)
+void MESH_OT_customdata_add_clear_custom_splitnormals(wmOperatorType *ot)
 {
 	/* identifiers */
-	ot->name = "Clear Custom Split Normals Data";
-	ot->idname = "MESH_OT_customdata_clear_custom_splitnormals";
-	ot->description = "Clear custom split normals layer";
+	ot->name = "Add/Clear Custom Split Normals Data";
+	ot->idname = "MESH_OT_customdata_add_clear_custom_splitnormals";
+	ot->description = "Add a custom split normals layer, or remove it if it already exists";
 
 	/* api callbacks */
-	ot->exec = mesh_customdata_clear_custom_splitnormals_exec;
-	ot->poll = mesh_customdata_clear_custom_splitnormals_poll;
+	ot->exec = mesh_customdata_add_clear_custom_splitnormals_exec;
+	ot->poll = mesh_customdata_add_clear_custom_splitnormals_poll;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;

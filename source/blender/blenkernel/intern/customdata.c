@@ -1081,6 +1081,11 @@ static void layerInterp_clnor(void **UNUSED(sources), const float *UNUSED(weight
 	zero_v2((float *)dest);
 }
 
+static void layerDefault_clnor(void *data, int count)
+{
+	fill_vn_fl((float *)data, count * 2, 0.0f);
+}
+
 static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	/* 0: CD_MVERT */
 	{sizeof(MVert), "MVert", 1, NULL, NULL, NULL, NULL, NULL, NULL},
@@ -1195,7 +1200,7 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	/* 40: CD_TESSLOOPNORMAL */
 	{sizeof(short[4][3]), "", 0, NULL, NULL, NULL, NULL, layerSwap_flnor, NULL},
 	/* 41: CD_CUSTOMLOOPNORMAL */
-	{sizeof(float[2]), "vec2f", 1, NULL, NULL, NULL, layerInterp_clnor, NULL, NULL},
+	{sizeof(float[2]), "vec2f", 1, NULL, NULL, NULL, layerInterp_clnor, NULL, layerDefault_clnor},
 };
 
 /* note, numbers are from trunk and need updating for bmesh */
