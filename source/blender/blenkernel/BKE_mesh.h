@@ -215,7 +215,7 @@ void BKE_mesh_normals_loop_split(
         struct MVert *mverts, const int numVerts, struct MEdge *medges, const int numEdges,
         struct MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
         struct MPoly *mpolys, const float (*polynors)[3], const int numPolys, float split_angle,
-        MLoopsNorSpaces *r_lnors_spaces, const float (*clnors_data)[2], int *r_loop_to_poly);
+        MLoopsNorSpaces *r_lnors_spaces, float (*clnors_data)[2], int *r_loop_to_poly);
 
 void BKE_mesh_normals_loop_custom_set(
         struct MVert *mverts, const int numVerts, struct MEdge *medges, const int numEdges,

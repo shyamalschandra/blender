@@ -485,7 +485,7 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
                                  MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
                                  MPoly *mpolys, const float (*polynors)[3], const int numPolys, float split_angle,
-                                 MLoopsNorSpaces *r_lnors_spaces, const float (*clnors_data)[2],
+                                 MLoopsNorSpaces *r_lnors_spaces, float (*clnors_data)[2],
                                  int *r_loop_to_poly)
 {
 #define INDEX_UNSET INT_MIN
@@ -516,6 +516,8 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 
 	/* Temp loop normal stack. */
 	BLI_SMALLSTACK_DECLARE(normal, float *);
+	/* Temp clnors stack. */
+	BLI_SMALLSTACK_DECLARE(clnors, float *);
 	/* Temp edge vectors stack, only used when computing lnor spaces. */
 	BLI_Stack *edge_vectors = NULL;
 
@@ -702,6 +704,11 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 				/* mlfan_vert_index: the loop of our current edge might not be the loop of our current vertex! */
 				int mlfan_curr_index, mlfan_vert_index, mpfan_curr_index;
 
+				/* We validate clnors data on the fly - cheapest way to do! */
+				float clnors_avg[2] = {0.0f, 0.0f}, (*clnor_ref)[2] = NULL;
+				int clnors_nbr = 0;
+				bool clnors_invalid = false;
+
 				MLoopNorSpace *lnor_space = r_lnors_spaces ? BKE_lnor_space_create(r_lnors_spaces) : NULL;
 
 				e2lfan_curr = e2l_prev;
@@ -754,6 +761,21 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 						const float fac = saacos(dot_v3v3(vec_curr, vec_prev));
 						/* Accumulate */
 						madd_v3_v3fl(lnor, polynors[mpfan_curr_index], fac);
+
+						if (clnors_data) {
+							/* Accumulate all clnors, if they are not all equal we have to fix that! */
+							float (*clnor)[2] = &clnors_data[mlfan_vert_index];
+							if (clnors_nbr) {
+								clnors_invalid |= !equals_v2v2(*clnor_ref, *clnor);
+							}
+							else {
+								clnor_ref = clnor;
+							}
+							add_v2_v2(clnors_avg, *clnor);
+							clnors_nbr++;
+							/* We store here a pointer to all custom lnors processed. */
+							BLI_SMALLSTACK_PUSH(clnors, (float *)*clnor);
+						}
 					}
 
 					/* We store here a pointer to all loop-normals processed. */
@@ -832,8 +854,23 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 						BKE_lnor_space_define(lnor_space, lnor, vec_org, vec_curr, edge_vectors);
 
 						if (clnors_data) {
-							/* We know all custom data of those loops are the same (else, it's a bug!). */
-							BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, clnors_data[ml_curr_index]);
+							if (clnors_invalid) {
+								float *clnor;
+
+								mul_v2_fl(clnors_avg, 1.0f / (float)clnors_nbr);
+								/* Fix/update all clnors of this fan with computed average value. */
+								printf("Invalid clnors in this fan!\n");
+								while ((clnor = BLI_SMALLSTACK_POP(clnors))) {
+									print_v2("org clnor", clnor);
+									copy_v2_v2(clnor, clnors_avg);
+								}
+								print_v2("new clnors", clnors_avg);
+							}
+							else {
+								/* We still have to consume the stack! */
+								while (BLI_SMALLSTACK_POP(clnors));
+							}
+							BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, *clnor_ref);
 						}
 					}
 
