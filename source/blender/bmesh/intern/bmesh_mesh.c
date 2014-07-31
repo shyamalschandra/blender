@@ -521,13 +521,14 @@ static void bm_mesh_edges_sharp_tag(BMesh *bm, const float (*vnos)[3], const flo
 }
 
 /* BMesh version of BKE_mesh_normals_loop_split() in mesh_evaluate.c
- * Use -1 as 'no custom lnors' tag for cd_loop_clnors_offset. */
+ * Will use first clnors_data array, and fallback to cd_loop_clnors_offset (use NULL and -1 to not use clnors). */
 static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const float (*fnos)[3], float (*r_lnos)[3],
-                                       MLoopsNorSpaces *r_lnors_spaces, const int cd_loop_clnors_offset)
+                                       MLoopsNorSpaces *r_lnors_spaces,
+                                       float (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	BMIter fiter;
 	BMFace *f_curr;
-	const bool has_clnors = cd_loop_clnors_offset != -1;
+	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
 
 	MLoopsNorSpaces _lnors_spaces = {NULL};
 
@@ -613,8 +614,8 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 					BKE_lnor_space_add_loop(r_lnors_spaces, lnor_space, l_curr_index, false);
 
 					if (has_clnors) {
-						const float (*clnor)[2] = CustomData_bmesh_get_layer_n(&bm->ldata, l_curr->head.data,
-						                                                       cd_loop_clnors_offset);
+						float (*clnor)[2] = clnors_data ? &clnors_data[l_curr_index] :
+						                                  BM_ELEM_CD_GET_VOID_P(l_curr, cd_loop_clnors_offset);
 						BKE_lnor_space_custom_data_to_normal(lnor_space, r_lnos[l_curr_index], *clnor);
 					}
 				}
@@ -707,8 +708,8 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 
 						if (has_clnors) {
 							/* Accumulate all clnors, if they are not all equal we have to fix that! */
-							float (*clnor)[2] = CustomData_bmesh_get_layer_n(&bm->ldata, lfan_pivot->head.data,
-							                                                 cd_loop_clnors_offset);
+							float (*clnor)[2] = clnors_data ? &clnors_data[lfan_pivot_index] :
+							                                  BM_ELEM_CD_GET_VOID_P(lfan_pivot, cd_loop_clnors_offset);
 							if (clnors_nbr) {
 								clnors_invalid |= !equals_v2v2(*clnor_ref, *clnor);
 							}
@@ -819,14 +820,17 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
  * first)!
  */
 void BM_mesh_loop_normals_update(BMesh *bm, const float split_angle, float (*r_lnos)[3],
-                                 MLoopsNorSpaces *r_lnors_spaces, const int cd_loop_clnors_offset)
+                                 MLoopsNorSpaces *r_lnors_spaces,
+                                 float (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
+	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
+
 	/* Tag smooth edges and set lnos from vnos when they might be completely smooth...
 	 * When using custom loop normals, disable the angle feature! */
-	bm_mesh_edges_sharp_tag(bm, NULL, NULL, (cd_loop_clnors_offset == -1) ? split_angle : (float)M_PI, r_lnos);
+	bm_mesh_edges_sharp_tag(bm, NULL, NULL, has_clnors ? (float)M_PI : split_angle, r_lnos);
 
 	/* Finish computing lnos by accumulating face normals in each fan of faces defined by sharp edges. */
-	bm_mesh_loops_calc_normals(bm, NULL, NULL, r_lnos, r_lnors_spaces, cd_loop_clnors_offset);
+	bm_mesh_loops_calc_normals(bm, NULL, NULL, r_lnos, r_lnors_spaces, clnors_data, cd_loop_clnors_offset);
 }
 #endif
 
@@ -838,14 +842,17 @@ void BM_mesh_loop_normals_update(BMesh *bm, const float split_angle, float (*r_l
  */
 void BM_loops_calc_normal_vcos(BMesh *bm, const float (*vcos)[3], const float (*vnos)[3], const float (*fnos)[3],
                                const float split_angle, float (*r_lnos)[3],
-                               MLoopsNorSpaces *r_lnors_spaces, const int cd_loop_clnors_offset)
+                               MLoopsNorSpaces *r_lnors_spaces,
+                               float (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
+	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
+
 	/* Tag smooth edges and set lnos from vnos when they might be completely smooth...
 	 * When using custom loop normals, disable the angle feature! */
-	bm_mesh_edges_sharp_tag(bm, vnos, fnos, (cd_loop_clnors_offset == -1) ? split_angle : (float)M_PI, r_lnos);
+	bm_mesh_edges_sharp_tag(bm, vnos, fnos, has_clnors ? (float)M_PI : split_angle, r_lnos);
 
 	/* Finish computing lnos by accumulating face normals in each fan of faces defined by sharp edges. */
-	bm_mesh_loops_calc_normals(bm, vcos, fnos, r_lnos, r_lnors_spaces, cd_loop_clnors_offset);
+	bm_mesh_loops_calc_normals(bm, vcos, fnos, r_lnos, r_lnors_spaces, clnors_data, cd_loop_clnors_offset);
 }
 
 static void UNUSED_FUNCTION(bm_mdisps_space_set)(Object *ob, BMesh *bm, int from, int to)
