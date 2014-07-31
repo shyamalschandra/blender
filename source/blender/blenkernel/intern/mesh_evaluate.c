@@ -46,6 +46,7 @@
 #include "BLI_linklist.h"
 #include "BLI_linklist_stack.h"
 #include "BLI_alloca.h"
+#include "BLI_stack.h"
 
 #include "BKE_customdata.h"
 #include "BKE_mesh.h"
@@ -336,7 +337,7 @@ MLoopNorSpace *BKE_lnor_space_create(MLoopsNorSpaces *lnors_spaces)
 
 /* Should only be called once.
  * Beware, this modifies ref_vec and other_vec in place!
- * Might set *lnor_space to NULL in case no valid space can be generated.
+ * In case no valid space can be generated, ref_alpha and ref_beta are set to zero (which means 'use auto lnors').
  */
 void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
                            float vec_ref[3], float vec_other[3], BLI_Stack *edge_vectors)
@@ -364,7 +365,7 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
 		while (!BLI_stack_is_empty(edge_vectors)) {
 			BLI_stack_pop(edge_vectors, vec);
 			alpha += saacosf(dot_v3v3(vec, lnor));
-			++nbr;
+			nbr++;
 		}
 		lnor_space->ref_alpha = alpha / (float)nbr;
 	}
@@ -434,13 +435,9 @@ void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_cus
 
 void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float custom_lnor[3], float r_clnor_data[2])
 {
-	print_v3("auto lnor", lnor_space->vec_lnor);
-	print_v3("custom lnor", custom_lnor);
-
 	/* We use null vector as NOP custom normal (can be simpler than giving autocomputed lnor...). */
 	if (is_zero_v3(custom_lnor) || equals_v3v3(lnor_space->vec_lnor, custom_lnor)) {
 		zero_v2(r_clnor_data);
-		printf("same nors\n");
 		return;
 	}
 
@@ -475,7 +472,6 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 			}
 		}
 	}
-	print_v2("encoded clnor", r_clnor_data);
 }
 
 /**
@@ -950,8 +946,6 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 
 	BLI_SMALLSTACK_DECLARE(clnors_data, float *);
 
-	printf("%s\n", __func__);
-
 	/* Compute current lnor spaces. */
 	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 	                            mpolys, polynors, numPolys, split_angle, &lnors_spaces, NULL, loop_to_poly);
@@ -991,7 +985,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 
 				if (fac != 1.0f) {
 					/* Note: inplace modification to get final custom lnor! */
-					interp_v3_v3v3_slerp(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
+					interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
 				}
 				BLI_BITMAP_ENABLE(done_loops, i);
 			}
@@ -1005,7 +999,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 
 				if (fac != 1.0f) {
 					/* Note: inplace modification to get final custom lnor! */
-					interp_v3_v3v3_slerp(nor, lnors_spaces.lspaces[lidx]->vec_lnor, nor, fac);
+					interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[lidx]->vec_lnor, nor, fac);
 				}
 
 				if (!org_nor) {

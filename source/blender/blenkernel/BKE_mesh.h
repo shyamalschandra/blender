@@ -37,6 +37,7 @@ struct DispList;
 struct EdgeHash;
 struct ListBase;
 struct LinkNode;
+struct BLI_Stack;
 struct MemArena;
 struct BMEditMesh;
 struct BMesh;
@@ -182,10 +183,9 @@ void BKE_mesh_loop_tangents_ex(
 void BKE_mesh_loop_tangents(
         struct Mesh *mesh, const char *uvmap, float (*r_looptangents)[4], struct ReportList *reports);
 
-/* XXX This is ugly! */
+/* XXX This is ugly! But other solution is to include those in each file using BKE_mesh.h :/ */
 #include "BLI_linklist.h"
 #include "BLI_memarena.h"
-#include "BLI_stack.h"
 
 typedef struct MLoopNorSpace {
 	float vec_lnor[3];   /* Automatically computed loop normal. */

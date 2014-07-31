@@ -844,7 +844,6 @@ static int mesh_customdata_add_clear_custom_splitnormals_exec(bContext *C, wmOpe
 
 		if (me->edit_btmesh) {
 			BM_data_layer_add(me->edit_btmesh->bm, data, CD_CUSTOMLOOPNORMAL);
-			
 		}
 		else {
 			CustomData_add_layer(data, CD_CUSTOMLOOPNORMAL, CD_DEFAULT, NULL, me->totloop);

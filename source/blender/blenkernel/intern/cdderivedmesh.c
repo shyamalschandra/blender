@@ -2511,6 +2511,8 @@ void CDDM_calc_loop_normals(DerivedMesh *dm, const float split_angle)
 	CDDM_calc_loop_normals_spaces(dm, split_angle, NULL);
 }
 
+//#define DEBUG_CLNORS
+
 void CDDM_calc_loop_normals_spaces(DerivedMesh *dm, const float split_angle, MLoopsNorSpaces *r_lnors_spaces)
 {
 	MVert *mverts = dm->getVertArray(dm);
@@ -2554,7 +2556,7 @@ void CDDM_calc_loop_normals_spaces(DerivedMesh *dm, const float split_angle, MLo
 		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 		                            mpolys, (const float (*)[3])pnors, numPolys, split_angle,
 		                            r_lnors_spaces, clnor_data, NULL);
-#if 0
+#ifdef DEBUG_CLNORS
 		if (r_lnors_spaces) {
 			int i;
 			for (i = 0; i < numLoops; i++) {

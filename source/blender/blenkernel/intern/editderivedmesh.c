@@ -206,33 +206,12 @@ static void emDM_calcLoopNormalsSpaces(DerivedMesh *dm, const float split_angle,
 		float (*clnors_data)[2] = dm->getLoopDataArray(dm, CD_CUSTOMLOOPNORMAL);
 		const int cd_loop_clnors_offset = clnors_data ? -1 : CustomData_get_offset(&bm->ldata, CD_CUSTOMLOOPNORMAL);
 
-#ifdef DEBUG_CLNORS
-		const int numLoops = dm->getNumLoops(dm);
-		float (*clnor_data)[2] = NULL;
-		/* XXX All this is really dirty!!! */
-		if (CustomData_has_layer(ldata, CD_CUSTOMLOOPNORMAL)) {
-			float (*clnor)[2] = clnor_data = MEM_mallocN(sizeof(float[2]) * (size_t)numLoops, __func__);
-			BMIter iter;
-			BMFace *efa;
-
-			BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
-				BMLoop *l_iter, *l_first;
-				l_iter = l_first = BM_FACE_FIRST_LOOP(efa);
-				do {
-					copy_v2_v2(*clnor, CustomData_bmesh_get(ldata, l_iter->head.data, CD_CUSTOMLOOPNORMAL));
-					++clnor;
-				} while ((l_iter = l_iter->next) != l_first);
-			}
-		}
-#endif
-
 		BM_loops_calc_normal_vcos(bm, vertexCos, vertexNos, polyNos, split_angle, loopNos,
 		                          r_lnors_spaces, clnors_data, cd_loop_clnors_offset);
 #ifdef DEBUG_CLNORS
 		if (r_lnors_spaces) {
 			int i;
 			for (i = 0; i < numLoops; i++) {
-				//if (i != 1) continue;
 				if (r_lnors_spaces->lspaces[i]->ref_alpha != 0.0f) {
 					LinkNode *loops = r_lnors_spaces->lspaces[i]->loops;
 					printf("Loop %d uses lnor space %p:\n", i, r_lnors_spaces->lspaces[i]);
@@ -253,8 +232,6 @@ static void emDM_calcLoopNormalsSpaces(DerivedMesh *dm, const float split_angle,
 				}
 			}
 		}
-
-		MEM_SAFE_FREE(clnor_data);
 #endif
 	}
 }
