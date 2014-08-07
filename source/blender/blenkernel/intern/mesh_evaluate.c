@@ -321,12 +321,14 @@ void BKE_init_loops_normal_spaces(MLoopsNorSpaces *lnors_spaces, const int numLo
 {
 	MemArena *mem = lnors_spaces->mem = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
 	lnors_spaces->lspaces = BLI_memarena_calloc(mem, sizeof(MLoopNorSpace *) * (size_t)numLoops);
+	lnors_spaces->loops_pool = BLI_memarena_alloc(mem, sizeof(LinkNode) * (size_t)numLoops);
 }
 
 void BKE_free_loops_normal_spaces(MLoopsNorSpaces *lnors_spaces)
 {
 	BLI_memarena_free(lnors_spaces->mem);
 	lnors_spaces->lspaces = NULL;
+	lnors_spaces->loops_pool = NULL;
 	lnors_spaces->mem = NULL;
 }
 
@@ -397,11 +399,11 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
 }
 
 void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_space, const int ml_index,
-                             const bool add_to_list)
+                             const bool do_add_loop)
 {
 	lnors_spaces->lspaces[ml_index] = lnor_space;
-	if (add_to_list) {
-		BLI_linklist_prepend_arena(&lnor_space->loops, SET_INT_IN_POINTER(ml_index), lnors_spaces->mem);
+	if (do_add_loop) {
+		BLI_linklist_prepend_nlink(&lnor_space->loops, SET_INT_IN_POINTER(ml_index), &lnors_spaces->loops_pool[ml_index]);
 	}
 }
 

@@ -200,7 +200,7 @@ static float vertex_weight(MDeformVert *dvert, const int index, const int defgrp
 
 static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *ob, DerivedMesh *dm)
 {
-	float (*clnors)[2];
+	short (*clnors)[2];
 	const int num_verts = dm->getNumVerts(dm);
 	const int num_edges = dm->getNumEdges(dm);
 	const int num_loops = dm->getNumLoops(dm);
