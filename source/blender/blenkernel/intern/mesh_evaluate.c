@@ -57,7 +57,7 @@
 
 #include "mikktspace.h"
 
-// #define DEBUG_TIME
+#define DEBUG_TIME
 
 #ifdef DEBUG_TIME
 #  include "PIL_time.h"
@@ -405,10 +405,10 @@ void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_
 	}
 }
 
-void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_custom_lnor[3], const float clnor_data[2])
+void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_custom_lnor[3], const short clnor_data[2])
 {
 	/* NOP custom normal data or invalid lnor space, return. */
-	if (clnor_data[0] == 0.0f || lnor_space->ref_alpha == 0.0f || lnor_space->ref_beta == 0.0f) {
+	if (clnor_data[0] == 0 || lnor_space->ref_alpha == 0.0f || lnor_space->ref_beta == 0.0f) {
 		copy_v3_v3(r_custom_lnor, lnor_space->vec_lnor);
 		return;
 	}
@@ -416,8 +416,9 @@ void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_cus
 	{
 		/* TODO Check whether using sincosf() gives any noticeable benefit! */
 		const float pi2 = (float)M_PI * 2.0f;
-		const float alpha = lnor_space->ref_alpha * clnor_data[0];
-		const float betafac = clnor_data[1];
+		const float alphafac = (float)clnor_data[0] / (float)SHRT_MAX;
+		const float alpha = (alphafac > 0.0f ? lnor_space->ref_alpha : pi2 - lnor_space->ref_alpha) * alphafac;
+		const float betafac = (float)clnor_data[1] / (float)SHRT_MAX;
 
 		mul_v3_v3fl(r_custom_lnor, lnor_space->vec_lnor, cosf(alpha));
 
@@ -433,11 +434,11 @@ void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_cus
 	}
 }
 
-void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float custom_lnor[3], float r_clnor_data[2])
+void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float custom_lnor[3], short r_clnor_data[2])
 {
 	/* We use null vector as NOP custom normal (can be simpler than giving autocomputed lnor...). */
 	if (is_zero_v3(custom_lnor) || equals_v3v3(lnor_space->vec_lnor, custom_lnor)) {
-		zero_v2(r_clnor_data);
+		r_clnor_data[0] = r_clnor_data[1] = 0;
 		return;
 	}
 
@@ -445,8 +446,16 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 		const float pi2 = (float)M_PI * 2.0f;
 		const float cos_alpha = dot_v3v3(lnor_space->vec_lnor, custom_lnor);
 		float vec[3], cos_beta;
+		float alpha;
 
-		r_clnor_data[0] = saacosf(cos_alpha) / lnor_space->ref_alpha;
+		alpha = saacosf(cos_alpha);
+		if (alpha > lnor_space->ref_alpha) {
+			/* Note we could stick to [0, pi] range here, but makes decoding more complex, not worth it. */
+			r_clnor_data[0] = (short)(-(pi2 - alpha) / (pi2 - lnor_space->ref_alpha) * (float)SHRT_MAX);
+		}
+		else {
+			r_clnor_data[0] = (short)(alpha / lnor_space->ref_alpha * (float)SHRT_MAX);
+		}
 
 		/* Project custom lnor on (vec_ref, vec_ortho) plane. */
 		mul_v3_v3fl(vec, lnor_space->vec_lnor, -cos_alpha);
@@ -456,7 +465,7 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 		cos_beta = dot_v3v3(lnor_space->vec_ref, vec);
 
 		if (cos_beta > (1.0f - 1e-6f)) {
-			r_clnor_data[1] = 0.0f;
+			r_clnor_data[1] = 0;
 		}
 		else {
 			float beta = saacosf(cos_beta);
@@ -465,10 +474,10 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 			}
 
 			if (beta > lnor_space->ref_beta) {
-				r_clnor_data[1] = -(pi2 - beta) / (pi2 - lnor_space->ref_beta);
+				r_clnor_data[1] = (short)(-(pi2 - beta) / (pi2 - lnor_space->ref_beta) * (float)SHRT_MAX);
 			}
 			else {
-				r_clnor_data[1] = beta / lnor_space->ref_beta;
+				r_clnor_data[1] = (short)(beta / lnor_space->ref_beta * (float)SHRT_MAX);
 			}
 		}
 	}
@@ -481,7 +490,7 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
                                  MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
                                  MPoly *mpolys, const float (*polynors)[3], const int numPolys, float split_angle,
-                                 MLoopsNorSpaces *r_lnors_spaces, float (*clnors_data)[2],
+                                 MLoopsNorSpaces *r_lnors_spaces, short (*clnors_data)[2],
                                  int *r_loop_to_poly)
 {
 #define INDEX_UNSET INT_MIN
@@ -513,7 +522,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	/* Temp loop normal stack. */
 	BLI_SMALLSTACK_DECLARE(normal, float *);
 	/* Temp clnors stack. */
-	BLI_SMALLSTACK_DECLARE(clnors, float *);
+	BLI_SMALLSTACK_DECLARE(clnors, short *);
 	/* Temp edge vectors stack, only used when computing lnor spaces. */
 	BLI_Stack *edge_vectors = NULL;
 
@@ -701,7 +710,8 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 				int mlfan_curr_index, mlfan_vert_index, mpfan_curr_index;
 
 				/* We validate clnors data on the fly - cheapest way to do! */
-				float clnors_avg[2] = {0.0f, 0.0f}, (*clnor_ref)[2] = NULL;
+				int clnors_avg[2] = {0, 0};
+				short (*clnor_ref)[2] = NULL;
 				int clnors_nbr = 0;
 				bool clnors_invalid = false;
 
@@ -760,17 +770,18 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 
 						if (clnors_data) {
 							/* Accumulate all clnors, if they are not all equal we have to fix that! */
-							float (*clnor)[2] = &clnors_data[mlfan_vert_index];
+							short (*clnor)[2] = &clnors_data[mlfan_vert_index];
 							if (clnors_nbr) {
-								clnors_invalid |= !equals_v2v2(*clnor_ref, *clnor);
+								clnors_invalid |= ((*clnor_ref)[0] != (*clnor)[0] || (*clnor_ref)[1] != (*clnor)[1]);
 							}
 							else {
 								clnor_ref = clnor;
 							}
-							add_v2_v2(clnors_avg, *clnor);
+							clnors_avg[0] += (*clnor)[0];
+							clnors_avg[1] += (*clnor)[1];
 							clnors_nbr++;
 							/* We store here a pointer to all custom lnors processed. */
-							BLI_SMALLSTACK_PUSH(clnors, (float *)*clnor);
+							BLI_SMALLSTACK_PUSH(clnors, (short *)*clnor);
 						}
 					}
 
@@ -851,16 +862,18 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 
 						if (clnors_data) {
 							if (clnors_invalid) {
-								float *clnor;
+								short *clnor;
 
-								mul_v2_fl(clnors_avg, 1.0f / (float)clnors_nbr);
+								clnors_avg[0] /= clnors_nbr;
+								clnors_avg[1] /= clnors_nbr;
 								/* Fix/update all clnors of this fan with computed average value. */
 								printf("Invalid clnors in this fan!\n");
 								while ((clnor = BLI_SMALLSTACK_POP(clnors))) {
-									print_v2("org clnor", clnor);
-									copy_v2_v2(clnor, clnors_avg);
+									//print_v2("org clnor", clnor);
+									clnor[0] = (short)clnors_avg[0];
+									clnor[1] = (short)clnors_avg[1];
 								}
-								print_v2("new clnors", clnors_avg);
+								//print_v2("new clnors", clnors_avg);
 							}
 							else {
 								/* We still have to consume the stack! */
@@ -929,7 +942,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
                                          MLoop *mloops, float (*custom_loopnors)[3],
                                          const float *custom_loopnors_facs, const int numLoops,
                                          MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                         float (*r_clnors_data)[2], const bool use_vertices)
+                                         short (*r_clnors_data)[2], const bool use_vertices)
 {
 	/* We *may* make that poor BKE_mesh_normals_loop_split() even more complex by making it handling that
 	 * feature too, would probably be more efficient in absolute.
@@ -944,7 +957,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 	const float split_angle = (float)M_PI;  /* In this case we do not want to use angle to define smooth fans! */
 	int i;
 
-	BLI_SMALLSTACK_DECLARE(clnors_data, float *);
+	BLI_SMALLSTACK_DECLARE(clnors_data, short *);
 
 	/* Compute current lnor spaces. */
 	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
@@ -1047,7 +1060,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 			if (loops) {
 				int nbr_nors = 0;
 				float avg_nor[3];
-				float clnor_data_tmp[2], *clnor_data;
+				short clnor_data_tmp[2], *clnor_data;
 
 				zero_v3(avg_nor);
 				while (loops) {
@@ -1057,7 +1070,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 
 					nbr_nors++;
 					add_v3_v3(avg_nor, nor);
-					BLI_SMALLSTACK_PUSH(clnors_data, (float *)r_clnors_data[lidx]);
+					BLI_SMALLSTACK_PUSH(clnors_data, (short *)r_clnors_data[lidx]);
 
 					loops = loops->next;
 					BLI_BITMAP_DISABLE(done_loops, lidx);
@@ -1067,7 +1080,8 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], avg_nor, clnor_data_tmp);
 
 				while ((clnor_data = BLI_SMALLSTACK_POP(clnors_data))) {
-					copy_v2_v2(clnor_data, clnor_data_tmp);
+					clnor_data[0] = clnor_data_tmp[0];
+					clnor_data[1] = clnor_data_tmp[1];
 				}
 			}
 			else {
@@ -1088,7 +1102,7 @@ void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *
                                       MLoop *mloops, float (*custom_loopnors)[3],
                                       const float *custom_loopnors_facs, const int numLoops,
                                       MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                      float (*r_clnors_data)[2])
+                                      short (*r_clnors_data)[2])
 {
 	mesh_normals_loop_custom_set(mverts, numVerts, medges, numEdges, mloops, custom_loopnors,
 	                             custom_loopnors_facs, numLoops, mpolys, polynors, numPolys,
@@ -1100,7 +1114,7 @@ void BKE_mesh_normals_loop_custom_from_vertices_set(MVert *mverts, float (*custo
                                                     MEdge *medges, const int numEdges,
                                                     MLoop *mloops, const int numLoops,
                                                     MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                                    float (*r_clnors_data)[2])
+                                                    short (*r_clnors_data)[2])
 {
 	mesh_normals_loop_custom_set(mverts, numVerts, medges, numEdges, mloops, custom_vertnors,
 	                             custom_vertnors_facs, numLoops, mpolys, polynors, numPolys,

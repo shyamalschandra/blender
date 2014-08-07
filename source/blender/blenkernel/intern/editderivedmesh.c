@@ -203,7 +203,7 @@ static void emDM_calcLoopNormalsSpaces(DerivedMesh *dm, const float split_angle,
 
 	{
 		/* We can have both, give priority to dm's data, and fallback to bm's ones. */
-		float (*clnors_data)[2] = dm->getLoopDataArray(dm, CD_CUSTOMLOOPNORMAL);
+		short (*clnors_data)[2] = dm->getLoopDataArray(dm, CD_CUSTOMLOOPNORMAL);
 		const int cd_loop_clnors_offset = clnors_data ? -1 : CustomData_get_offset(&bm->ldata, CD_CUSTOMLOOPNORMAL);
 
 		BM_loops_calc_normal_vcos(bm, vertexCos, vertexNos, polyNos, split_angle, loopNos,

@@ -525,7 +525,7 @@ static void bm_mesh_edges_sharp_tag(BMesh *bm, const float (*vnos)[3], const flo
  * Will use first clnors_data array, and fallback to cd_loop_clnors_offset (use NULL and -1 to not use clnors). */
 static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const float (*fnos)[3], float (*r_lnos)[3],
                                        MLoopsNorSpaces *r_lnors_spaces,
-                                       float (*clnors_data)[2], const int cd_loop_clnors_offset)
+                                       short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	BMIter fiter;
 	BMFace *f_curr;
@@ -536,7 +536,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 	/* Temp normal stack. */
 	BLI_SMALLSTACK_DECLARE(normal, float *);
 	/* Temp clnors stack. */
-	BLI_SMALLSTACK_DECLARE(clnors, float *);
+	BLI_SMALLSTACK_DECLARE(clnors, short *);
 	/* Temp edge vectors stack, only used when computing lnor spaces. */
 	BLI_Stack *edge_vectors = NULL;
 
@@ -615,7 +615,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 					BKE_lnor_space_add_loop(r_lnors_spaces, lnor_space, l_curr_index, false);
 
 					if (has_clnors) {
-						float (*clnor)[2] = clnors_data ? &clnors_data[l_curr_index] :
+						short (*clnor)[2] = clnors_data ? &clnors_data[l_curr_index] :
 						                                  BM_ELEM_CD_GET_VOID_P(l_curr, cd_loop_clnors_offset);
 						BKE_lnor_space_custom_data_to_normal(lnor_space, r_lnos[l_curr_index], *clnor);
 					}
@@ -646,7 +646,8 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 				float vec_curr[3], vec_next[3], vec_org[3];
 
 				/* We validate clnors data on the fly - cheapest way to do! */
-				float clnors_avg[2] = {0.0f, 0.0f}, (*clnor_ref)[2] = NULL;
+				int clnors_avg[2] = {0, 0};
+				short (*clnor_ref)[2] = NULL;
 				int clnors_nbr = 0;
 				bool clnors_invalid = false;
 
@@ -709,18 +710,19 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 
 						if (has_clnors) {
 							/* Accumulate all clnors, if they are not all equal we have to fix that! */
-							float (*clnor)[2] = clnors_data ? &clnors_data[lfan_pivot_index] :
+							short (*clnor)[2] = clnors_data ? &clnors_data[lfan_pivot_index] :
 							                                  BM_ELEM_CD_GET_VOID_P(lfan_pivot, cd_loop_clnors_offset);
 							if (clnors_nbr) {
-								clnors_invalid |= !equals_v2v2(*clnor_ref, *clnor);
+								clnors_invalid |= ((*clnor_ref)[0] != (*clnor)[0] || (*clnor_ref)[1] != (*clnor)[1]);
 							}
 							else {
 								clnor_ref = clnor;
 							}
-							add_v2_v2(clnors_avg, *clnor);
+							clnors_avg[0] += (*clnor)[0];
+							clnors_avg[1] += (*clnor)[1];
 							clnors_nbr++;
 							/* We store here a pointer to all custom lnors processed. */
-							BLI_SMALLSTACK_PUSH(clnors, (float *)*clnor);
+							BLI_SMALLSTACK_PUSH(clnors, (short *)*clnor);
 						}
 					}
 
@@ -763,16 +765,18 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 
 						if (has_clnors) {
 							if (clnors_invalid) {
-								float *clnor;
+								short *clnor;
 
-								mul_v2_fl(clnors_avg, 1.0f / clnors_nbr);
+								clnors_avg[0] /= clnors_nbr;
+								clnors_avg[1] /= clnors_nbr;
 								/* Fix/update all clnors of this fan with computed average value. */
 								printf("Invalid clnors in this fan!\n");
 								while ((clnor = BLI_SMALLSTACK_POP(clnors))) {
-									print_v2("org clnor", clnor);
-									copy_v2_v2(clnor, clnors_avg);
+									//print_v2("org clnor", clnor);
+									clnor[0] = (short)clnors_avg[0];
+									clnor[1] = (short)clnors_avg[1];
 								}
-								print_v2("new clnors", clnors_avg);
+								//print_v2("new clnors", clnors_avg);
 							}
 							else {
 								/* We still have to consume the stack! */
@@ -822,7 +826,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
  */
 void BM_mesh_loop_normals_update(BMesh *bm, const float split_angle, float (*r_lnos)[3],
                                  MLoopsNorSpaces *r_lnors_spaces,
-                                 float (*clnors_data)[2], const int cd_loop_clnors_offset)
+                                 short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
 
@@ -844,7 +848,7 @@ void BM_mesh_loop_normals_update(BMesh *bm, const float split_angle, float (*r_l
 void BM_loops_calc_normal_vcos(BMesh *bm, const float (*vcos)[3], const float (*vnos)[3], const float (*fnos)[3],
                                const float split_angle, float (*r_lnos)[3],
                                MLoopsNorSpaces *r_lnors_spaces,
-                               float (*clnors_data)[2], const int cd_loop_clnors_offset)
+                               short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
 

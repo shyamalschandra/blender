@@ -2551,7 +2551,7 @@ void CDDM_calc_loop_normals_spaces(DerivedMesh *dm, const float split_angle, MLo
 	dm->dirty &= ~DM_DIRTY_NORMALS;
 
 	{
-		float (*clnor_data)[2] = CustomData_get_layer(ldata, CD_CUSTOMLOOPNORMAL);
+		short (*clnor_data)[2] = CustomData_get_layer(ldata, CD_CUSTOMLOOPNORMAL);
 
 		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 		                            mpolys, (const float (*)[3])pnors, numPolys, split_angle,
