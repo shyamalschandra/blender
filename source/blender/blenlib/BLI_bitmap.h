@@ -91,6 +91,16 @@ typedef unsigned int BLI_bitmap;
 			BLI_BITMAP_DISABLE(_bitmap, _index); \
 	} (void)0
 
+/* set the value of the whole bitmap (needs size info) */
+#define BLI_BITMAP_ENABLE_ALL(_bitmap, _tot) \
+	(CHECK_TYPE_INLINE(_bitmap, BLI_bitmap *), \
+	 (memset(_bitmap, UCHAR_MAX, BLI_BITMAP_SIZE(_tot))))
+
+/* clear the value of the whole bitmap (needs size info) */
+#define BLI_BITMAP_DISABLE_ALL(_bitmap, _tot) \
+	(CHECK_TYPE_INLINE(_bitmap, BLI_bitmap *), \
+	 (memset(_bitmap, 0, BLI_BITMAP_SIZE(_tot))))
+
 /* resize bitmap to have space for '_tot' bits */
 #define BLI_BITMAP_RESIZE(_bitmap, _tot) \
 	{ \

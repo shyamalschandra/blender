@@ -1200,6 +1200,8 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 	 */
 	MLoopsNorSpaces lnors_spaces = {NULL};
 	BLI_bitmap *done_loops = BLI_BITMAP_NEW((size_t)numLoops, __func__);
+	/* To avoid interpolating custom vnors more than once in case their weight is not 1.0f!!! */
+	BLI_bitmap *done_verts = use_vertices ? BLI_BITMAP_NEW((size_t)numVerts, __func__) : NULL;
 	float (*lnors)[3] = MEM_callocN(sizeof(*lnors) * (size_t)numLoops, __func__);
 	int *loop_to_poly = MEM_mallocN(sizeof(int) * (size_t)numLoops, __func__);
 	const float split_angle = (float)M_PI;  /* In this case we do not want to use angle to define smooth fans! */
@@ -1211,91 +1213,103 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 	                            mpolys, polynors, numPolys, split_angle, &lnors_spaces, NULL, loop_to_poly);
 
-	/* Now, check each current smooth fan (one lnor space per smooth fan!), and if all its matching custom lnors
-	 * are not (enough) equal, add sharp edges as needed.
-	 * This way, next time we run BKE_mesh_normals_loop_split(), we'll get lnor spaces/smooth fans matching
-	 * given custom lnors.
-	 * Note this code *will never* unsharp edges!
-	 */
-	for (i = 0; i < numLoops; i++) {
-		if (!lnors_spaces.lspaces[i]) {
-			/* This should not happen in theory, but in some rare case (probably ugly geometry)
-			 * we can get some NULL loopspaces at this point. :/
-			 * Maybe we should set those loops' edges as sharp?
-			 */
-			BLI_BITMAP_ENABLE(done_loops, i);
-			//printf("WARNING! Getting invalid NULL loop spaces for loop %d!\n", i);
-			continue;
-		}
-
-		if (!BLI_BITMAP_TEST_BOOL(done_loops, i)) {
-			/* Notes:
-			 *     * In case of mono-loop smooth fan, loops is NULL, so everything is fine (we have nothing to do).
-			 *     * Loops in this linklist are ordered (in reversed order compared to how they were discovered by
-			 *       BKE_mesh_normals_loop_split(), but this is not a problem). Hence, we just have to compare
-			 *       current value to the previous one!
-			 */
-			LinkNode *loops = lnors_spaces.lspaces[i]->loops;
-			MLoop *prev_ml = NULL;
-			const float *org_nor = NULL;
-			if (!loops) {
-				MLoop *ml = &mloops[i];
-				const int idx = use_vertices ? (int)ml->v : i;
-				float *nor = custom_loopnors[idx];
-				const float fac = custom_loopnors_facs ? custom_loopnors_facs[idx] : 1.0f;
-
-				if (fac != 1.0f) {
-					/* Note: inplace modification to get final custom lnor! */
-					interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
-				}
+	if (!use_vertices) {
+		/* Now, check each current smooth fan (one lnor space per smooth fan!), and if all its matching custom lnors
+		 * are not (enough) equal, add sharp edges as needed.
+		 * This way, next time we run BKE_mesh_normals_loop_split(), we'll get lnor spaces/smooth fans matching
+		 * given custom lnors.
+		 * Note this code *will never* unsharp edges!
+		 * And quite obviously, when we set custom normals per vertices, running this is absolutely useless!
+		 */
+		for (i = 0; i < numLoops; i++) {
+			if (!lnors_spaces.lspaces[i]) {
+				/* This should not happen in theory, but in some rare case (probably ugly geometry)
+				 * we can get some NULL loopspaces at this point. :/
+				 * Maybe we should set those loops' edges as sharp?
+				 */
 				BLI_BITMAP_ENABLE(done_loops, i);
+				printf("WARNING! Getting invalid NULL loop spaces for loop %d!\n", i);
+				continue;
 			}
-			/* Hidden else, avoids one indentation. ;) */
-			while (loops) {
-				const int lidx = GET_INT_FROM_POINTER(loops->link);
-				MLoop *ml = &mloops[lidx];
-				const int idx = use_vertices ? (int)ml->v : lidx;
-				float *nor = custom_loopnors[idx];
-				const float fac = custom_loopnors_facs ? custom_loopnors_facs[idx] : 1.0f;
 
-				if (fac != 1.0f) {
-					/* Note: inplace modification to get final custom lnor! */
-					interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[lidx]->vec_lnor, nor, fac);
+			if (!BLI_BITMAP_TEST_BOOL(done_loops, i)) {
+				/* Notes:
+				 *     * In case of mono-loop smooth fan, loops is NULL, so everything is fine (we have nothing to do).
+				 *     * Loops in this linklist are ordered (in reversed order compared to how they were discovered by
+				 *       BKE_mesh_normals_loop_split(), but this is not a problem). Hence, we just have to compare
+				 *       current value to the previous one!
+				 */
+				LinkNode *loops = lnors_spaces.lspaces[i]->loops;
+				MLoop *prev_ml = NULL;
+				const float *org_nor = NULL;
+				if (!loops) {
+					MLoop *ml = &mloops[i];
+					const int idx = use_vertices ? (int)ml->v : i;
+					float *nor = custom_loopnors[idx];
+
+					if (custom_loopnors_facs) {
+						const float fac = custom_loopnors_facs[idx];
+
+						if (fac != 1.0f) {
+							/* Note: inplace modification to get final custom lnor! */
+							interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
+						}
+					}
+					BLI_BITMAP_ENABLE(done_loops, i);
 				}
+				/* Hidden else, avoids one indentation. ;) */
+				while (loops) {
+					const int lidx = GET_INT_FROM_POINTER(loops->link);
+					MLoop *ml = &mloops[lidx];
+					const int idx = use_vertices ? (int)ml->v : lidx;
+					float *nor = custom_loopnors[idx];
 
-				if (!org_nor) {
-					org_nor = nor;
+					if (custom_loopnors_facs) {
+						const float fac = custom_loopnors_facs[idx];
+
+						if (fac != 1.0f) {
+							/* Note: inplace modification to get final custom lnor! */
+							interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
+						}
+					}
+
+					if (!org_nor) {
+						org_nor = nor;
+					}
+					else if (dot_v3v3(org_nor, nor) < 1.0f - 1e-6f) {
+						/* Current normal differs too much from org one, we have to tag the edge between
+						 * previous loop's face and current's one as sharp.
+						 * We know those two loops do not point to the same edge, since we do not allow reversed winding
+						 * in a same smooth fan.
+						 */
+						const MPoly *mp = &mpolys[loop_to_poly[lidx]];
+						const MLoop *mlp = &mloops[(lidx == mp->loopstart) ? mp->loopstart + mp->totloop - 1 : lidx - 1];
+						medges[(prev_ml->e == mlp->e) ? prev_ml->e : ml->e].flag |= ME_SHARP;
+
+						org_nor = nor;
+					}
+
+					prev_ml = ml;
+					loops = loops->next;
+					BLI_BITMAP_ENABLE(done_loops, lidx);
 				}
-				else if (dot_v3v3(org_nor, nor) < 1.0f - 1e-6f) {
-					/* Current normal differs too much from org one, we have to tag the edge between
-					 * previous loop's face and current's one as sharp.
-					 * We know those two loops do not point to the same edge, since we do not allow reversed winding
-					 * in a same smooth fan.
-					 */
-					const MPoly *mp = &mpolys[loop_to_poly[lidx]];
-					const MLoop *mlp = &mloops[(lidx == mp->loopstart) ? mp->loopstart + mp->totloop - 1 : lidx - 1];
-					medges[(prev_ml->e == mlp->e) ? prev_ml->e : ml->e].flag |= ME_SHARP;
-
-					org_nor = nor;
-				}
-
-				prev_ml = ml;
-				loops = loops->next;
-				BLI_BITMAP_ENABLE(done_loops, lidx);
 			}
 		}
-	}
 
-	/* And now, recompute our new auto lnors and lnor spaces! */
-	BKE_free_loops_normal_spaces(&lnors_spaces);
-	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
-	                            mpolys, polynors, numPolys, split_angle, &lnors_spaces, NULL, loop_to_poly);
+		/* And now, recompute our new auto lnors and lnor spaces! */
+		BKE_free_loops_normal_spaces(&lnors_spaces);
+		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
+		                            mpolys, polynors, numPolys, split_angle, &lnors_spaces, NULL, loop_to_poly);
+	}
+	else {
+		BLI_BITMAP_ENABLE_ALL(done_loops, (size_t)numLoops);
+	}
 
 	/* And we just have to convert plain object-space custom normals to our lnor space-encoded ones. */
 	for (i = 0; i < numLoops; i++) {
 		if (!lnors_spaces.lspaces[i]) {
 			BLI_BITMAP_DISABLE(done_loops, i);
-			//printf("WARNING! Still getting invalid NULL loop spaces in second loop for loop %d!\n", i);
+			printf("WARNING! Still getting invalid NULL loop spaces in second loop for loop %d!\n", i);
 			continue;
 		}
 
@@ -1314,7 +1328,17 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				while (loops) {
 					const int lidx = GET_INT_FROM_POINTER(loops->link);
 					const int idx = use_vertices ? (int)mloops[lidx].v : lidx;
-					const float *nor = custom_loopnors[idx];
+					float *nor = custom_loopnors[idx];
+
+					if (custom_loopnors_facs && use_vertices && !BLI_BITMAP_TEST_BOOL(done_verts, idx)) {
+						const float fac = custom_loopnors_facs[idx];
+
+						if (fac != 1.0f) {
+							/* Note: inplace modification to get final custom lnor! */
+							interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
+						}
+						BLI_BITMAP_ENABLE(done_verts, idx);
+					}
 
 					nbr_nors++;
 					add_v3_v3(avg_nor, nor);
@@ -1334,7 +1358,19 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 			}
 			else {
 				const int idx = use_vertices ? (int)mloops[i].v : i;
-				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], custom_loopnors[idx], r_clnors_data[i]);
+				float *nor = custom_loopnors[idx];
+
+				if (custom_loopnors_facs && use_vertices && !BLI_BITMAP_TEST_BOOL(done_verts, idx)) {
+					const float fac = custom_loopnors_facs[idx];
+
+					if (fac != 1.0f) {
+						/* Note: inplace modification to get final custom lnor! */
+						interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
+					}
+					BLI_BITMAP_ENABLE(done_verts, idx);
+				}
+
+				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], nor, r_clnors_data[i]);
 				BLI_BITMAP_DISABLE(done_loops, i);
 			}
 		}
