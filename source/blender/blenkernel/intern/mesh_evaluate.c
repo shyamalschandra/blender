@@ -47,6 +47,7 @@
 #include "BLI_linklist_stack.h"
 #include "BLI_alloca.h"
 #include "BLI_stack.h"
+#include "BLI_task.h"
 
 #include "BKE_customdata.h"
 #include "BKE_mesh.h"
@@ -485,6 +486,336 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 	}
 }
 
+typedef struct LoopSplitTaskDataCommon {
+	/* Common to all instances, read/write.
+	 * Note we do not need to protect it, though, since two different tasks will *always* affect different
+	 * elements in the arrays. */
+	MLoopsNorSpaces *lnors_spaces;
+	float (*loopnors)[3];
+	short (*clnors_data)[2];
+
+	/* Common to all instances, and read-only. */
+	const MVert *mverts;
+	const MEdge *medges;
+	const MLoop *mloops;
+	const MPoly *mpolys;
+	const int (*edge_to_loops)[2];
+	const int *loop_to_poly;
+	const float (*polynors)[3];
+} LoopSplitTaskDataCommon;
+
+typedef struct LoopSplitTaskData {
+	/* Specific to each instance (each task). */
+	MLoopNorSpace *lnor_space;  /* We have to create those outside of tasks, since afaik memarena is not threadsafe. */
+	float (*lnor)[3];
+	const MLoop *ml_curr;
+	const MLoop *ml_prev;
+	int ml_curr_index;
+	int ml_prev_index;
+	const int *e2l_prev;
+	int mp_index;
+
+	LoopSplitTaskDataCommon *common;
+} LoopSplitTaskData;
+
+static void exec_split_loop_nor_single(TaskPool *UNUSED(pool), void *taskdata, int UNUSED(threadid))
+{
+	LoopSplitTaskData *data = (LoopSplitTaskData *)taskdata;
+
+	MLoopsNorSpaces *lnors_spaces = data->common->lnors_spaces;
+	short (*clnors_data)[2] = data->common->clnors_data;
+
+	const MVert *mverts = data->common->mverts;
+	const MEdge *medges = data->common->medges;
+	const float (*polynors)[3] = data->common->polynors;
+
+	MLoopNorSpace *lnor_space = data->lnor_space;
+	float (*lnor)[3] = data->lnor;
+	const MLoop *ml_curr = data->ml_curr;
+	const MLoop *ml_prev = data->ml_prev;
+	const int ml_curr_index = data->ml_curr_index;
+#if 0  /* Not needed for 'single' loop. */
+	const int ml_prev_index = data->ml_prev_index;
+	const int *e2l_prev = data->e2l_prev;
+#endif
+	const int mp_index = data->mp_index;
+
+	/* Simple case (both edges around that vertex are sharp in current polygon),
+	 * this loop just takes its poly normal.
+	 */
+	copy_v3_v3(*lnor, polynors[mp_index]);
+
+	/* printf("BASIC: handling loop %d / edge %d / vert %d\n", ml_curr_index, ml_curr->e, ml_curr->v); */
+
+	/* If needed, generate this (simple!) lnor space. */
+	if (lnors_spaces) {
+		float vec_curr[3], vec_prev[3];
+
+		const unsigned int mv_pivot_index = ml_curr->v;  /* The vertex we are "fanning" around! */
+		const MVert *mv_pivot = &mverts[mv_pivot_index];
+		const MEdge *me_curr = &medges[ml_curr->e];
+		const MVert *mv_2 = (me_curr->v1 == mv_pivot_index) ? &mverts[me_curr->v2] : &mverts[me_curr->v1];
+		const MEdge *me_prev = &medges[ml_prev->e];
+		const MVert *mv_3 = (me_prev->v1 == mv_pivot_index) ? &mverts[me_prev->v2] : &mverts[me_prev->v1];
+
+		sub_v3_v3v3(vec_curr, mv_2->co, mv_pivot->co);
+		normalize_v3(vec_curr);
+		sub_v3_v3v3(vec_prev, mv_3->co, mv_pivot->co);
+		normalize_v3(vec_prev);
+
+		BKE_lnor_space_define(lnor_space, *lnor, vec_curr, vec_prev, NULL);
+		/* We know there is only one loop in this space, no need to create a linklist in this case... */
+		BKE_lnor_space_add_loop(lnors_spaces, lnor_space, ml_curr_index, false);
+
+		if (clnors_data) {
+			BKE_lnor_space_custom_data_to_normal(lnor_space, *lnor, clnors_data[ml_curr_index]);
+		}
+	}
+}
+
+#define INDEX_UNSET INT_MIN
+#define INDEX_INVALID -1
+/* See comment about edge_to_loops below. */
+#define IS_EDGE_SHARP(_e2l) (ELEM((_e2l)[1], INDEX_UNSET, INDEX_INVALID))
+
+static void exec_split_loop_nor_fan(TaskPool *UNUSED(pool), void *taskdata, int UNUSED(threadid))
+{
+	LoopSplitTaskData *data = (LoopSplitTaskData *)taskdata;
+
+	MLoopsNorSpaces *lnors_spaces = data->common->lnors_spaces;
+	float (*loopnors)[3] = data->common->loopnors;
+	short (*clnors_data)[2] = data->common->clnors_data;
+
+	const MVert *mverts = data->common->mverts;
+	const MEdge *medges = data->common->medges;
+	const MLoop *mloops = data->common->mloops;
+	const MPoly *mpolys = data->common->mpolys;
+	const int (*edge_to_loops)[2] = data->common->edge_to_loops;
+	const int *loop_to_poly = data->common->loop_to_poly;
+	const float (*polynors)[3] = data->common->polynors;
+
+	MLoopNorSpace *lnor_space = data->lnor_space;
+#if 0  /* Not needed for 'fan' loops. */
+	float (*lnor)[3] = data->lnor;
+#endif
+	const MLoop *ml_curr = data->ml_curr;
+	const MLoop *ml_prev = data->ml_prev;
+	const int ml_curr_index = data->ml_curr_index;
+	const int ml_prev_index = data->ml_prev_index;
+	const int mp_index = data->mp_index;
+	const int *e2l_prev = data->e2l_prev;
+
+	/* Gah... We have to fan around current vertex, until we find the other non-smooth edge,
+	 * and accumulate face normals into the vertex!
+	 * Note in case this vertex has only one sharp edges, this is a waste because the normal is the same as
+	 * the vertex normal, but I do not see any easy way to detect that (would need to count number
+	 * of sharp edges per vertex, I doubt the additional memory usage would be worth it, especially as
+	 * it should not be a common case in real-life meshes anyway).
+	 */
+	const unsigned int mv_pivot_index = ml_curr->v;  /* The vertex we are "fanning" around! */
+	const MVert *mv_pivot = &mverts[mv_pivot_index];
+	const MEdge *me_org = &medges[ml_curr->e];  /* ml_curr would be mlfan_prev if we needed that one */
+	const int *e2lfan_curr;
+	float vec_curr[3], vec_prev[3], vec_org[3];
+	const MLoop *mlfan_curr, *mlfan_next;
+	const MPoly *mpfan_next;
+	float lnor[3] = {0.0f, 0.0f, 0.0f};
+	/* mlfan_vert_index: the loop of our current edge might not be the loop of our current vertex! */
+	int mlfan_curr_index, mlfan_vert_index, mpfan_curr_index;
+
+	/* We validate clnors data on the fly - cheapest way to do! */
+	int clnors_avg[2] = {0, 0};
+	short (*clnor_ref)[2] = NULL;
+	int clnors_nbr = 0;
+	bool clnors_invalid = false;
+
+	/* Temp loop normal stack. */
+	BLI_SMALLSTACK_DECLARE(normal, float *);
+	/* Temp clnors stack. */
+	BLI_SMALLSTACK_DECLARE(clnors, short *);
+	/* Temp edge vectors stack, only used when computing lnor spaces. */
+	BLI_Stack *edge_vectors = lnors_spaces ? BLI_stack_new(sizeof(float[3]), __func__) : NULL;
+
+	e2lfan_curr = e2l_prev;
+	mlfan_curr = ml_prev;
+	mlfan_curr_index = ml_prev_index;
+	mlfan_vert_index = ml_curr_index;
+	mpfan_curr_index = mp_index;
+
+	BLI_assert(mlfan_curr_index >= 0);
+	BLI_assert(mlfan_vert_index >= 0);
+	BLI_assert(mpfan_curr_index >= 0);
+
+	BLI_assert((edge_vectors == NULL) || BLI_stack_is_empty(edge_vectors));
+
+	/* Only need to compute previous edge's vector once, then we can just reuse old current one! */
+	{
+		const MVert *mv_2 = (me_org->v1 == mv_pivot_index) ? &mverts[me_org->v2] : &mverts[me_org->v1];
+
+		sub_v3_v3v3(vec_org, mv_2->co, mv_pivot->co);
+		normalize_v3(vec_org);
+		copy_v3_v3(vec_prev, vec_org);
+
+		if (lnors_spaces) {
+			BLI_stack_push(edge_vectors, vec_org);
+		}
+	}
+
+	/* printf("FAN: vert %d, start edge %d\n", mv_pivot_index, ml_curr->e); */
+
+	while (true) {
+		const MEdge *me_curr = &medges[mlfan_curr->e];
+		/* Compute edge vectors.
+		 * NOTE: We could pre-compute those into an array, in the first iteration, instead of computing them
+		 *       twice (or more) here. However, time gained is not worth memory and time lost,
+		 *       given the fact that this code should not be called that much in real-life meshes...
+		 */
+		{
+			const MVert *mv_2 = (me_curr->v1 == mv_pivot_index) ? &mverts[me_curr->v2] : &mverts[me_curr->v1];
+
+			sub_v3_v3v3(vec_curr, mv_2->co, mv_pivot->co);
+			normalize_v3(vec_curr);
+		}
+
+		/* printf("\thandling edge %d / loop %d\n", mlfan_curr->e, mlfan_curr_index); */
+
+		{
+			/* Code similar to accumulate_vertex_normals_poly. */
+			/* Calculate angle between the two poly edges incident on this vertex. */
+			const float fac = saacos(dot_v3v3(vec_curr, vec_prev));
+			/* Accumulate */
+			madd_v3_v3fl(lnor, polynors[mpfan_curr_index], fac);
+
+			if (clnors_data) {
+				/* Accumulate all clnors, if they are not all equal we have to fix that! */
+				short (*clnor)[2] = &clnors_data[mlfan_vert_index];
+				if (clnors_nbr) {
+					clnors_invalid |= ((*clnor_ref)[0] != (*clnor)[0] || (*clnor_ref)[1] != (*clnor)[1]);
+				}
+				else {
+					clnor_ref = clnor;
+				}
+				clnors_avg[0] += (*clnor)[0];
+				clnors_avg[1] += (*clnor)[1];
+				clnors_nbr++;
+				/* We store here a pointer to all custom lnors processed. */
+				BLI_SMALLSTACK_PUSH(clnors, (short *)*clnor);
+			}
+		}
+
+		/* We store here a pointer to all loop-normals processed. */
+		BLI_SMALLSTACK_PUSH(normal, (float *)(loopnors[mlfan_vert_index]));
+
+		if (lnors_spaces) {
+			/* Assign current lnor space to current 'vertex' loop. */
+			BKE_lnor_space_add_loop(lnors_spaces, lnor_space, mlfan_vert_index, true);
+			if (me_curr != me_org) {
+				/* We store here all edges-normalized vectors processed. */
+				BLI_stack_push(edge_vectors, vec_curr);
+			}
+		}
+
+		if (IS_EDGE_SHARP(e2lfan_curr) || (me_curr == me_org)) {
+			/* Current edge is sharp and we have finished with this fan of faces around this vert,
+			 * or this vert is smooth, and we have completed a full turn around it.
+			 */
+			/* printf("FAN: Finished!\n"); */
+			break;
+		}
+
+		copy_v3_v3(vec_prev, vec_curr);
+
+		/* Warning! This is rather complex!
+		 * We have to find our next edge around the vertex (fan mode).
+		 * First we find the next loop, which is either previous or next to mlfan_curr_index, depending
+		 * whether both loops using current edge are in the same direction or not, and whether
+		 * mlfan_curr_index actually uses the vertex we are fanning around!
+		 * mlfan_curr_index is the index of mlfan_next here, and mlfan_next is not the real next one
+		 * (i.e. not the future mlfan_curr)...
+		 */
+		mlfan_curr_index = (e2lfan_curr[0] == mlfan_curr_index) ? e2lfan_curr[1] : e2lfan_curr[0];
+		mpfan_curr_index = loop_to_poly[mlfan_curr_index];
+
+		BLI_assert(mlfan_curr_index >= 0);
+		BLI_assert(mpfan_curr_index >= 0);
+
+		mlfan_next = &mloops[mlfan_curr_index];
+		mpfan_next = &mpolys[mpfan_curr_index];
+		if ((mlfan_curr->v == mlfan_next->v && mlfan_curr->v == mv_pivot_index) ||
+			(mlfan_curr->v != mlfan_next->v && mlfan_curr->v != mv_pivot_index))
+		{
+			/* We need the previous loop, but current one is our vertex's loop. */
+			mlfan_vert_index = mlfan_curr_index;
+			if (--mlfan_curr_index < mpfan_next->loopstart) {
+				mlfan_curr_index = mpfan_next->loopstart + mpfan_next->totloop - 1;
+			}
+		}
+		else {
+			/* We need the next loop, which is also our vertex's loop. */
+			if (++mlfan_curr_index >= mpfan_next->loopstart + mpfan_next->totloop) {
+				mlfan_curr_index = mpfan_next->loopstart;
+			}
+			mlfan_vert_index = mlfan_curr_index;
+		}
+		mlfan_curr = &mloops[mlfan_curr_index];
+		/* And now we are back in sync, mlfan_curr_index is the index of mlfan_curr! Pff! */
+
+		e2lfan_curr = edge_to_loops[mlfan_curr->e];
+	}
+
+	{
+		float lnor_len = normalize_v3(lnor);
+
+		/* If we are generating lnor spaces, we can now define the one for this fan,
+		 * and optionally compute final lnor from custom data too!
+		 */
+		if (lnors_spaces) {
+			if (UNLIKELY(lnor_len == 0.0f)) {
+				/* Use vertex normal as fallback! */
+				copy_v3_v3(lnor, loopnors[mlfan_vert_index]);
+				lnor_len = 1.0f;
+			}
+
+			BKE_lnor_space_define(lnor_space, lnor, vec_org, vec_curr, edge_vectors);
+
+			if (clnors_data) {
+				if (clnors_invalid) {
+					short *clnor;
+
+					clnors_avg[0] /= clnors_nbr;
+					clnors_avg[1] /= clnors_nbr;
+					/* Fix/update all clnors of this fan with computed average value. */
+					printf("Invalid clnors in this fan!\n");
+					while ((clnor = BLI_SMALLSTACK_POP(clnors))) {
+						//print_v2("org clnor", clnor);
+						clnor[0] = (short)clnors_avg[0];
+						clnor[1] = (short)clnors_avg[1];
+					}
+					//print_v2("new clnors", clnors_avg);
+				}
+				/* Extra bonus: since smallstack is local to this func, no more need to empty it at all cost! */
+
+				BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, *clnor_ref);
+			}
+		}
+
+		/* In case we get a zero normal here, just use vertex normal already set! */
+		if (LIKELY(lnor_len != 0.0f)) {
+			/* Copy back the final computed normal into all related loop-normals. */
+			float *nor;
+
+			while ((nor = BLI_SMALLSTACK_POP(normal))) {
+				copy_v3_v3(nor, lnor);
+			}
+		}
+		/* Extra bonus: since smallstack is local to this func, no more need to empty it at all cost! */
+	}
+
+	if (lnors_spaces) {
+		BLI_stack_free(edge_vectors);
+	}
+}
+
 /**
  * Compute split normals, i.e. vertex normals associated with each poly (hence 'loop normals').
  * Useful to materialize sharp edges (or non-smooth faces) without actually modifying the geometry (splitting edges).
@@ -495,11 +826,6 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
                                  MLoopsNorSpaces *r_lnors_spaces, short (*clnors_data)[2],
                                  int *r_loop_to_poly)
 {
-#define INDEX_UNSET INT_MIN
-#define INDEX_INVALID -1
-/* See comment about edge_to_loops below. */
-#define IS_EDGE_SHARP(_e2l) (ELEM((_e2l)[1], INDEX_UNSET, INDEX_INVALID))
-
 	/* Mapping edge -> loops.
 	 * If that edge is used by more than two loops (polys), it is always sharp (and tagged as such, see below).
 	 * We also use the second loop index as a kind of flag: smooth edge: > 0,
@@ -521,16 +847,25 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	bool *sharp_verts = NULL;  /* Maybe we could use a BLI_bitmap here? */
 	MLoopsNorSpaces _lnors_spaces = {NULL};
 
-	/* Temp loop normal stack. */
-	BLI_SMALLSTACK_DECLARE(normal, float *);
-	/* Temp clnors stack. */
-	BLI_SMALLSTACK_DECLARE(clnors, short *);
-	/* Temp edge vectors stack, only used when computing lnor spaces. */
-	BLI_Stack *edge_vectors = NULL;
+#ifdef USE_THREADS
+	const int totthread = 4;//TASK_SCHEDULER_AUTO_THREADS;
+#else
+	const int totthread = 4;//TASK_SCHEDULER_SINGLE_THREAD;
+#endif
+	TaskScheduler *task_scheduler = NULL;
+	TaskPool *task_pool = NULL;
+	LoopSplitTaskDataCommon common_taskdata = {NULL};
 
 #ifdef DEBUG_TIME
 	TIMEIT_START(BKE_mesh_normals_loop_split);
 #endif
+
+	printf("%d\n", totthread);
+
+	if (numLoops > 10000) {
+		task_scheduler = BLI_task_scheduler_create(totthread);
+		task_pool = BLI_task_pool_create(task_scheduler, NULL);
+	}
 
 	if (check_angle) {
 		/* When using custom loop normals, disable the angle feature! */
@@ -550,9 +885,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 		if (!r_lnors_spaces->mem) {
 			BKE_init_loops_normal_spaces(r_lnors_spaces, numLoops);
 		}
-
 		sharp_verts = MEM_callocN(sizeof(bool) * (size_t)numVerts, __func__);
-		edge_vectors = BLI_stack_new(sizeof(float[3]), __func__);
 	}
 
 	/* This first loop check which edges are actually smooth, and compute edge vectors. */
@@ -620,6 +953,19 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 		}
 	}
 
+	/* Init data common to all tasks. */
+	common_taskdata.lnors_spaces = r_lnors_spaces;
+	common_taskdata.loopnors = r_loopnors;
+	common_taskdata.clnors_data = clnors_data;
+
+	common_taskdata.mverts = mverts;
+	common_taskdata.medges = medges;
+	common_taskdata.mloops = mloops;
+	common_taskdata.mpolys = mpolys;
+	common_taskdata.edge_to_loops = (const int(*)[2])edge_to_loops;
+	common_taskdata.loop_to_poly = loop_to_poly;
+	common_taskdata.polynors = polynors;
+
 	/* We now know edges that can be smoothed (with their vector, and their two loops), and edges that will be hard!
 	 * Now, time to generate the normals.
 	 */
@@ -649,39 +995,25 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 				/* printf("Skipping loop %d / edge %d / vert %d(%d)\n", ml_curr_index, ml_curr->e, ml_curr->v, sharp_verts[ml_curr->v]); */
 			}
 			else if (IS_EDGE_SHARP(e2l_curr) && IS_EDGE_SHARP(e2l_prev)) {
-				/* Simple case (both edges around that vertex are sharp in current polygon),
-				 * this vertex just takes its poly normal.
-				 */
-				copy_v3_v3(*lnors, polynors[mp_index]);
-
-				/* printf("BASIC: handling loop %d / edge %d / vert %d\n", ml_curr_index, ml_curr->e, ml_curr->v); */
-
-				/* If needed, generate this (simple!) lnor space. */
+				LoopSplitTaskData *taskdata = MEM_mallocN(sizeof(LoopSplitTaskData), __func__);
+				taskdata->lnor = lnors;
+				taskdata->ml_curr = ml_curr;
+				taskdata->ml_prev = ml_prev;
+				taskdata->ml_curr_index = ml_curr_index;
+#if 0  /* Not needed for 'single' loop. */
+				taskdata->ml_prev_index = ml_prev_index;
+				taskdata->e2l_prev = e2l_prev;
+#endif
+				taskdata->mp_index = mp_index;
+				taskdata->common = &common_taskdata;
 				if (r_lnors_spaces) {
-					float vec_curr[3], vec_prev[3];
-					MLoopNorSpace *lnor_space = BKE_lnor_space_create(r_lnors_spaces);
-
-					{
-						const unsigned int mv_pivot_index = ml_curr->v;  /* The vertex we are "fanning" around! */
-						const MVert *mv_pivot = &mverts[mv_pivot_index];
-						const MEdge *me_curr = &medges[ml_curr->e];
-						const MVert *mv_2 = (me_curr->v1 == mv_pivot_index) ? &mverts[me_curr->v2] : &mverts[me_curr->v1];
-						const MEdge *me_prev = &medges[ml_prev->e];
-						const MVert *mv_3 = (me_prev->v1 == mv_pivot_index) ? &mverts[me_prev->v2] : &mverts[me_prev->v1];
-
-						sub_v3_v3v3(vec_curr, mv_2->co, mv_pivot->co);
-						normalize_v3(vec_curr);
-						sub_v3_v3v3(vec_prev, mv_3->co, mv_pivot->co);
-						normalize_v3(vec_prev);
-					}
-
-					BKE_lnor_space_define(lnor_space, *lnors, vec_curr, vec_prev, NULL);
-					/* We know there is only one loop in this space, no need to create a linklist in this case... */
-					BKE_lnor_space_add_loop(r_lnors_spaces, lnor_space, ml_curr_index, false);
-
-					if (clnors_data) {
-						BKE_lnor_space_custom_data_to_normal(lnor_space, *lnors, clnors_data[ml_curr_index]);
-					}
+					taskdata->lnor_space = BKE_lnor_space_create(r_lnors_spaces);
+				}
+				if (task_pool) {
+					BLI_task_pool_push(task_pool, exec_split_loop_nor_single, taskdata, true, TASK_PRIORITY_HIGH);
+				}
+				else {
+					exec_split_loop_nor_single(NULL, taskdata, 0);
 				}
 			}
 			/* We *do not need* to check/tag loops as already computed!
@@ -693,216 +1025,28 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 			 * All this due/thanks to link between normals and loop ordering (i.e. winding).
 			 */
 			else {
-				/* Gah... We have to fan around current vertex, until we find the other non-smooth edge,
-				 * and accumulate face normals into the vertex!
-				 * Note in case this vertex has only one sharp edges, this is a waste because the normal is the same as
-				 * the vertex normal, but I do not see any easy way to detect that (would need to count number
-				 * of sharp edges per vertex, I doubt the additional memory usage would be worth it, especially as
-				 * it should not be a common case in real-life meshes anyway).
-				 */
-				const unsigned int mv_pivot_index = ml_curr->v;  /* The vertex we are "fanning" around! */
-				const MVert *mv_pivot = &mverts[mv_pivot_index];
-				const MEdge *me_org = &medges[ml_curr->e];  /* ml_curr would be mlfan_prev if we needed that one */
-				const int *e2lfan_curr;
-				float vec_curr[3], vec_prev[3], vec_org[3];
-				MLoop *mlfan_curr, *mlfan_next;
-				MPoly *mpfan_next;
-				float lnor[3] = {0.0f, 0.0f, 0.0f};
-				/* mlfan_vert_index: the loop of our current edge might not be the loop of our current vertex! */
-				int mlfan_curr_index, mlfan_vert_index, mpfan_curr_index;
-
-				/* We validate clnors data on the fly - cheapest way to do! */
-				int clnors_avg[2] = {0, 0};
-				short (*clnor_ref)[2] = NULL;
-				int clnors_nbr = 0;
-				bool clnors_invalid = false;
-
-				MLoopNorSpace *lnor_space = r_lnors_spaces ? BKE_lnor_space_create(r_lnors_spaces) : NULL;
-
-				e2lfan_curr = e2l_prev;
-				mlfan_curr = ml_prev;
-				mlfan_curr_index = ml_prev_index;
-				mlfan_vert_index = ml_curr_index;
-				mpfan_curr_index = mp_index;
-
-				BLI_assert(mlfan_curr_index >= 0);
-				BLI_assert(mlfan_vert_index >= 0);
-				BLI_assert(mpfan_curr_index >= 0);
-
-				BLI_assert((edge_vectors == NULL) || BLI_stack_is_empty(edge_vectors));
-
-				/* Only need to compute previous edge's vector once, then we can just reuse old current one! */
-				{
-					const MVert *mv_2 = (me_org->v1 == mv_pivot_index) ? &mverts[me_org->v2] : &mverts[me_org->v1];
-
-					sub_v3_v3v3(vec_org, mv_2->co, mv_pivot->co);
-					normalize_v3(vec_org);
-					copy_v3_v3(vec_prev, vec_org);
-
-					if (r_lnors_spaces) {
-						BLI_stack_push(edge_vectors, vec_org);
-					}
-				}
-
-				/* printf("FAN: vert %d, start edge %d\n", mv_pivot_index, ml_curr->e); */
-
-				while (true) {
-					const MEdge *me_curr = &medges[mlfan_curr->e];
-					/* Compute edge vectors.
-					 * NOTE: We could pre-compute those into an array, in the first iteration, instead of computing them
-					 *       twice (or more) here. However, time gained is not worth memory and time lost,
-					 *       given the fact that this code should not be called that much in real-life meshes...
-					 */
-					{
-						const MVert *mv_2 = (me_curr->v1 == mv_pivot_index) ? &mverts[me_curr->v2] :
-						                                                      &mverts[me_curr->v1];
-
-						sub_v3_v3v3(vec_curr, mv_2->co, mv_pivot->co);
-						normalize_v3(vec_curr);
-					}
-
-					/* printf("\thandling edge %d / loop %d\n", mlfan_curr->e, mlfan_curr_index); */
-
-					{
-						/* Code similar to accumulate_vertex_normals_poly. */
-						/* Calculate angle between the two poly edges incident on this vertex. */
-						const float fac = saacos(dot_v3v3(vec_curr, vec_prev));
-						/* Accumulate */
-						madd_v3_v3fl(lnor, polynors[mpfan_curr_index], fac);
-
-						if (clnors_data) {
-							/* Accumulate all clnors, if they are not all equal we have to fix that! */
-							short (*clnor)[2] = &clnors_data[mlfan_vert_index];
-							if (clnors_nbr) {
-								clnors_invalid |= ((*clnor_ref)[0] != (*clnor)[0] || (*clnor_ref)[1] != (*clnor)[1]);
-							}
-							else {
-								clnor_ref = clnor;
-							}
-							clnors_avg[0] += (*clnor)[0];
-							clnors_avg[1] += (*clnor)[1];
-							clnors_nbr++;
-							/* We store here a pointer to all custom lnors processed. */
-							BLI_SMALLSTACK_PUSH(clnors, (short *)*clnor);
-						}
-					}
-
-					/* We store here a pointer to all loop-normals processed. */
-					BLI_SMALLSTACK_PUSH(normal, &(r_loopnors[mlfan_vert_index][0]));
-
-					if (r_lnors_spaces) {
-						/* Assign current lnor space to current 'vertex' loop. */
-						BKE_lnor_space_add_loop(r_lnors_spaces, lnor_space, mlfan_vert_index, true);
-						if (me_curr != me_org) {
-							/* We store here all edges-normalized vectors processed. */
-							BLI_stack_push(edge_vectors, vec_curr);
-						}
-					}
-
-					if (IS_EDGE_SHARP(e2lfan_curr) || (me_curr == me_org)) {
-						/* Current edge is sharp and we have finished with this fan of faces around this vert,
-						 * or this vert is smooth, and we have completed a full turn around it.
-						 */
-						/* printf("FAN: Finished!\n"); */
-						break;
-					}
-
-					copy_v3_v3(vec_prev, vec_curr);
-
-					/* Warning! This is rather complex!
-					 * We have to find our next edge around the vertex (fan mode).
-					 * First we find the next loop, which is either previous or next to mlfan_curr_index, depending
-					 * whether both loops using current edge are in the same direction or not, and whether
-					 * mlfan_curr_index actually uses the vertex we are fanning around!
-					 * mlfan_curr_index is the index of mlfan_next here, and mlfan_next is not the real next one
-					 * (i.e. not the future mlfan_curr)...
-					 */
-					mlfan_curr_index = (e2lfan_curr[0] == mlfan_curr_index) ? e2lfan_curr[1] : e2lfan_curr[0];
-					mpfan_curr_index = loop_to_poly[mlfan_curr_index];
-
-					BLI_assert(mlfan_curr_index >= 0);
-					BLI_assert(mpfan_curr_index >= 0);
-
-					mlfan_next = &mloops[mlfan_curr_index];
-					mpfan_next = &mpolys[mpfan_curr_index];
-					if ((mlfan_curr->v == mlfan_next->v && mlfan_curr->v == mv_pivot_index) ||
-					    (mlfan_curr->v != mlfan_next->v && mlfan_curr->v != mv_pivot_index))
-					{
-						/* We need the previous loop, but current one is our vertex's loop. */
-						mlfan_vert_index = mlfan_curr_index;
-						if (--mlfan_curr_index < mpfan_next->loopstart) {
-							mlfan_curr_index = mpfan_next->loopstart + mpfan_next->totloop - 1;
-						}
-					}
-					else {
-						/* We need the next loop, which is also our vertex's loop. */
-						if (++mlfan_curr_index >= mpfan_next->loopstart + mpfan_next->totloop) {
-							mlfan_curr_index = mpfan_next->loopstart;
-						}
-						mlfan_vert_index = mlfan_curr_index;
-					}
-					mlfan_curr = &mloops[mlfan_curr_index];
-					/* And now we are back in sync, mlfan_curr_index is the index of mlfan_curr! Pff! */
-
-					e2lfan_curr = edge_to_loops[mlfan_curr->e];
-				}
-
-				{
-					float lnor_len = normalize_v3(lnor);
-
-					/* If we are generating lnor spaces, we can now define the one for this fan,
-					 * and optionally compute final lnor from custom data too!
-					 */
-					if (r_lnors_spaces) {
-						if (UNLIKELY(lnor_len == 0.0f)) {
-							/* Use vertex normal as fallback! */
-							copy_v3_v3(lnor, r_loopnors[mlfan_vert_index]);
-							lnor_len = 1.0f;
-						}
-
-						BKE_lnor_space_define(lnor_space, lnor, vec_org, vec_curr, edge_vectors);
-
-						if (clnors_data) {
-							if (clnors_invalid) {
-								short *clnor;
-
-								clnors_avg[0] /= clnors_nbr;
-								clnors_avg[1] /= clnors_nbr;
-								/* Fix/update all clnors of this fan with computed average value. */
-								printf("Invalid clnors in this fan!\n");
-								while ((clnor = BLI_SMALLSTACK_POP(clnors))) {
-									//print_v2("org clnor", clnor);
-									clnor[0] = (short)clnors_avg[0];
-									clnor[1] = (short)clnors_avg[1];
-								}
-								//print_v2("new clnors", clnors_avg);
-							}
-							else {
-								/* We still have to consume the stack! */
-								while (BLI_SMALLSTACK_POP(clnors));
-							}
-							BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, *clnor_ref);
-						}
-					}
-
-					/* In case we get a zero normal here, just use vertex normal already set! */
-					if (LIKELY(lnor_len != 0.0f)) {
-						/* Copy back the final computed normal into all related loop-normals. */
-						float *nor;
-
-						while ((nor = BLI_SMALLSTACK_POP(normal))) {
-							copy_v3_v3(nor, lnor);
-						}
-					}
-					else {
-						/* We still have to consume the stack! */
-						while (BLI_SMALLSTACK_POP(normal));
-					}
-				}
-
-				/* Tag related vertex as sharp, to avoid fanning around it again (in case it was a smooth one). */
+				LoopSplitTaskData *taskdata = MEM_mallocN(sizeof(LoopSplitTaskData), __func__);
+#if 0  /* Not needed for 'fan' loops. */
+				taskdata->lnor = lnors;
+#endif
+				taskdata->ml_curr = ml_curr;
+				taskdata->ml_prev = ml_prev;
+				taskdata->ml_curr_index = ml_curr_index;
+				taskdata->ml_prev_index = ml_prev_index;
+				taskdata->e2l_prev = e2l_prev;
+				taskdata->mp_index = mp_index;
+				taskdata->common = &common_taskdata;
 				if (r_lnors_spaces) {
+					taskdata->lnor_space = BKE_lnor_space_create(r_lnors_spaces);
+					/* Tag related vertex as sharp, to avoid fanning around it again (in case it was a smooth one).
+					 * This *has* to be done outside of tasks! */
 					sharp_verts[ml_curr->v] = true;
+				}
+				if (task_pool) {
+					BLI_task_pool_push(task_pool, exec_split_loop_nor_fan, taskdata, true, TASK_PRIORITY_HIGH);
+				}
+				else {
+					exec_split_loop_nor_fan(NULL, taskdata, 0);
 				}
 			}
 
@@ -911,6 +1055,10 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 		}
 	}
 
+	BLI_task_pool_work_and_wait(task_pool);
+	BLI_task_pool_free(task_pool);
+	BLI_task_scheduler_free(task_scheduler);
+
 	MEM_freeN(edge_to_loops);
 	if (!r_loop_to_poly) {
 		MEM_freeN(loop_to_poly);
@@ -918,7 +1066,6 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 
 	if (r_lnors_spaces) {
 		MEM_freeN(sharp_verts);
-		BLI_stack_free(edge_vectors);
 		if (r_lnors_spaces == &_lnors_spaces) {
 			BKE_free_loops_normal_spaces(r_lnors_spaces);
 		}
@@ -927,11 +1074,11 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 #ifdef DEBUG_TIME
 	TIMEIT_END(BKE_mesh_normals_loop_split);
 #endif
+}
 
 #undef INDEX_UNSET
 #undef INDEX_INVALID
 #undef IS_EDGE_SHARP
-}
 
 /**
  * Compute internal representation of given custom normals (as an array of float[2]).
