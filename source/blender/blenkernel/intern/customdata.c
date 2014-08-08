@@ -1200,7 +1200,7 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	/* 40: CD_TESSLOOPNORMAL */
 	{sizeof(short[4][3]), "", 0, NULL, NULL, NULL, NULL, layerSwap_flnor, NULL},
 	/* 41: CD_CUSTOMLOOPNORMAL */
-	{sizeof(short[2]), "vec2f", 1, NULL, NULL, NULL, layerInterp_clnor, NULL, layerDefault_clnor},
+	{sizeof(short[2]), "vec2s", 1, NULL, NULL, NULL, layerInterp_clnor, NULL, layerDefault_clnor},
 };
 
 /* note, numbers are from trunk and need updating for bmesh */

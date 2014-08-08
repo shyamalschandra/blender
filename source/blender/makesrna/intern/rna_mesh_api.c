@@ -73,7 +73,7 @@ static void rna_Mesh_calc_normals_split(Mesh *mesh, float min_angle)
 {
 	float (*r_loopnors)[3];
 	float (*polynors)[3];
-	float (*clnors)[2] = NULL;
+	short (*clnors)[2] = NULL;
 	bool free_polynors = false;
 
 	if (CustomData_has_layer(&mesh->ldata, CD_NORMAL)) {
@@ -157,7 +157,7 @@ static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_l
                                                     const float *custom_loopnors_factors, const bool use_vertices)
 {
 	float (*polynors)[3];
-	float (*clnors)[2];
+	short (*clnors)[2];
 	const int numloops = mesh->totloop;
 	bool free_polynors = false;
 
