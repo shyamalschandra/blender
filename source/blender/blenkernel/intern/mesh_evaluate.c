@@ -1181,7 +1181,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 
 /**
  * Compute internal representation of given custom normals (as an array of float[2]).
- * It also make sure the mesh matches those custom normals, by setting sharp edges fag as needed to get a
+ * It also makes sure the mesh matches those custom normals, by setting sharp edges flag as needed to get a
  * same custom lnor for all loops sharing a same smooth fan.
  * If use_vertices if true, custom_loopnors and custom_loopnors_facs are assumed to be per-vertex, not per-loop
  * (this allows to set whole vert's normals at once, useful in some cases).
@@ -1200,8 +1200,6 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 	 */
 	MLoopsNorSpaces lnors_spaces = {NULL};
 	BLI_bitmap *done_loops = BLI_BITMAP_NEW((size_t)numLoops, __func__);
-	/* To avoid interpolating custom vnors more than once in case their weight is not 1.0f!!! */
-	BLI_bitmap *done_verts = use_vertices ? BLI_BITMAP_NEW((size_t)numVerts, __func__) : NULL;
 	float (*lnors)[3] = MEM_callocN(sizeof(*lnors) * (size_t)numLoops, __func__);
 	int *loop_to_poly = MEM_mallocN(sizeof(int) * (size_t)numLoops, __func__);
 	const float split_angle = (float)M_PI;  /* In this case we do not want to use angle to define smooth fans! */
@@ -1213,14 +1211,14 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 	                            mpolys, polynors, numPolys, split_angle, &lnors_spaces, NULL, loop_to_poly);
 
+	/* Now, check each current smooth fan (one lnor space per smooth fan!), and if all its matching custom lnors
+	 * are not (enough) equal, add sharp edges as needed.
+	 * This way, next time we run BKE_mesh_normals_loop_split(), we'll get lnor spaces/smooth fans matching
+	 * given custom lnors.
+	 * Note this code *will never* unsharp edges!
+	 * And quite obviously, when we set custom normals per vertices, running this is absolutely useless.
+	 */
 	if (!use_vertices) {
-		/* Now, check each current smooth fan (one lnor space per smooth fan!), and if all its matching custom lnors
-		 * are not (enough) equal, add sharp edges as needed.
-		 * This way, next time we run BKE_mesh_normals_loop_split(), we'll get lnor spaces/smooth fans matching
-		 * given custom lnors.
-		 * Note this code *will never* unsharp edges!
-		 * And quite obviously, when we set custom normals per vertices, running this is absolutely useless!
-		 */
 		for (i = 0; i < numLoops; i++) {
 			if (!lnors_spaces.lspaces[i]) {
 				/* This should not happen in theory, but in some rare case (probably ugly geometry)
@@ -1236,47 +1234,31 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				/* Notes:
 				 *     * In case of mono-loop smooth fan, loops is NULL, so everything is fine (we have nothing to do).
 				 *     * Loops in this linklist are ordered (in reversed order compared to how they were discovered by
-				 *       BKE_mesh_normals_loop_split(), but this is not a problem). Hence, we just have to compare
-				 *       current value to the previous one!
+				 *       BKE_mesh_normals_loop_split(), but this is not a problem). Which means if we find a
+				 *       mismatching clnor, we know all remaining loops will have to be in a new, different smooth fan/
+				 *       lnor space.
+				 *     * In smooth fan case, we compare each clnor against a ref one, to avoid small differences adding
+				 *       up into a real big one in the end!
 				 */
 				LinkNode *loops = lnors_spaces.lspaces[i]->loops;
 				MLoop *prev_ml = NULL;
 				const float *org_nor = NULL;
-				if (!loops) {
-					MLoop *ml = &mloops[i];
-					const int idx = use_vertices ? (int)ml->v : i;
-					float *nor = custom_loopnors[idx];
+				float org_fac = 0.0f;
 
-					if (custom_loopnors_facs) {
-						const float fac = custom_loopnors_facs[idx];
-
-						if (fac != 1.0f) {
-							/* Note: inplace modification to get final custom lnor! */
-							interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
-						}
-					}
-					BLI_BITMAP_ENABLE(done_loops, i);
-				}
-				/* Hidden else, avoids one indentation. ;) */
 				while (loops) {
 					const int lidx = GET_INT_FROM_POINTER(loops->link);
 					MLoop *ml = &mloops[lidx];
-					const int idx = use_vertices ? (int)ml->v : lidx;
-					float *nor = custom_loopnors[idx];
-
-					if (custom_loopnors_facs) {
-						const float fac = custom_loopnors_facs[idx];
-
-						if (fac != 1.0f) {
-							/* Note: inplace modification to get final custom lnor! */
-							interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
-						}
-					}
+					const int nidx = use_vertices ? (int)ml->v : lidx;
+					float *nor = custom_loopnors[nidx];
+					const float fac = custom_loopnors_facs ? custom_loopnors_facs[nidx] : 0.0f;
 
 					if (!org_nor) {
 						org_nor = nor;
+						org_fac = fac;
 					}
-					else if (dot_v3v3(org_nor, nor) < 1.0f - 1e-6f) {
+					else if (dot_v3v3(org_nor, nor) < 1.0f - 1e-6f ||
+					         (custom_loopnors_facs && fabsf(org_fac - fac) > 1e-6f))
+					{
 						/* Current normal differs too much from org one, we have to tag the edge between
 						 * previous loop's face and current's one as sharp.
 						 * We know those two loops do not point to the same edge, since we do not allow reversed winding
@@ -1287,12 +1269,14 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 						medges[(prev_ml->e == mlp->e) ? prev_ml->e : ml->e].flag |= ME_SHARP;
 
 						org_nor = nor;
+						org_fac = fac;
 					}
 
 					prev_ml = ml;
 					loops = loops->next;
 					BLI_BITMAP_ENABLE(done_loops, lidx);
 				}
+				BLI_BITMAP_ENABLE(done_loops, i);  /* For single loops, where lnors_spaces.lspaces[i]->loops is NULL. */
 			}
 		}
 
@@ -1322,26 +1306,20 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 			if (loops) {
 				int nbr_nors = 0;
 				float avg_nor[3];
+				float avg_fac = 0.0f;
 				short clnor_data_tmp[2], *clnor_data;
 
 				zero_v3(avg_nor);
 				while (loops) {
 					const int lidx = GET_INT_FROM_POINTER(loops->link);
-					const int idx = use_vertices ? (int)mloops[lidx].v : lidx;
-					float *nor = custom_loopnors[idx];
-
-					if (custom_loopnors_facs && use_vertices && !BLI_BITMAP_TEST_BOOL(done_verts, idx)) {
-						const float fac = custom_loopnors_facs[idx];
-
-						if (fac != 1.0f) {
-							/* Note: inplace modification to get final custom lnor! */
-							interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
-						}
-						BLI_BITMAP_ENABLE(done_verts, idx);
-					}
+					const int nidx = use_vertices ? (int)mloops[lidx].v : lidx;
+					float *nor = custom_loopnors[nidx];
 
 					nbr_nors++;
 					add_v3_v3(avg_nor, nor);
+					if (custom_loopnors_facs) {
+						avg_fac += custom_loopnors_facs[nidx];
+					}
 					BLI_SMALLSTACK_PUSH(clnors_data, (short *)r_clnors_data[lidx]);
 
 					loops = loops->next;
@@ -1349,6 +1327,12 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				}
 
 				mul_v3_fl(avg_nor, 1.0f / (float)nbr_nors);
+				if (custom_loopnors_facs) {
+					avg_fac /= (float)nbr_nors;
+					if (avg_fac < 1.0f - 1e-6f) {
+						interp_v3_v3v3_slerp_safe(avg_nor, lnors_spaces.lspaces[i]->vec_lnor, avg_nor, avg_fac);
+					}
+				}
 				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], avg_nor, clnor_data_tmp);
 
 				while ((clnor_data = BLI_SMALLSTACK_POP(clnors_data))) {
@@ -1357,17 +1341,17 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				}
 			}
 			else {
-				const int idx = use_vertices ? (int)mloops[i].v : i;
-				float *nor = custom_loopnors[idx];
+				const int nidx = use_vertices ? (int)mloops[i].v : i;
+				float *nor = custom_loopnors[nidx];
+				float tnor[3];
 
-				if (custom_loopnors_facs && use_vertices && !BLI_BITMAP_TEST_BOOL(done_verts, idx)) {
-					const float fac = custom_loopnors_facs[idx];
+				if (custom_loopnors_facs) {
+					const float fac = custom_loopnors_facs[nidx];
 
-					if (fac != 1.0f) {
-						/* Note: inplace modification to get final custom lnor! */
-						interp_v3_v3v3_slerp_safe(nor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
+					if (fac < 1.0f - 1e-6f) {
+						interp_v3_v3v3_slerp_safe(tnor, lnors_spaces.lspaces[i]->vec_lnor, nor, fac);
+						nor = tnor;
 					}
-					BLI_BITMAP_ENABLE(done_verts, idx);
 				}
 
 				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], nor, r_clnors_data[i]);
