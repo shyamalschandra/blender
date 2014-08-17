@@ -911,7 +911,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	int mp_index, me_index;
 	bool check_angle = (split_angle < (float)M_PI);
 
-	bool *sharp_verts = NULL;  /* Maybe we could use a BLI_bitmap here? */
+	BLI_bitmap *sharp_verts = NULL;
 	MLoopsNorSpaces _lnors_spaces = {NULL};
 
 //#ifdef USE_THREADS
@@ -949,8 +949,8 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 		if (!r_lnors_spaces->mem) {
 			BKE_init_loops_normal_spaces(r_lnors_spaces, numLoops);
 		}
-		sharp_verts = MEM_callocN(sizeof(bool) * (size_t)numVerts, __func__);
-		 edge_vectors = BLI_stack_new(sizeof(float[3]), __func__);
+		sharp_verts = BLI_BITMAP_NEW((size_t)numVerts, __func__);
+		edge_vectors = BLI_stack_new(sizeof(float[3]), __func__);
 	}
 
 	/* This first loop check which edges are actually smooth, and compute edge vectors. */
@@ -1013,7 +1013,8 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 			const int *e2l = edge_to_loops[me_index];
 			const MEdge *me = &medges[me_index];
 			if (IS_EDGE_SHARP(e2l)) {
-				sharp_verts[me->v1] = sharp_verts[me->v2] = true;
+				BLI_BITMAP_ENABLE(sharp_verts, me->v1);
+				BLI_BITMAP_ENABLE(sharp_verts, me->v2);
 			}
 		}
 	}
@@ -1073,13 +1074,13 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 			const int *e2l_curr = edge_to_loops[ml_curr->e];
 			const int *e2l_prev = edge_to_loops[ml_prev->e];
 
-			if (!IS_EDGE_SHARP(e2l_curr) && (!r_lnors_spaces || sharp_verts[ml_curr->v])) {
+			if (!IS_EDGE_SHARP(e2l_curr) && (!r_lnors_spaces || BLI_BITMAP_TEST_BOOL(sharp_verts, ml_curr->v))) {
 				/* A smooth edge, and we are not generating lnor_spaces, or the related vertex is sharp.
 				 * We skip it because it is either:
 				 * - in the middle of a 'smooth fan' already computed (or that will be as soon as we hit
 				 *   one of its ends, i.e. one of its two sharp edges), or...
 				 * - the related vertex is a "full smooth" one, in which case pre-populated normals from vertex
-				 *   are just fine!
+				 *   are just fine (or it has already be handled in a previous loop in case of needed lnors spaces)!
 				 */
 				/* printf("Skipping loop %d / edge %d / vert %d(%d)\n", ml_curr_index, ml_curr->e, ml_curr->v, sharp_verts[ml_curr->v]); */
 			}
@@ -1120,13 +1121,13 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 				taskdata.ml_prev = ml_prev;
 				taskdata.ml_curr_index = ml_curr_index;
 				taskdata.ml_prev_index = ml_prev_index;
-				taskdata.e2l_prev = e2l_prev;
+				taskdata.e2l_prev = e2l_prev;  /* Also tag as 'fan' task. */
 				taskdata.mp_index = mp_index;
 				if (r_lnors_spaces) {
 					taskdata.lnor_space = BKE_lnor_space_create(r_lnors_spaces);
 					/* Tag related vertex as sharp, to avoid fanning around it again (in case it was a smooth one).
 					 * This *has* to be done outside of tasks! */
-					sharp_verts[ml_curr->v] = true;
+					BLI_BITMAP_ENABLE(sharp_verts, ml_curr->v);
 				}
 				if (task_pool) {
 					loop_split_task_data_push(&common_taskdata, &taskdata);
