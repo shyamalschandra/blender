@@ -487,6 +487,8 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 	}
 }
 
+#define LOOP_SPLIT_TASK_BLOCK_SIZE 1024
+
 typedef struct LoopSplitTaskData {
 	/* Specific to each instance (each task). */
 	MLoopNorSpace *lnor_space;  /* We have to create those outside of tasks, since afaik memarena is not threadsafe. */
@@ -501,7 +503,7 @@ typedef struct LoopSplitTaskData {
 	/* This one is special, it's owned and managed by worker tasks, avoid to have to create it for each fan! */
 	BLI_Stack *edge_vectors;
 
-	char c;
+	char pad_c;
 } LoopSplitTaskData;
 
 typedef struct LoopSplitTaskDataCommon {
@@ -536,7 +538,8 @@ typedef struct LoopSplitTaskDataCommon {
 /* Main thread only! */
 static void loop_split_task_init(LoopSplitTaskDataCommon *common_data)
 {
-	common_data->tasks = BLI_stack_new(sizeof(LoopSplitTaskData), __func__);
+	common_data->tasks = BLI_stack_new_ex(sizeof(LoopSplitTaskData) * LOOP_SPLIT_TASK_BLOCK_SIZE, __func__,
+	                                      sizeof(LoopSplitTaskData) * LOOP_SPLIT_TASK_BLOCK_SIZE * 32);
 	BLI_spin_init(&common_data->lock);
 }
 
@@ -861,28 +864,41 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
 	}
 }
 
-static void loop_split_worker(TaskPool *UNUSED(pool), void *taskdata, int threadid)
+static void loop_split_worker(TaskPool *UNUSED(pool), void *taskdata, int UNUSED(threadid))
 {
 	LoopSplitTaskDataCommon *common_data = (LoopSplitTaskDataCommon *)taskdata;
-	LoopSplitTaskData data;
+	LoopSplitTaskData data_buff[LOOP_SPLIT_TASK_BLOCK_SIZE];
 
 	/* Temp edge vectors stack, only used when computing lnor spaces. */
 	BLI_Stack *edge_vectors = common_data->lnors_spaces ? BLI_stack_new(sizeof(float[3]), __func__) : NULL;
+
+	int count = 0;
 
 #ifdef DEBUG_TIME
 	TIMEIT_START(loop_split_worker);
 #endif
 
-	while (loop_split_task_data_pop(common_data, &data)) {
-		if (data.e2l_prev) {
-			BLI_assert((edge_vectors == NULL) || BLI_stack_is_empty(edge_vectors));
-			data.edge_vectors = edge_vectors;
-			split_loop_nor_fan_do(common_data, &data);
+	while (loop_split_task_data_pop(common_data, data_buff)) {
+		LoopSplitTaskData *data = data_buff;
+		int i;
+
+		for (i = 0; i < LOOP_SPLIT_TASK_BLOCK_SIZE; i++, data++) {
+			/* A NULL ml_curr is used to tag ended data! */
+			if (data->ml_curr == NULL) {
+				break;
+			}
+			else if (data->e2l_prev) {
+				BLI_assert((edge_vectors == NULL) || BLI_stack_is_empty(edge_vectors));
+				data->edge_vectors = edge_vectors;
+				split_loop_nor_fan_do(common_data, data);
+			}
+			else {
+				/* No need for edge_vectors for 'single' case! */
+				split_loop_nor_single_do(common_data, data);
+			}
 		}
-		else {
-			/* No need for edge_vectors for 'single' case! */
-			split_loop_nor_single_do(common_data, &data);
-		}
+
+		count += i;
 	}
 
 	if (edge_vectors) {
@@ -890,15 +906,15 @@ static void loop_split_worker(TaskPool *UNUSED(pool), void *taskdata, int thread
 	}
 
 #ifdef DEBUG_TIME
-	printf("%d - ", threadid);
 	TIMEIT_END(loop_split_worker);
 #endif
 }
 
-static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int threadid)
+static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int UNUSED(threadid))
 {
 	LoopSplitTaskDataCommon *common_data = (LoopSplitTaskDataCommon *)taskdata;
-	LoopSplitTaskData data;
+	LoopSplitTaskData data_buff[LOOP_SPLIT_TASK_BLOCK_SIZE];
+	int data_idx = 0;
 
 	MLoopsNorSpaces *lnors_spaces = common_data->lnors_spaces;
 	BLI_bitmap *sharp_verts = common_data->sharp_verts;
@@ -915,6 +931,8 @@ static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int thr
 #ifdef DEBUG_TIME
 	TIMEIT_START(loop_split_generator);
 #endif
+
+	memset(data_buff, 0, sizeof(data_buff));
 
 	/* We now know edges that can be smoothed (with their vector, and their two loops), and edges that will be hard!
 	 * Now, time to generate the normals.
@@ -934,6 +952,8 @@ static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int thr
 			const int *e2l_curr = edge_to_loops[ml_curr->e];
 			const int *e2l_prev = edge_to_loops[ml_prev->e];
 
+			LoopSplitTaskData *data = &data_buff[data_idx % LOOP_SPLIT_TASK_BLOCK_SIZE];
+
 			if (!IS_EDGE_SHARP(e2l_curr) && (!lnors_spaces || BLI_BITMAP_TEST_BOOL(sharp_verts, ml_curr->v))) {
 				/* A smooth edge, and we are not generating lnor_spaces, or the related vertex is sharp.
 				 * We skip it because it is either:
@@ -944,46 +964,52 @@ static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int thr
 				 */
 				/* printf("Skipping loop %d / edge %d / vert %d(%d)\n", ml_curr_index, ml_curr->e, ml_curr->v, sharp_verts[ml_curr->v]); */
 			}
-			else if (IS_EDGE_SHARP(e2l_curr) && IS_EDGE_SHARP(e2l_prev)) {
-				data.lnor = lnors;
-				data.ml_curr = ml_curr;
-				data.ml_prev = ml_prev;
-				data.ml_curr_index = ml_curr_index;
-#if 0  /* Not needed for 'single' loop. */
-				data.ml_prev_index = ml_prev_index;
-#endif
-				data.e2l_prev = NULL;  /* Tag as 'single' task. */
-				data.mp_index = mp_index;
-				if (lnors_spaces) {
-					data.lnor_space = BKE_lnor_space_create(lnors_spaces);
-				}
-				loop_split_task_data_push(common_data, &data);
-			}
-			/* We *do not need* to check/tag loops as already computed!
-			 * Due to the fact a loop only links to one of its two edges, a same fan *will never be walked more than
-			 * once!*
-			 * Since we consider edges having neighbor polys with inverted (flipped) normals as sharp, we are sure that
-			 * no fan will be skipped, even only considering the case (sharp curr_edge, smooth prev_edge), and not the
-			 * alternative (smooth curr_edge, sharp prev_edge).
-			 * All this due/thanks to link between normals and loop ordering (i.e. winding).
-			 */
 			else {
-#if 0  /* Not needed for 'fan' loops. */
-				data.lnor = lnors;
+				if (IS_EDGE_SHARP(e2l_curr) && IS_EDGE_SHARP(e2l_prev)) {
+					data->lnor = lnors;
+					data->ml_curr = ml_curr;
+					data->ml_prev = ml_prev;
+					data->ml_curr_index = ml_curr_index;
+#if 0  /* Not needed for 'single' loop. */
+					data->ml_prev_index = ml_prev_index;
+					data->e2l_prev = NULL;  /* Tag as 'single' task. */
 #endif
-				data.ml_curr = ml_curr;
-				data.ml_prev = ml_prev;
-				data.ml_curr_index = ml_curr_index;
-				data.ml_prev_index = ml_prev_index;
-				data.e2l_prev = e2l_prev;  /* Also tag as 'fan' task. */
-				data.mp_index = mp_index;
-				if (lnors_spaces) {
-					data.lnor_space = BKE_lnor_space_create(lnors_spaces);
-					/* Tag related vertex as sharp, to avoid fanning around it again (in case it was a smooth one).
-					 * This *has* to be done outside of workers tasks! */
-					BLI_BITMAP_ENABLE(sharp_verts, ml_curr->v);
+					data->mp_index = mp_index;
+					if (lnors_spaces) {
+						data->lnor_space = BKE_lnor_space_create(lnors_spaces);
+					}
 				}
-				loop_split_task_data_push(common_data, &data);
+				/* We *do not need* to check/tag loops as already computed!
+				 * Due to the fact a loop only links to one of its two edges, a same fan *will never be walked
+				 * more than once!*
+				 * Since we consider edges having neighbor polys with inverted (flipped) normals as sharp, we are sure
+				 * that no fan will be skipped, even only considering the case (sharp curr_edge, smooth prev_edge),
+				 * and not the alternative (smooth curr_edge, sharp prev_edge).
+				 * All this due/thanks to link between normals and loop ordering (i.e. winding).
+				 */
+				else {
+#if 0  /* Not needed for 'fan' loops. */
+					data->lnor = lnors;
+#endif
+					data->ml_curr = ml_curr;
+					data->ml_prev = ml_prev;
+					data->ml_curr_index = ml_curr_index;
+					data->ml_prev_index = ml_prev_index;
+					data->e2l_prev = e2l_prev;  /* Also tag as 'fan' task. */
+					data->mp_index = mp_index;
+					if (lnors_spaces) {
+						data->lnor_space = BKE_lnor_space_create(lnors_spaces);
+						/* Tag related vertex as sharp, to avoid fanning around it again (in case it was a smooth one).
+						 * This *has* to be done outside of workers tasks! */
+						BLI_BITMAP_ENABLE(sharp_verts, ml_curr->v);
+					}
+				}
+
+				data_idx++;
+				if (!(data_idx % LOOP_SPLIT_TASK_BLOCK_SIZE)) {
+					loop_split_task_data_push(common_data, data_buff);
+					memset(data_buff, 0, sizeof(data_buff));
+				}
 			}
 
 			ml_prev = ml_curr;
@@ -991,12 +1017,16 @@ static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int thr
 		}
 	}
 
-#ifdef DEBUG_TIME
-	printf("%d - ", threadid);
-	TIMEIT_END(loop_split_generator);
-#endif
+	/* Last block of data, most likely not exactly fully filled, so we have to tag first invalid item. */
+	if (data_idx % LOOP_SPLIT_TASK_BLOCK_SIZE) {
+		loop_split_task_data_push(common_data, data_buff);
+	}
 
 	common_data->finished = true;
+
+#ifdef DEBUG_TIME
+	TIMEIT_END(loop_split_generator);
+#endif
 }
 
 /**
@@ -1031,15 +1061,10 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	BLI_bitmap *sharp_verts = NULL;
 	MLoopsNorSpaces _lnors_spaces = {NULL};
 
-//#ifdef USE_THREADS
-#if 1
-	const int totthread = TASK_SCHEDULER_AUTO_THREADS;
-#else
-	const int totthread = TASK_SCHEDULER_SINGLE_THREAD;
-#endif
-	TaskScheduler *task_scheduler = NULL;
-	TaskPool *task_pool = NULL;
+	TaskScheduler *task_scheduler;
+	TaskPool *task_pool;
 	LoopSplitTaskDataCommon common_taskdata = {NULL};
+	int nbr_workers;
 
 #ifdef DEBUG_TIME
 	TIMEIT_START(BKE_mesh_normals_loop_split);
@@ -1151,12 +1176,12 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 
 	task_scheduler = BLI_task_scheduler_get();
 	task_pool = BLI_task_pool_create(task_scheduler, NULL);
-	printf("%d (%d)\n", totthread, BLI_task_scheduler_num_threads(task_scheduler));
 
-	BLI_task_pool_push(task_pool, loop_split_generator, &common_taskdata, false, TASK_PRIORITY_HIGH);
-	for (i = 0; i < min_ii(6, BLI_task_scheduler_num_threads(task_scheduler)); i++) {
+	nbr_workers = max_ii(1, BLI_task_scheduler_num_threads(task_scheduler));
+	for (i = 0; i < nbr_workers; i++) {
 		BLI_task_pool_push(task_pool, loop_split_worker, &common_taskdata, false, TASK_PRIORITY_HIGH);
 	}
+	BLI_task_pool_push(task_pool, loop_split_generator, &common_taskdata, false, TASK_PRIORITY_HIGH);
 	BLI_task_pool_work_and_wait(task_pool);
 
 	BLI_task_pool_free(task_pool);
