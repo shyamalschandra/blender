@@ -50,11 +50,24 @@
 #include "MOD_util.h"
 
 
+static bool is_valid_target(SetSplitNormalModifierData *smd)
+{
+	if (smd->mode == MOD_SETSPLITNORMAL_MODE_ELLIPSOID) {
+		return true;
+	}
+	else if (smd->mode == MOD_SETSPLITNORMAL_MODE_GEOM_FACENOR &&
+	         smd->target && smd->target->type == OB_MESH)
+	{
+		return true;
+	}
+	return false;
+}
+
 static void initData(ModifierData *md)
 {
 	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
 
-	smd->mode = MOD_SETSPLITNORMAL_ELLIPSOID;
+	smd->mode = MOD_SETSPLITNORMAL_MODE_ELLIPSOID;
 }
 
 static void copyData(ModifierData *md, ModifierData *target)
@@ -83,16 +96,21 @@ static void foreachObjectLink(ModifierData *md, Object *ob, ObjectWalkFunc walk,
 {
 	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
 
-	walk(userData, ob, &smd->object_geometry);
-	walk(userData, ob, &smd->object_center);
+	walk(userData, ob, &smd->target);
 }
 
 static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
 {
 	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
 
-	walk(userData, ob, (ID **)&smd->object_geometry);
-	walk(userData, ob, (ID **)&smd->object_center);
+	walk(userData, ob, (ID **)&smd->target);
+}
+
+static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
+{
+	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *)md;
+
+	return !is_valid_target(smd);
 }
 
 static void updateDepgraph(ModifierData *md, DagForest *forest, struct Scene *UNUSED(scene),
@@ -100,14 +118,8 @@ static void updateDepgraph(ModifierData *md, DagForest *forest, struct Scene *UN
 {
 	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
 
-	if (smd->object_geometry) {
-		DagNode *Node = dag_get_node(forest, smd->object_geometry);
-
-		dag_add_relation(forest, Node, obNode, DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "SetSplitNormal Modifier");
-	}
-
-	if (smd->object_center) {
-		DagNode *Node = dag_get_node(forest, smd->object_center);
+	if (smd->target) {
+		DagNode *Node = dag_get_node(forest, smd->target);
 
 		dag_add_relation(forest, Node, obNode, DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "SetSplitNormal Modifier");
 	}
@@ -198,9 +210,177 @@ static float vertex_weight(MDeformVert *dvert, const int index, const int defgrp
 	return (!dvert || defgrp_index == -1) ? 1.0f :  defvert_find_weight(&dvert[index], defgrp_index);
 }
 
+static void setSplitNormalModifier_do_ellipsoid(
+        SetSplitNormalModifierData *smd, Object *ob, DerivedMesh *dm,
+        short (*clnors)[2], float (*polynors)[3],
+        MDeformVert *dvert, const int defgrp_index, const bool use_invert_vgroup,
+        MVert *mvert, const int num_verts, MEdge *medge, const int num_edges,
+        MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
+{
+	const bool use_bbox_center = ((smd->flags & MOD_SETSPLITNORMAL_CENTER_BBOX) != 0) && (smd->target == NULL);
+
+	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
+	float *facs = MEM_mallocN(sizeof(*facs) * num_verts, __func__);
+
+	float size[3];
+
+	generate_vert_coordinates(dm, ob, smd->target, use_bbox_center, num_verts, cos, size);
+
+	/* size gives us our spheroid coefficients (A, B, C).
+	 * Then, we want to find out for each vert its (a, b, c) triple (proportional to (A, B, C) one).
+	 *
+	 * Ellipsoid basic equation: (x^2/a^2) + (y^2/b^2) + (z^2/c^2) = 1.
+	 * Since we want to find (a, b, c) matching this equation and proportional to (A, B, C), we can do:
+	 *     m = B / A
+	 *     n = C / A
+	 * hence:
+	 *     (x^2/a^2) + (y^2/b^2) + (z^2/c^2) = 1
+	 *  -> b^2*c^2*x^2 + a^2*c^2*y^2 + a^2*b^2*z^2 = a^2*b^2*c^2
+	 *     b = ma
+	 *     c = na
+	 *  -> m^2*a^2*n^2*a^2*x^2 + a^2*n^2*a^2*y^2 + a^2*m^2*a^2*z^2 = a^2*m^2*a^2*n^2*a^2
+	 *  -> m^2*n^2*a^4*x^2 + n^2*a^4*y^2 + m^2*a^4*z^2 = m^2*n^2*a^6
+	 *  -> a^2 = (m^2*n^2*x^2 + n^2y^2 + m^2z^2) / (m^2*n^2) = x^2 + (y^2 / m^2) + (z^2 / n^2)
+	 *  -> b^2 = (m^2*n^2*x^2 + n^2y^2 + m^2z^2) / (n^2)     = (m^2 * x^2) + y^2 + (m^2 * z^2 / n^2)
+	 *  -> c^2 = (m^2*n^2*x^2 + n^2y^2 + m^2z^2) / (m^2)     = (n^2 * x^2) + (n^2 * y^2 / m^2) + z^2
+	 *
+	 * All we have to do now is compute normal of the spheroid at that point:
+	 *     n = (x / a^2, y / b^2, z / c^2)
+	 * And we are done!
+	 */
+	{
+		const float A = size[0], B = size[1], C = size[2];
+		const float m2 = (B * B) / (A * A);
+		const float n2 = (C * C) / (A * A);
+		int i = num_verts;
+
+		/* We reuse cos to now store the ellipsoid-normal of the verts! */
+		while (i--) {
+			float *co = cos[i];
+			const float weight = vertex_weight(dvert, i, defgrp_index);
+			facs[i] = use_invert_vgroup ? 1.0f - weight : weight;
+
+			if (facs[i]) {
+				const float x2 = co[0] * co[0];
+				const float y2 = co[1] * co[1];
+				const float z2 = co[2] * co[2];
+				const float a2 = x2 + (y2 / m2) + (z2 / n2);
+				const float b2 = (m2 * x2) + y2 + (m2 * z2 / n2);
+				const float c2 = (n2 * x2) + (n2 * y2 / m2) + z2;
+				co[0] /= a2;
+				co[1] /= b2;
+				co[2] /= c2;
+				normalize_v3(co);
+			}
+			else {
+				zero_v3(co);
+			}
+		}
+	}
+
+	BKE_mesh_normals_loop_custom_from_vertices_set(mvert, cos, facs, num_verts, medge, num_edges, mloop, num_loops,
+	                                               mpoly, (const float(*)[3])polynors, num_polys, clnors);
+
+	MEM_freeN(cos);
+	MEM_freeN(facs);
+}
+
+static void setSplitNormalModifier_do_facenormal(
+        SetSplitNormalModifierData *smd, Object *ob, DerivedMesh *dm,
+        short (*clnors)[2], float (*polynors)[3],
+        MDeformVert *dvert, const int defgrp_index, const bool use_invert_vgroup,
+        MVert *mvert, const int num_verts, MEdge *medge, const int num_edges,
+        MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
+{
+	Object *target_ob = smd->target;
+	DerivedMesh *target_dm = target_ob->derivedFinal;
+	BVHTreeFromMesh treeData = {0};
+
+	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
+	float *facs = MEM_mallocN(sizeof(*facs) * num_verts, __func__);
+
+	/* Create a bvh-tree of the given target's faces. */
+	bvhtree_from_mesh_faces(&treeData, target_dm, 0.0, 2, 6);
+	if (treeData.tree != NULL) {
+		const int target_num_polys = target_dm->getNumPolys(target_dm);
+		BVHTreeNearest nearest = {0};
+
+		float (*target_polynors)[3];
+		bool free_target_polynors = false;
+
+		int i;
+
+		SpaceTransform loc2trgt;
+		BLI_SPACE_TRANSFORM_SETUP(&loc2trgt, ob, target_ob);
+
+		target_polynors = target_dm->getPolyDataArray(target_dm, CD_NORMAL);
+		if (!target_polynors) {
+			const int target_num_verts = target_dm->getNumVerts(target_dm);
+			const int target_num_loops = target_dm->getNumLoops(target_dm);
+			MVert *target_mvert = target_dm->getVertArray(target_dm);
+			MLoop *target_mloop = target_dm->getLoopArray(target_dm);
+			MPoly *target_mpoly = target_dm->getPolyArray(target_dm);
+
+			target_polynors = MEM_mallocN(sizeof(*target_polynors) * target_num_polys, __func__);
+			BKE_mesh_calc_normals_poly(target_mvert, target_num_verts, target_mloop, target_mpoly,
+			                           target_num_loops, target_num_polys, target_polynors, false);
+			free_target_polynors = true;
+		}
+
+		nearest.index = -1;
+		dm->getVertCos(dm, cos);
+
+		/* Find the nearest vert/edge/face. */
+#ifndef __APPLE__
+#pragma omp parallel for default(none) private(i) firstprivate(nearest) \
+                         shared(treeData, cos, facs, target_polynors, loc2trgt, dvert) \
+                         schedule(static)
+#endif
+		for (i = 0; i < num_verts; i++) {
+			float tmp_co[3];
+			const float weight = vertex_weight(dvert, i, defgrp_index);
+			facs[i] = use_invert_vgroup ? 1.0f - weight : weight;
+
+			/* Convert the vertex to tree coordinates. */
+			copy_v3_v3(tmp_co, cos[i]);
+			BLI_space_transform_apply(&loc2trgt, tmp_co);
+
+			/* Use local proximity heuristics (to reduce the nearest search).
+			 *
+			 * If we already had an hit before, we assume this vertex is going to have a close hit to
+			 * that other vertex, so we can initiate the "nearest.dist" with the expected value to that
+			 * last hit.
+			 * This will lead in prunning of the search tree.
+			 */
+			nearest.dist_sq = (nearest.index != -1) ? len_squared_v3v3(tmp_co, nearest.co) : FLT_MAX;
+			/* Compute and store result. */
+			BLI_bvhtree_find_nearest(treeData.tree, tmp_co, &nearest, treeData.nearest_callback, &treeData);
+
+			if (facs[i] && nearest.index != -1) {
+				copy_v3_v3(cos[i], target_polynors[nearest.index]);
+				/* Bring normal back in own space! */
+				BLI_space_transform_invert_normal(&loc2trgt, cos[i]);
+			}
+			else {
+				zero_v3(cos[i]);
+			}
+		}
+
+		free_bvhtree_from_mesh(&treeData);
+		if (free_target_polynors) {
+			MEM_freeN(target_polynors);
+		}
+
+		BKE_mesh_normals_loop_custom_from_vertices_set(mvert, cos, facs, num_verts, medge, num_edges, mloop, num_loops,
+		                                               mpoly, (const float(*)[3])polynors, num_polys, clnors);
+	}
+
+	MEM_freeN(cos);
+	MEM_freeN(facs);
+}
+
 static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *ob, DerivedMesh *dm)
 {
-	short (*clnors)[2];
 	const int num_verts = dm->getNumVerts(dm);
 	const int num_edges = dm->getNumEdges(dm);
 	const int num_loops = dm->getNumLoops(dm);
@@ -210,23 +390,17 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 	MLoop *mloop = dm->getLoopArray(dm);
 	MPoly *mpoly = dm->getPolyArray(dm);
 
-	const bool use_bbox_center = ((smd->flags & MOD_SETSPLITNORMAL_CENTER_BBOX) != 0) && (smd->object_center == NULL);
 	const bool use_invert_vgroup = ((smd->flags & MOD_SETSPLITNORMAL_INVERT_VGROUP) != 0);
 
 	int defgrp_index;
 	MDeformVert *dvert;
 
+	short (*clnors)[2];
+
 	float (*polynors)[3];
 	bool free_polynors = false;
 
-	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
-	float *facs = MEM_mallocN(sizeof(*facs) * num_verts, __func__);
-
-	int i;
-
-	if (!ELEM(smd->mode, MOD_SETSPLITNORMAL_ELLIPSOID, MOD_SETSPLITNORMAL_OBJECT) ||
-	    (smd->mode == MOD_SETSPLITNORMAL_OBJECT && !smd->object_geometry))
-	{
+	if (!is_valid_target(smd)) {
 		return;
 	}
 
@@ -236,8 +410,6 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 		clnors = dm->getLoopDataArray(dm, CD_CUSTOMLOOPNORMAL);
 	}
 
-	modifier_get_vgroup(ob, dm, smd->defgrp_name, &dvert, &defgrp_index);
-
 	polynors = dm->getPolyDataArray(dm, CD_NORMAL);
 	if (!polynors) {
 		polynors = MEM_mallocN(sizeof(*polynors) * num_polys, __func__);
@@ -245,149 +417,17 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 		free_polynors = true;
 	}
 
-	if (smd->mode == MOD_SETSPLITNORMAL_ELLIPSOID) {
-		float size[3];
+	modifier_get_vgroup(ob, dm, smd->defgrp_name, &dvert, &defgrp_index);
 
-		generate_vert_coordinates(dm, ob, smd->object_center, use_bbox_center, num_verts, cos, size);
-
-		/* size gives us our spheroid coefficients (A, B, C).
-		 * Then, we want to find out for each vert its (a, b, c) triple (proportional to (A, B, C) one).
-		 *
-		 * Ellipsoid basic equation: (x^2/a^2) + (y^2/b^2) + (z^2/c^2) = 1.
-		 * Since we want to find (a, b, c) matching this equation and proportional to (A, B, C), we can do:
-		 *     m = B / A
-		 *     n = C / A
-		 * hence:
-		 *     (x^2/a^2) + (y^2/b^2) + (z^2/c^2) = 1
-		 *  -> b^2*c^2*x^2 + a^2*c^2*y^2 + a^2*b^2*z^2 = a^2*b^2*c^2
-		 *     b = ma
-		 *     c = na
-		 *  -> m^2*a^2*n^2*a^2*x^2 + a^2*n^2*a^2*y^2 + a^2*m^2*a^2*z^2 = a^2*m^2*a^2*n^2*a^2
-		 *  -> m^2*n^2*a^4*x^2 + n^2*a^4*y^2 + m^2*a^4*z^2 = m^2*n^2*a^6
-		 *  -> a^2 = (m^2*n^2*x^2 + n^2y^2 + m^2z^2) / (m^2*n^2) = x^2 + (y^2 / m^2) + (z^2 / n^2)
-		 *  -> b^2 = (m^2*n^2*x^2 + n^2y^2 + m^2z^2) / (n^2)     = (m^2 * x^2) + y^2 + (m^2 * z^2 / n^2)
-		 *  -> c^2 = (m^2*n^2*x^2 + n^2y^2 + m^2z^2) / (m^2)     = (n^2 * x^2) + (n^2 * y^2 / m^2) + z^2
-		 *
-		 * All we have to do now is compute normal of the spheroid at that point:
-		 *     n = (x / a^2, y / b^2, z / c^2)
-		 * And we are done!
-		 */
-		{
-			const float A = size[0], B = size[1], C = size[2];
-			const float m2 = (B * B) / (A * A);
-			const float n2 = (C * C) / (A * A);
-
-			/* We reuse cos to now store the ellipsoid-normal of the verts! */
-			i = num_verts;
-			while (i--) {
-				float *co = cos[i];
-				facs[i] = use_invert_vgroup ? 1.0f - vertex_weight(dvert, i, defgrp_index) :
-				                              vertex_weight(dvert, i, defgrp_index);
-
-				if (facs[i]) {
-					const float x2 = co[0] * co[0];
-					const float y2 = co[1] * co[1];
-					const float z2 = co[2] * co[2];
-					const float a2 = x2 + (y2 / m2) + (z2 / n2);
-					const float b2 = (m2 * x2) + y2 + (m2 * z2 / n2);
-					const float c2 = (n2 * x2) + (n2 * y2 / m2) + z2;
-					co[0] /= a2;
-					co[1] /= b2;
-					co[2] /= c2;
-					normalize_v3(co);
-				}
-				else {
-					zero_v3(co);
-				}
-			}
-		}
+	if (smd->mode == MOD_SETSPLITNORMAL_MODE_ELLIPSOID) {
+		setSplitNormalModifier_do_ellipsoid(smd, ob, dm, clnors, polynors, dvert, defgrp_index, use_invert_vgroup,
+		                                    mvert, num_verts, medge, num_edges, mloop, num_loops, mpoly, num_polys);
 	}
-	else {
-		Object *obr = smd->object_geometry;
-		DerivedMesh *target_dm = obr->derivedFinal;
-		BVHTreeFromMesh treeData = {0};
-
-		/* Create a bvh-tree of the given target's faces. */
-		bvhtree_from_mesh_faces(&treeData, target_dm, 0.0, 2, 6);
-		if (treeData.tree != NULL) {
-			const int target_num_polys = target_dm->getNumPolys(target_dm);
-			BVHTreeNearest nearest = {0};
-
-			float (*target_polynors)[3];
-			bool free_target_polynors = false;
-
-			SpaceTransform loc2trgt;
-			BLI_SPACE_TRANSFORM_SETUP(&loc2trgt, ob, obr);
-
-			target_polynors = target_dm->getPolyDataArray(target_dm, CD_NORMAL);
-			if (!target_polynors) {
-				const int target_num_verts = target_dm->getNumVerts(target_dm);
-				const int target_num_loops = target_dm->getNumLoops(target_dm);
-				MVert *target_mvert = target_dm->getVertArray(target_dm);
-				MLoop *target_mloop = target_dm->getLoopArray(target_dm);
-				MPoly *target_mpoly = target_dm->getPolyArray(target_dm);
-
-				target_polynors = MEM_mallocN(sizeof(*target_polynors) * target_num_polys, __func__);
-				BKE_mesh_calc_normals_poly(target_mvert, target_num_verts, target_mloop, target_mpoly,
-				                           target_num_loops, target_num_polys, target_polynors, false);
-				free_target_polynors = true;
-			}
-
-			nearest.index = -1;
-			dm->getVertCos(dm, cos);
-
-			/* Find the nearest vert/edge/face. */
-#ifndef __APPLE__
-#pragma omp parallel for default(none) private(i) firstprivate(nearest) \
-                         shared(treeData, cos, facs, target_polynors, loc2trgt, dvert, defgrp_index) \
-                         schedule(static)
-#endif
-			for (i = 0; i < num_verts; i++) {
-				float tmp_co[3];
-				facs[i] = use_invert_vgroup ? 1.0f - vertex_weight(dvert, i, defgrp_index) :
-				                              vertex_weight(dvert, i, defgrp_index);
-
-				/* Convert the vertex to tree coordinates. */
-				copy_v3_v3(tmp_co, cos[i]);
-				BLI_space_transform_apply(&loc2trgt, tmp_co);
-
-				/* Use local proximity heuristics (to reduce the nearest search).
-				 *
-				 * If we already had an hit before, we assume this vertex is going to have a close hit to
-				 * that other vertex, so we can initiate the "nearest.dist" with the expected value to that
-				 * last hit.
-				 * This will lead in prunning of the search tree.
-				 */
-				nearest.dist_sq = (nearest.index != -1) ? len_squared_v3v3(tmp_co, nearest.co) : FLT_MAX;
-				/* Compute and store result. */
-				BLI_bvhtree_find_nearest(treeData.tree, tmp_co, &nearest, treeData.nearest_callback, &treeData);
-
-				if (facs[i] && nearest.index != -1) {
-					copy_v3_v3(cos[i], target_polynors[nearest.index]);
-					/* Bring normal back in own space! */
-					BLI_space_transform_invert_normal(&loc2trgt, cos[i]);
-				}
-				else {
-					zero_v3(cos[i]);
-				}
-			}
-
-			free_bvhtree_from_mesh(&treeData);
-			if (free_target_polynors) {
-				MEM_freeN(target_polynors);
-			}
-		}
-		else {
-			memset(cos, 0, sizeof(*cos) * num_verts);
-			memset(facs, 0, sizeof(*facs) * num_verts);
-		}
+	else if (smd->mode == MOD_SETSPLITNORMAL_MODE_GEOM_FACENOR) {
+		setSplitNormalModifier_do_facenormal(smd, ob, dm, clnors, polynors, dvert, defgrp_index, use_invert_vgroup,
+		                                     mvert, num_verts, medge, num_edges, mloop, num_loops, mpoly, num_polys);
 	}
 
-	BKE_mesh_normals_loop_custom_from_vertices_set(mvert, cos, facs, num_verts, medge, num_edges, mloop, num_loops,
-	                                               mpoly, (const float(*)[3])polynors, num_polys, clnors);
-
-	MEM_freeN(cos);
-	MEM_freeN(facs);
 	if (free_polynors) {
 		MEM_freeN(polynors);
 	}
@@ -419,7 +459,7 @@ ModifierTypeInfo modifierType_SetSplitNormal = {
 	/* initData */          initData,
 	/* requiredDataMask */  requiredDataMask,
 	/* freeData */          NULL,
-	/* isDisabled */        NULL,
+	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  dependsOnNormals,

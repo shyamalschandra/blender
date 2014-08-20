@@ -1371,23 +1371,22 @@ enum {
 typedef struct SetSplitNormalModifierData {
 	ModifierData modifier;
 	char defgrp_name[64];  /* MAX_VGROUP_NAME */
-	struct Object *object_geometry;  /* Source of normals. */
-	struct Object *object_center;    /* Center of box or ellipsoid. */
+	struct Object *target;  /* Source of normals, or center of ellipsoid. */
 	short flags;
 	short mode;
 	short pad[2];
 } SetSplitNormalModifierData;
 
+/* SetSplitNormalModifierData.mode */
+enum {
+	MOD_SETSPLITNORMAL_MODE_ELLIPSOID    = 0,
+	MOD_SETSPLITNORMAL_MODE_GEOM_FACENOR = 1,
+};
+
 /* SetSplitNormalModifierData.flags */
 enum {
 	MOD_SETSPLITNORMAL_INVERT_VGROUP = (1 << 0),
 	MOD_SETSPLITNORMAL_CENTER_BBOX   = (1 << 1),
-};
-
-/* SetSplitNormalModifierData.mode */
-enum {
-	MOD_SETSPLITNORMAL_ELLIPSOID    = 0,
-	MOD_SETSPLITNORMAL_OBJECT       = 1,
 };
 
 

@@ -1227,27 +1227,20 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
     def SET_SPLIT_NORMAL(self, layout, ob, md):
         has_vgroup = bool(md.vertex_group)
-        needs_object_geom = (md.mode == 'OBJECT')
-        needs_object_center = (md.mode == 'ELLIPSOID')
-        has_object_center = bool(md.object_center)
+        needs_object_bbox_center = (md.mode == 'ELLIPSOID') and not md.target
 
-        row = layout.row(align=True)
+        row = layout.row()
         row.prop(md, "mode", expand=True)
 
         split = layout.split()
 
         col = split.column()
-        col.active = needs_object_center
-        col.prop(md, "object_center", text="")
-        row = col.row()
-        row.active = not has_object_center
-        row.prop(md, "use_bbox_center")
+        col.prop(md, "target", text="")
+        sub = col.row()
+        sub.active = needs_object_bbox_center
+        sub.prop(md, "use_bbox_center")
 
         col = split.column()
-        row = col.row()
-        row.active = needs_object_geom
-        row.prop(md, "object_geometry", text="")
-
         row = col.row(align=True)
         row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
         sub = row.row(align=True)

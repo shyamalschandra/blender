@@ -406,8 +406,7 @@ RNA_MOD_OBJECT_SET(Curve, object, OB_CURVE);
 RNA_MOD_OBJECT_SET(Lattice, object, OB_LATTICE);
 RNA_MOD_OBJECT_SET(Mask, ob_arm, OB_ARMATURE);
 RNA_MOD_OBJECT_SET(MeshDeform, object, OB_MESH);
-RNA_MOD_OBJECT_SET(SetSplitNormal, object_geometry, OB_MESH);
-RNA_MOD_OBJECT_SET(SetSplitNormal, object_center, OB_EMPTY);
+RNA_MOD_OBJECT_SET(SetSplitNormal, target, OB_EMPTY);
 RNA_MOD_OBJECT_SET(Shrinkwrap, target, OB_MESH);
 RNA_MOD_OBJECT_SET(Shrinkwrap, auxTarget, OB_MESH);
 
@@ -3676,9 +3675,9 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	static EnumPropertyItem prop_mode_items[] = {
-		{MOD_SETSPLITNORMAL_ELLIPSOID, "ELLIPSOID", 0, "Ellipsoid",
-		                               "From an ellipsoid (shape defined by the boundbox's dimensions)"},
-		{MOD_SETSPLITNORMAL_OBJECT, "OBJECT", 0, "Object", "From a mesh object"},
+		{MOD_SETSPLITNORMAL_MODE_ELLIPSOID, "ELLIPSOID", 0, "Ellipsoid",
+		        "From an ellipsoid (shape defined by the boundbox's dimensions - target is optional)"},
+		{MOD_SETSPLITNORMAL_MODE_GEOM_FACENOR, "FACE_NORMALS", 0, "Face Normals", "From a mesh's face normals"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -3689,12 +3688,23 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, prop_mode_items);
-	RNA_def_property_ui_text(prop, "Mode", "How to get our normals");
+	RNA_def_property_ui_text(prop, "Mode", "How to affect (generate) normals");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-	prop = RNA_def_property(srna, "object_geometry", PROP_POINTER, PROP_NONE);
-	RNA_def_property_ui_text(prop, "Object", "Mesh object to take normals from (use nearest face's normal)");
-	RNA_def_property_pointer_funcs(prop, NULL, "rna_SetSplitNormalModifier_object_geometry_set", NULL, NULL);
+	prop = RNA_def_property(srna, "vertex_group", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_sdna(prop, NULL, "defgrp_name");
+	RNA_def_property_ui_text(prop, "Vertex Group", "Vertex group name for selecting/weighting the affected areas");
+	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_SetSplitNormalModifier_defgrp_name_set");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "use_invert_vertex_group", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_INVERT_VGROUP);
+	RNA_def_property_ui_text(prop, "Invert", "Invert vertex group influence");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "target", PROP_POINTER, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Target", "Target object used to affect normal");
+	RNA_def_property_pointer_funcs(prop, NULL, "rna_SetSplitNormalModifier_target_set", NULL, NULL);
 	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
 	RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
 
@@ -3702,24 +3712,6 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_CENTER_BBOX);
 	RNA_def_property_ui_text(prop, "BoundingBox Center",
 	                         "Center ellipsoid on bounding box center instead of own object center");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-	prop = RNA_def_property(srna, "object_center", PROP_POINTER, PROP_NONE);
-	RNA_def_property_ui_text(prop, "Object Center",
-	                         "Center ellipsoid on this object center (overrides BoundingBox Center when set)");
-	RNA_def_property_pointer_funcs(prop, NULL, "rna_SetSplitNormalModifier_object_center_set", NULL, NULL);
-	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
-	RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
-
-	prop = RNA_def_property(srna, "vertex_group", PROP_STRING, PROP_NONE);
-	RNA_def_property_string_sdna(prop, NULL, "defgrp_name");
-	RNA_def_property_ui_text(prop, "Vertex Group", "Vertex group name for selecting the affected areas");
-	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_SetSplitNormalModifier_defgrp_name_set");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-	prop = RNA_def_property(srna, "use_invert_vertex_group", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_INVERT_VGROUP);
-	RNA_def_property_ui_text(prop, "Invert", "Invert vertex group influence");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 }
 
