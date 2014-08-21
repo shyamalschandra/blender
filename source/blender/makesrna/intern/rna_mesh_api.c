@@ -154,7 +154,8 @@ static void rna_Mesh_calc_smooth_groups(Mesh *mesh, int use_bitflags, int *r_pol
 }
 
 static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_loopnors)[3],
-                                                    const float *custom_loopnors_factors, const bool use_vertices)
+                                                    const float *custom_loopnors_factors,
+                                                    bool use_current_clnors, const bool use_vertices)
 {
 	float (*polynors)[3];
 	short (*clnors)[2];
@@ -167,6 +168,7 @@ static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_l
 	}
 	else {
 		clnors = CustomData_add_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL, CD_DEFAULT, NULL, numloops);
+		use_current_clnors = false;
 	}
 
 	if (CustomData_has_layer(&mesh->pdata, CD_NORMAL)) {
@@ -188,7 +190,8 @@ static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_l
 	else {
 		BKE_mesh_normals_loop_custom_set(mesh->mvert, mesh->totvert, mesh->medge, mesh->totedge,
 		                                 mesh->mloop, custom_loopnors, custom_loopnors_factors, mesh->totloop,
-		                                 mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly, clnors);
+		                                 mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly,
+		                                 clnors, use_current_clnors);
 	}
 
 	if (free_polynors) {
@@ -197,7 +200,7 @@ static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_l
 }
 
 static void rna_Mesh_define_normals_split_custom(Mesh *mesh, ReportList *reports, int normals_len, float *normals,
-                                                 int factors_len, float *factors)
+                                                 int factors_len, float *factors, int use_current_custom_normals)
 {
 	float (*loopnors)[3] = (float (*)[3])normals;
 	const float *loopnors_factors = (const float *)factors;
@@ -216,7 +219,7 @@ static void rna_Mesh_define_normals_split_custom(Mesh *mesh, ReportList *reports
 		return;
 	}
 
-	rna_Mesh_define_normals_split_custom_do(mesh, loopnors, loopnors_factors, false);
+	rna_Mesh_define_normals_split_custom_do(mesh, loopnors, loopnors_factors, (bool)use_current_custom_normals, false);
 }
 
 static void rna_Mesh_define_normals_split_custom_from_vertices(Mesh *mesh, ReportList *reports,
@@ -242,7 +245,7 @@ static void rna_Mesh_define_normals_split_custom_from_vertices(Mesh *mesh, Repor
 		return;
 	}
 
-	rna_Mesh_define_normals_split_custom_do(mesh, vertnors, vertnors_factors, true);
+	rna_Mesh_define_normals_split_custom_do(mesh, vertnors, vertnors_factors, false, true);
 }
 
 static void rna_Mesh_transform(Mesh *mesh, float *mat)
@@ -315,6 +318,8 @@ void RNA_api_mesh(StructRNA *srna)
 	                           "Interpolation factors (0.0 to use full auto normal, 1.0 to use full custom given one)",
 	                           0.0f, 0.0f);
 	RNA_def_property_flag(parm, PROP_DYNAMIC);
+	RNA_def_boolean(func, "use_current_custom_normals", false, "",
+	                "Try to use current custom split normals data as basis (if available), instead of plain auto ones");
 
 	func = RNA_def_function(srna, "define_normals_split_custom_from_vertices",
 	                        "rna_Mesh_define_normals_split_custom_from_vertices");
