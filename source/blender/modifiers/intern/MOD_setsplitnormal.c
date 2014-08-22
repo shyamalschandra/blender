@@ -51,81 +51,6 @@
 #include "MOD_util.h"
 
 
-static bool is_valid_target(SetSplitNormalModifierData *smd)
-{
-	if (smd->mode == MOD_SETSPLITNORMAL_MODE_ELLIPSOID) {
-		return true;
-	}
-	else if (ELEM(smd->mode, MOD_SETSPLITNORMAL_MODE_GEOM_FACENOR, MOD_SETSPLITNORMAL_MODE_GEOM_LOOPNOR) &&
-	         smd->target && smd->target->type == OB_MESH)
-	{
-		return true;
-	}
-	return false;
-}
-
-static void initData(ModifierData *md)
-{
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
-
-	smd->mode = MOD_SETSPLITNORMAL_MODE_ELLIPSOID;
-}
-
-static void copyData(ModifierData *md, ModifierData *target)
-{
-	modifier_copyData_generic(md, target);
-}
-
-static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
-{
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *)md;
-	CustomDataMask dataMask = CD_CUSTOMLOOPNORMAL;
-
-	/* Ask for vertexgroups if we need them. */
-	if (smd->defgrp_name[0]) {
-		dataMask |= (CD_MASK_MDEFORMVERT);
-	}
-
-	return dataMask;
-}
-
-static bool dependsOnNormals(ModifierData *UNUSED(md)) {
-	return true;
-}
-
-static void foreachObjectLink(ModifierData *md, Object *ob, ObjectWalkFunc walk, void *userData)
-{
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
-
-	walk(userData, ob, &smd->target);
-}
-
-static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
-{
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
-
-	walk(userData, ob, (ID **)&smd->target);
-}
-
-static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
-{
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *)md;
-
-	return !is_valid_target(smd);
-}
-
-static void updateDepgraph(ModifierData *md, DagForest *forest, struct Scene *UNUSED(scene),
-                           Object *UNUSED(ob), DagNode *obNode)
-{
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
-
-	if (smd->target) {
-		DagNode *Node = dag_get_node(forest, smd->target);
-
-		dag_add_relation(forest, Node, obNode, DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "SetSplitNormal Modifier");
-	}
-}
-
 static bool ensure_target_dm(Object *target_ob, DerivedMesh **r_target_dm)
 {
 	*r_target_dm = target_ob->derivedFinal;
@@ -599,6 +524,19 @@ static void setSplitNormalModifier_do_loopnormal(
 	}
 }
 
+static bool is_valid_target(SetSplitNormalModifierData *smd)
+{
+	if (smd->mode == MOD_SETSPLITNORMAL_MODE_ELLIPSOID) {
+		return true;
+	}
+	else if (ELEM(smd->mode, MOD_SETSPLITNORMAL_MODE_GEOM_FACENOR, MOD_SETSPLITNORMAL_MODE_GEOM_LOOPNOR) &&
+	         smd->target && smd->target->type == OB_MESH)
+	{
+		return true;
+	}
+	return false;
+}
+
 static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *ob, DerivedMesh *dm)
 {
 	const int num_verts = dm->getNumVerts(dm);
@@ -654,6 +592,68 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 
 	if (free_polynors) {
 		MEM_freeN(polynors);
+	}
+}
+
+static void initData(ModifierData *md)
+{
+	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
+
+	smd->mode = MOD_SETSPLITNORMAL_MODE_ELLIPSOID;
+}
+
+static void copyData(ModifierData *md, ModifierData *target)
+{
+	modifier_copyData_generic(md, target);
+}
+
+static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
+{
+	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *)md;
+	CustomDataMask dataMask = CD_CUSTOMLOOPNORMAL;
+
+	/* Ask for vertexgroups if we need them. */
+	if (smd->defgrp_name[0]) {
+		dataMask |= (CD_MASK_MDEFORMVERT);
+	}
+
+	return dataMask;
+}
+
+static bool dependsOnNormals(ModifierData *UNUSED(md)) {
+	return true;
+}
+
+static void foreachObjectLink(ModifierData *md, Object *ob, ObjectWalkFunc walk, void *userData)
+{
+	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
+
+	walk(userData, ob, &smd->target);
+}
+
+static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
+{
+	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
+
+	walk(userData, ob, (ID **)&smd->target);
+}
+
+static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
+{
+	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *)md;
+
+	return !is_valid_target(smd);
+}
+
+static void updateDepgraph(ModifierData *md, DagForest *forest, struct Scene *UNUSED(scene),
+                           Object *UNUSED(ob), DagNode *obNode)
+{
+	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
+
+	if (smd->target) {
+		DagNode *Node = dag_get_node(forest, smd->target);
+
+		dag_add_relation(forest, Node, obNode, DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "SetSplitNormal Modifier");
 	}
 }
 
