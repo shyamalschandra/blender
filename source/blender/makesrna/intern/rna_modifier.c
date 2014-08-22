@@ -3676,8 +3676,9 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 
 	static EnumPropertyItem prop_mode_items[] = {
 		{MOD_SETSPLITNORMAL_MODE_ELLIPSOID, "ELLIPSOID", 0, "Ellipsoid",
-		        "From an ellipsoid (shape defined by the boundbox's dimensions - target is optional)"},
+		        "From an ellipsoid (shape defined by the boundbox's dimensions, target is optional)"},
 		{MOD_SETSPLITNORMAL_MODE_GEOM_FACENOR, "FACE_NORMALS", 0, "Face Normals", "From a mesh's face normals"},
+		{MOD_SETSPLITNORMAL_MODE_GEOM_LOOPNOR, "SPLIT_NORMALS", 0, "Split Normals", "From a mesh's split normals"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -3711,7 +3712,15 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "use_bbox_center", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_CENTER_BBOX);
 	RNA_def_property_ui_text(prop, "BoundingBox Center",
-	                         "Center ellipsoid on bounding box center instead of own object center");
+	                         "Center ellipsoid on bounding box center instead of own object center "
+	                         "(Ellipsoid mode only)");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "use_current_custom_split_normals", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_USE_CURCLNORS);
+	RNA_def_property_ui_text(prop, "Use Custom Split Normals",
+	                         "Use current custom split normals as basis, instead of auto-computed ones, if available "
+	                         "(Split Normals mode only)");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 }
 

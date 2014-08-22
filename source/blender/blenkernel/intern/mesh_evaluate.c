@@ -59,10 +59,10 @@
 
 #include "mikktspace.h"
 
-#define DEBUG_TIME
+//#define DEBUG_TIME
 
+#include "PIL_time.h"
 #ifdef DEBUG_TIME
-#  include "PIL_time.h"
 #  include "PIL_time_utildefines.h"
 #endif
 
