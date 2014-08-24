@@ -467,13 +467,17 @@ static void setSplitNormalModifier_do_loopnormal(
 		/* And now, match all loops together, based on their respective faces' normals. */
 		for (i = 0; i < num_loops; i++) {
 			const MLoop *ml = &mloop[i];
-			const float (*pnor)[3] = (const float (*)[3])&polynors[loop_to_poly[i]];
+			float pnor[3];
 			const int target_vidx = (int)cos[ml->v][0];
 
 			LinkNode *target_ml_lnk;
 			float target_ml_best_dot = -1.1f;
 			int target_lidx = -1;
 			const float fac = facs[i] = vfacs[ml->v];
+
+			/* Move our poly normal in target space! */
+			copy_v3_v3(pnor, polynors[loop_to_poly[i]]);
+			BLI_space_transform_apply_normal(&loc2trgt, pnor);
 
 			if (target_vidx < 0) {
 				/* nos is calloc'ed, no need to zero_v3 here. */
@@ -482,7 +486,7 @@ static void setSplitNormalModifier_do_loopnormal(
 
 			for (target_ml_lnk = target_verts2loops[target_vidx]; target_ml_lnk; target_ml_lnk = target_ml_lnk->next) {
 				const int t_lidx = GET_INT_FROM_POINTER(target_ml_lnk->link);
-				const float t_dot = dot_v3v3(*pnor, target_polynors[target_loop_to_poly[t_lidx]]);
+				const float t_dot = dot_v3v3(pnor, target_polynors[target_loop_to_poly[t_lidx]]);
 
 				if (t_dot > target_ml_best_dot) {
 					target_ml_best_dot = t_dot;
