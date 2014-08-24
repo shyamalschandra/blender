@@ -227,7 +227,8 @@ void BKE_mesh_normals_loop_custom_set(
 void BKE_mesh_normals_loop_custom_from_vertices_set(
         struct MVert *mverts, float (*custom_vertnors)[3], const float *custom_vertnors_facs, const int numVerts,
         struct MEdge *medges, const int numEdges, struct MLoop *mloops, const int numLoops,
-        struct MPoly *mpolys, const float (*polynors)[3], const int numPolys, short (*r_clnors_data)[2]);
+        struct MPoly *mpolys, const float (*polynors)[3], const int numPolys,
+        short (*r_clnors_data)[2], const bool use_clnors_data);
 
 void BKE_mesh_calc_poly_normal(
         struct MPoly *mpoly, struct MLoop *loopstart,

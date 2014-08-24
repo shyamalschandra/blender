@@ -185,7 +185,8 @@ static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_l
 		BKE_mesh_normals_loop_custom_from_vertices_set(mesh->mvert, custom_loopnors, custom_loopnors_factors,
 		                                               mesh->totvert, mesh->medge, mesh->totedge,
 		                                               mesh->mloop, mesh->totloop, mesh->mpoly,
-		                                               (const float (*)[3])polynors, mesh->totpoly, clnors);
+		                                               (const float (*)[3])polynors, mesh->totpoly,
+		                                               clnors, use_current_clnors);
 	}
 	else {
 		BKE_mesh_normals_loop_custom_set(mesh->mvert, mesh->totvert, mesh->medge, mesh->totedge,
@@ -224,7 +225,8 @@ static void rna_Mesh_define_normals_split_custom(Mesh *mesh, ReportList *reports
 
 static void rna_Mesh_define_normals_split_custom_from_vertices(Mesh *mesh, ReportList *reports,
                                                                int normals_len, float *normals,
-                                                               int factors_len, float *factors)
+                                                               int factors_len, float *factors,
+                                                               int use_current_custom_normals)
 {
 	float (*vertnors)[3] = (float (*)[3])normals;
 	const float *vertnors_factors = (const float *)factors;
@@ -245,7 +247,7 @@ static void rna_Mesh_define_normals_split_custom_from_vertices(Mesh *mesh, Repor
 		return;
 	}
 
-	rna_Mesh_define_normals_split_custom_do(mesh, vertnors, vertnors_factors, false, true);
+	rna_Mesh_define_normals_split_custom_do(mesh, vertnors, vertnors_factors, (bool)use_current_custom_normals, true);
 }
 
 static void rna_Mesh_transform(Mesh *mesh, float *mat)
@@ -335,6 +337,8 @@ void RNA_api_mesh(StructRNA *srna)
 	                           "Interpolation factors (0.0 to use full auto normal, 1.0 to use full custom given one)",
 	                           0.0f, 0.0f);
 	RNA_def_property_flag(parm, PROP_DYNAMIC);
+	RNA_def_boolean(func, "use_current_custom_normals", false, "",
+	                "Try to use current custom split normals data as basis (if available), instead of plain auto ones");
 
 	func = RNA_def_function(srna, "update", "ED_mesh_update");
 	RNA_def_boolean(func, "calc_edges", 0, "Calculate Edges", "Force recalculation of edges");

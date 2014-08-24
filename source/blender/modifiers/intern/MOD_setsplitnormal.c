@@ -178,6 +178,7 @@ static void setSplitNormalModifier_do_ellipsoid(
         MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
 {
 	const bool use_bbox_center = ((smd->flags & MOD_SETSPLITNORMAL_CENTER_BBOX) != 0) && (smd->target == NULL);
+	const bool use_current_clnors = ((smd->flags & MOD_SETSPLITNORMAL_USE_CURCLNORS) != 0);
 
 	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
 	float *facs = MEM_mallocN(sizeof(*facs) * num_verts, __func__);
@@ -238,7 +239,8 @@ static void setSplitNormalModifier_do_ellipsoid(
 	}
 
 	BKE_mesh_normals_loop_custom_from_vertices_set(mvert, cos, facs, num_verts, medge, num_edges, mloop, num_loops,
-	                                               mpoly, (const float(*)[3])polynors, num_polys, clnors);
+	                                               mpoly, (const float(*)[3])polynors, num_polys,
+	                                               clnors, use_current_clnors);
 
 	MEM_freeN(cos);
 	MEM_freeN(facs);
@@ -255,6 +257,8 @@ static void setSplitNormalModifier_do_facenormal(
 	DerivedMesh *target_dm;
 	const bool free_target_dm = ensure_target_dm(target_ob, &target_dm);
 	BVHTreeFromMesh treeData = {0};
+
+	const bool use_current_clnors = ((smd->flags & MOD_SETSPLITNORMAL_USE_CURCLNORS) != 0);
 
 	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
 	float *facs = MEM_mallocN(sizeof(*facs) * num_verts, __func__);
@@ -332,7 +336,8 @@ static void setSplitNormalModifier_do_facenormal(
 		}
 
 		BKE_mesh_normals_loop_custom_from_vertices_set(mvert, cos, facs, num_verts, medge, num_edges, mloop, num_loops,
-		                                               mpoly, (const float(*)[3])polynors, num_polys, clnors);
+		                                               mpoly, (const float(*)[3])polynors, num_polys,
+		                                               clnors, use_current_clnors);
 	}
 
 	MEM_freeN(cos);
@@ -597,9 +602,10 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 
 static void initData(ModifierData *md)
 {
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
+	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *)md;
 
 	smd->mode = MOD_SETSPLITNORMAL_MODE_ELLIPSOID;
+	smd->flags = MOD_SETSPLITNORMAL_USE_CURCLNORS;
 }
 
 static void copyData(ModifierData *md, ModifierData *target)

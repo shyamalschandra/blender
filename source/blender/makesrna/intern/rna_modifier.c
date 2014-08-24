@@ -3718,6 +3718,7 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "use_current_custom_split_normals", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_USE_CURCLNORS);
+	RNA_def_property_boolean_default(prop, true);
 	RNA_def_property_ui_text(prop, "Use Custom Split Normals",
 	                         "Use current custom split normals as basis, instead of auto-computed ones, if available "
 	                         "(Split Normals mode only)");

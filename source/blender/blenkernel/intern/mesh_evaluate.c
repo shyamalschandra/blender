@@ -1215,8 +1215,8 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
  * same custom lnor for all loops sharing a same smooth fan.
  * If use_vertices if true, custom_loopnors and custom_loopnors_facs are assumed to be per-vertex, not per-loop
  * (this allows to set whole vert's normals at once, useful in some cases).
- * If use_vertices is false and use_clnors_data is true, auto lnors will be computed using data available in given
- * r_clnors_data. Useful to edit custom normals instead of simply overwriting them!
+ * If use_clnors_data is true, auto lnors will be computed using data available in given r_clnors_data. Useful to edit
+ * custom normals instead of simply overwriting them!
  */
 static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
                                          MLoop *mloops, float (*custom_loopnors)[3],
@@ -1418,11 +1418,11 @@ void BKE_mesh_normals_loop_custom_from_vertices_set(MVert *mverts, float (*custo
                                                     MEdge *medges, const int numEdges,
                                                     MLoop *mloops, const int numLoops,
                                                     MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                                    short (*r_clnors_data)[2])
+                                                    short (*r_clnors_data)[2], const bool use_clnors_data)
 {
 	mesh_normals_loop_custom_set(mverts, numVerts, medges, numEdges, mloops, custom_vertnors,
 	                             custom_vertnors_facs, numLoops, mpolys, polynors, numPolys,
-	                             r_clnors_data, false, true);
+	                             r_clnors_data, use_clnors_data, true);
 }
 
 /** \} */
