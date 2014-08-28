@@ -64,7 +64,7 @@ EnumPropertyItem modifier_type_items[] = {
 	{eModifierType_WeightVGMix, "VERTEX_WEIGHT_MIX", ICON_MOD_VERTEX_WEIGHT, "Vertex Weight Mix", ""},
 	{eModifierType_WeightVGProximity, "VERTEX_WEIGHT_PROXIMITY", ICON_MOD_VERTEX_WEIGHT,
 	                                  "Vertex Weight Proximity", ""},
-	{eModifierType_SetSplitNormal, "SET_SPLIT_NORMAL", ICON_MOD_VERTEX_WEIGHT, "Set Split Normals", ""},
+	{eModifierType_SetSplitNormal, "SET_SPLIT_NORMAL", ICON_MOD_SETSPLITNORMAL, "Set Split Normals", ""},
 	{0, "", 0, N_("Generate"), ""},
 	{eModifierType_Array, "ARRAY", ICON_MOD_ARRAY, "Array", ""},
 	{eModifierType_Bevel, "BEVEL", ICON_MOD_BEVEL, "Bevel", ""},
@@ -3685,7 +3685,7 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 	srna = RNA_def_struct(brna, "SetSplitNormalModifier", "Modifier");
 	RNA_def_struct_ui_text(srna, "Set Split Normal Modifier", "Modifier affecting split normals");
 	RNA_def_struct_sdna(srna, "SetSplitNormalModifierData");
-	RNA_def_struct_ui_icon(srna, ICON_MOD_WIREFRAME);
+	RNA_def_struct_ui_icon(srna, ICON_MOD_SETSPLITNORMAL);
 
 	prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, prop_mode_items);
