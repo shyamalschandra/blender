@@ -952,7 +952,9 @@ static bool check_seam(const ProjPaintState *ps,
 
 				/* set up the other face */
 				*other_face = face_index;
-				*orig_fidx = (i1_fidx < i2_fidx) ? i1_fidx : i2_fidx;
+				
+				/* we check if difference is 1 here, else we might have a case of edge 2-0 or 3-0 for quads */
+				*orig_fidx = (i1_fidx < i2_fidx && (i2_fidx - i1_fidx == 1)) ? i1_fidx : i2_fidx;
 
 				/* initialize face winding if needed */
 				if ((ps->faceWindingFlags[face_index] & PROJ_FACE_WINDING_INIT) == 0)
@@ -3787,7 +3789,7 @@ static void do_projectpaint_smear_f(ProjPaintState *ps, ProjPixel *projPixel, fl
 static void do_projectpaint_soften_f(ProjPaintState *ps, ProjPixel *projPixel, float mask,
                                      MemArena *softenArena, LinkNode **softenPixels)
 {
-	float accum_tot = 0.0;
+	float accum_tot = 0.0f;
 	int xk, yk;
 	BlurKernel *kernel = ps->blurkernel;
 	float *rgba = projPixel->newColor.f;
@@ -3827,7 +3829,7 @@ static void do_projectpaint_soften_f(ProjPaintState *ps, ProjPixel *projPixel, f
 
 				/* add to enhance edges */
 				blend_color_add_float(rgba, projPixel->pixel.f_pt, rgba);
-				projPixel->pixel.f_pt[3] = alpha;
+				rgba[3] = alpha;
 			}
 			else
 				return;
