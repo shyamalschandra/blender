@@ -1320,7 +1320,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 		                            &lnors_spaces, use_clnors_data ? r_clnors_data : NULL, loop_to_poly);
 	}
 	else {
-		BLI_BITMAP_ENABLE_ALL(done_loops, (size_t)numLoops);
+		BLI_BITMAP_SET_ALL(done_loops, true, (size_t)numLoops);
 	}
 
 	/* And we just have to convert plain object-space custom normals to our lnor space-encoded ones. */
