@@ -94,6 +94,8 @@ void        wm_event_free_handler   (wmEventHandler *handler);
             /* goes over entire hierarchy:  events -> window -> screen -> area -> region */
 void        wm_event_do_handlers    (bContext *C);
 
+void        wm_event_clicktype_set(wmWindow *win, wmEvent *event, wmEvent *event_state);
+
 void        wm_event_add_ghostevent (wmWindowManager *wm, wmWindow *win, int type, int time, void *customdata);
 
 void        wm_event_do_notifiers   (bContext *C);
