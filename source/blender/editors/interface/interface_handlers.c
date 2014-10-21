@@ -1146,7 +1146,7 @@ static int ui_handler_region_drag_toggle(bContext *C, const wmEvent *event, void
 	switch (event->type) {
 		case LEFTMOUSE:
 		{
-			if (event->val != KM_PRESS) {
+			if (event->val == KM_RELEASE) {
 				done = true;
 			}
 			break;
@@ -2605,7 +2605,7 @@ static void ui_do_but_textedit(bContext *C, uiBlock *block, uiBut *but, uiHandle
 				inbox = ui_searchbox_inside(data->searchbox, event->x, event->y);
 
 			/* for double click: we do a press again for when you first click on button (selects all text, no cursor pos) */
-			if (event->val == KM_PRESS || event->val == KM_DBL_CLICK) {
+			if (event->val == KM_PRESS || event->clicktype == KM_DBL_CLICK) {
 				float mx, my;
 
 				mx = event->x;
@@ -2630,7 +2630,7 @@ static void ui_do_but_textedit(bContext *C, uiBlock *block, uiBut *but, uiHandle
 			}
 			
 			/* only select a word in button if there was no selection before */
-			if (event->val == KM_DBL_CLICK && had_selection == false) {
+			if (event->clicktype == KM_DBL_CLICK && had_selection == false) {
 				ui_textedit_move(but, data, STRCUR_DIR_PREV, false, STRCUR_JUMP_DELIM);
 				ui_textedit_move(but, data, STRCUR_DIR_NEXT, true, STRCUR_JUMP_DELIM);
 				retval = WM_UI_HANDLER_BREAK;
@@ -3028,7 +3028,7 @@ static int ui_do_but_BUT(bContext *C, uiBut *but, uiHandleButtonData *data, cons
 		}
 	}
 	else if (data->state == BUTTON_STATE_WAIT_RELEASE) {
-		if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			if (!(but->flag & UI_SELECT))
 				data->cancel = true;
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
@@ -3564,7 +3564,7 @@ static int ui_do_but_NUM(bContext *C, uiBlock *block, uiBut *but, uiHandleButton
 				button_activate_state(C, but, BUTTON_STATE_EXIT);
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			if (data->dragchange) {
 #ifdef USE_DRAG_MULTINUM
 				/* if we started multibutton but didnt drag, then edit */
@@ -3861,7 +3861,7 @@ static int ui_do_but_SLI(bContext *C, uiBlock *block, uiBut *but, uiHandleButton
 				button_activate_state(C, but, BUTTON_STATE_EXIT);
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			if (data->dragchange) {
 #ifdef USE_DRAG_MULTINUM
 				/* if we started multibutton but didnt drag, then edit */
@@ -4006,7 +4006,7 @@ static int ui_do_but_SCROLL(bContext *C, uiBlock *block, uiBut *but, uiHandleBut
 				button_activate_state(C, but, BUTTON_STATE_EXIT);
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
 		}
 		else if (event->type == MOUSEMOVE) {
@@ -4054,7 +4054,7 @@ static int ui_do_but_GRIP(bContext *C, uiBlock *block, uiBut *but, uiHandleButto
 				button_activate_state(C, but, BUTTON_STATE_EXIT);
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
 		}
 		else if (event->type == MOUSEMOVE) {
@@ -4078,7 +4078,7 @@ static int ui_do_but_LISTROW(bContext *C, uiBut *but, uiHandleButtonData *data, 
 		 * editing field for editing list item names
 		 */
 		if ((ELEM(event->type, LEFTMOUSE, PADENTER, RETKEY) && event->val == KM_PRESS && event->ctrl) ||
-		    (event->type == LEFTMOUSE && event->val == KM_DBL_CLICK))
+		    (event->type == LEFTMOUSE && event->clicktype == KM_DBL_CLICK))
 		{
 			uiBut *labelbut = ui_but_list_row_text_activate(C, but, data, event, BUTTON_ACTIVATE_TEXT_EDITING);
 			if (labelbut) {
@@ -4422,7 +4422,7 @@ static int ui_do_but_NORMAL(bContext *C, uiBlock *block, uiBut *but, uiHandleBut
 					ui_numedit_apply(C, block, but, data);
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
 		}
 
@@ -4740,7 +4740,7 @@ static int ui_do_but_HSVCUBE(bContext *C, uiBlock *block, uiBut *but, uiHandleBu
 					ui_numedit_apply(C, block, but, data);
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
 		}
 		
@@ -5012,7 +5012,7 @@ static int ui_do_but_HSVCIRCLE(bContext *C, uiBlock *block, uiBut *but, uiHandle
 				}
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
 		}
 		return WM_UI_HANDLER_BREAK;
@@ -5097,7 +5097,7 @@ static int ui_do_but_COLORBAND(bContext *C, uiBlock *block, uiBut *but, uiHandle
 					ui_numedit_apply(C, block, but, data);
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
 		}
 		
@@ -5336,7 +5336,7 @@ static int ui_do_but_CURVE(bContext *C, uiBlock *block, uiBut *but, uiHandleButt
 					ui_numedit_apply(C, block, but, data);
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			if (data->dragsel != -1) {
 				CurveMapping *cumap = (CurveMapping *)but->poin;
 				CurveMap *cuma = cumap->cm + cumap->cur;
@@ -5432,7 +5432,7 @@ static int ui_do_but_HISTOGRAM(bContext *C, uiBlock *block, uiBut *but, uiHandle
 					ui_numedit_apply(C, block, but, data);
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
 		}
 		return WM_UI_HANDLER_BREAK;
@@ -5505,7 +5505,7 @@ static int ui_do_but_WAVEFORM(bContext *C, uiBlock *block, uiBut *but, uiHandleB
 					ui_numedit_apply(C, block, but, data);
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
 		}
 		return WM_UI_HANDLER_BREAK;
@@ -5530,7 +5530,7 @@ static int ui_do_but_LINK(bContext *C, uiBut *but, uiHandleButtonData *data, con
 	}
 	else if (data->state == BUTTON_STATE_WAIT_RELEASE) {
 		
-		if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			if (!(but->flag & UI_SELECT))
 				data->cancel = true;
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
@@ -5613,7 +5613,7 @@ static int ui_do_but_TRACKPREVIEW(bContext *C, uiBlock *block, uiBut *but, uiHan
 					ui_numedit_apply(C, block, but, data);
 			}
 		}
-		else if (event->type == LEFTMOUSE && event->val != KM_PRESS) {
+		else if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
 		}
 		return WM_UI_HANDLER_BREAK;
@@ -8319,7 +8319,7 @@ static int ui_handle_menu_event(
 				case YKEY:
 				case ZKEY:
 				{
-					if ((event->val  == KM_PRESS || event->val == KM_DBL_CLICK) &&
+					if ((event->val  == KM_PRESS || event->clicktype == KM_DBL_CLICK) &&
 					    (event->shift == 0) &&
 					    (event->ctrl  == 0) &&
 					    (event->oskey == 0))
@@ -8369,7 +8369,8 @@ static int ui_handle_menu_event(
 				uiSafetyRct *saferct = block->saferct.first;
 
 				if (ELEM(event->type, LEFTMOUSE, MIDDLEMOUSE, RIGHTMOUSE) &&
-				    ELEM(event->val, KM_PRESS, KM_DBL_CLICK))
+				    (event->val == KM_PRESS ||
+				     event->clicktype == KM_DBL_CLICK))
 				{
 					if ((is_parent_menu == false) && (U.uiflag & USER_MENUOPENAUTO) == 0) {
 						/* for root menus, allow clicking to close */
@@ -8771,7 +8772,7 @@ static int ui_handler_pie(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 				break;
 
 			case LEFTMOUSE:
-				if (is_click_style) {
+				if (event->val == KM_RELEASE && is_click_style) {
 					if (block->pie_data.flags & UI_PIE_INVALID_DIR) {
 						menu->menuretval = UI_RETURN_CANCEL;
 					}
@@ -8813,7 +8814,7 @@ static int ui_handler_pie(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 			case YKEY:
 			case ZKEY:
 			{
-				if ((event->val  == KM_PRESS || event->val == KM_DBL_CLICK) &&
+				if ((event->val  == KM_PRESS || event->clicktype == KM_DBL_CLICK) &&
 				    (event->shift == 0) &&
 				    (event->ctrl  == 0) &&
 				    (event->oskey == 0))
@@ -8924,7 +8925,7 @@ static int ui_handle_menus_recursive(
 
 			if (block->flag & UI_BLOCK_RADIAL)
 				retval = ui_handler_pie(C, event, menu);
-			else if (event->type == LEFTMOUSE || event->val != KM_DBL_CLICK)
+			else if (event->type == LEFTMOUSE || event->clicktype != KM_DBL_CLICK)
 				retval = ui_handle_menu_event(C, event, menu, level, is_parent_inside, is_parent_menu, is_floating);
 		}
 	}
