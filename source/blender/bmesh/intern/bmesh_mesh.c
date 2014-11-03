@@ -557,7 +557,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 	}
 	if (r_lnors_spaces) {
 		if (!r_lnors_spaces->mem) {
-			BKE_init_loops_normal_spaces(r_lnors_spaces, bm->totloop);
+			BKE_lnor_spaces_init(r_lnors_spaces, bm->totloop);
 		}
 		edge_vectors = BLI_stack_new(sizeof(float[3]), __func__);
 	}
@@ -812,7 +812,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 	if (r_lnors_spaces) {
 		BLI_stack_free(edge_vectors);
 		if (r_lnors_spaces == &_lnors_spaces) {
-			BKE_free_loops_normal_spaces(r_lnors_spaces);
+			BKE_lnor_spaces_free(r_lnors_spaces);
 		}
 	}
 }

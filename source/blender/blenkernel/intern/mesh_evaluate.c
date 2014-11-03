@@ -319,14 +319,14 @@ void BKE_mesh_calc_normals_tessface(MVert *mverts, int numVerts, MFace *mfaces, 
 		MEM_freeN(fnors);
 }
 
-void BKE_init_loops_normal_spaces(MLoopsNorSpaces *lnors_spaces, const int numLoops)
+void BKE_lnor_spaces_init(MLoopsNorSpaces *lnors_spaces, const int numLoops)
 {
 	MemArena *mem = lnors_spaces->mem = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
 	lnors_spaces->lspaces = BLI_memarena_calloc(mem, sizeof(MLoopNorSpace *) * (size_t)numLoops);
 	lnors_spaces->loops_pool = BLI_memarena_alloc(mem, sizeof(LinkNode) * (size_t)numLoops);
 }
 
-void BKE_free_loops_normal_spaces(MLoopsNorSpaces *lnors_spaces)
+void BKE_lnor_spaces_free(MLoopsNorSpaces *lnors_spaces)
 {
 	BLI_memarena_free(lnors_spaces->mem);
 	lnors_spaces->lspaces = NULL;
@@ -1086,7 +1086,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	}
 	if (r_lnors_spaces) {
 		if (!r_lnors_spaces->mem) {
-			BKE_init_loops_normal_spaces(r_lnors_spaces, numLoops);
+			BKE_lnor_spaces_init(r_lnors_spaces, numLoops);
 		}
 		sharp_verts = BLI_BITMAP_NEW((size_t)numVerts, __func__);
 	}
@@ -1196,7 +1196,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	if (r_lnors_spaces) {
 		MEM_freeN(sharp_verts);
 		if (r_lnors_spaces == &_lnors_spaces) {
-			BKE_free_loops_normal_spaces(r_lnors_spaces);
+			BKE_lnor_spaces_free(r_lnors_spaces);
 		}
 	}
 
@@ -1314,7 +1314,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 		}
 
 		/* And now, recompute our new auto lnors and lnor spaces! */
-		BKE_free_loops_normal_spaces(&lnors_spaces);
+		BKE_lnor_spaces_free(&lnors_spaces);
 		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 		                            mpolys, polynors, numPolys, split_angle,
 		                            &lnors_spaces, use_clnors_data ? r_clnors_data : NULL, loop_to_poly);
@@ -1399,7 +1399,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 	MEM_freeN(lnors);
 	MEM_freeN(loop_to_poly);
 	MEM_freeN(done_loops);
-	BKE_free_loops_normal_spaces(&lnors_spaces);
+	BKE_lnor_spaces_free(&lnors_spaces);
 }
 
 void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,

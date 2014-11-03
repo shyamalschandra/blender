@@ -201,8 +201,8 @@ typedef struct MLoopsNorSpaces {
 	LinkNode *loops_pool;  /* Allocated once, avoids to call BLI_linklist_prepend_arena() for each loop! */
 	MemArena *mem;
 } MLoopsNorSpaces;
-void BKE_init_loops_normal_spaces(MLoopsNorSpaces *lnors_spaces, const int numLoops);
-void BKE_free_loops_normal_spaces(MLoopsNorSpaces *lnors_spaces);
+void BKE_lnor_spaces_init(MLoopsNorSpaces *lnors_spaces, const int numLoops);
+void BKE_lnor_spaces_free(MLoopsNorSpaces *lnors_spaces);
 MLoopNorSpace *BKE_lnor_space_create(MLoopsNorSpaces *lnors_spaces);
 void BKE_lnor_space_define(
         MLoopNorSpace *lnor_space, const float lnor[3], float vec_ref[3], float vec_other[3],
