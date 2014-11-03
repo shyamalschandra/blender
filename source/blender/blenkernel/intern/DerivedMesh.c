@@ -1500,7 +1500,7 @@ static void mesh_calc_modifiers(Scene *scene, Object *ob, float (*inputVertexCos
 	/* XXX Same as above... For now, only weights preview in WPaint mode. */
 	const bool do_mod_wmcol = do_init_wmcol;
 
-	const bool do_loop_normals = (me->flag & ME_AUTOSMOOTH);
+	bool do_loop_normals = (me->flag & ME_AUTOSMOOTH);
 	const float loop_normals_split_angle = me->smoothresh;
 
 	VirtualModifierData virtualModifierData;
@@ -1904,6 +1904,8 @@ static void mesh_calc_modifiers(Scene *scene, Object *ob, float (*inputVertexCos
 			add_orco_dm(ob, NULL, *deform_r, NULL, CD_ORCO);
 	}
 
+	do_loop_normals = (do_loop_normals || DM_get_loop_data_layer(finaldm, CD_CUSTOMLOOPNORMAL));
+
 	if (do_loop_normals) {
 		/* Compute loop normals (note: will compute poly and vert normals as well, if needed!) */
 		DM_calc_loop_normals(finaldm, loop_normals_split_angle);
@@ -2006,7 +2008,7 @@ static void editbmesh_calc_modifiers(Scene *scene, Object *ob, BMEditMesh *em, D
 	const bool do_mod_wmcol = do_init_wmcol;
 	VirtualModifierData virtualModifierData;
 
-	const bool do_loop_normals = (((Mesh *)(ob->data))->flag & ME_AUTOSMOOTH);
+	bool do_loop_normals = (((Mesh *)(ob->data))->flag & ME_AUTOSMOOTH);
 	const float loop_normals_split_angle = ((Mesh *)(ob->data))->smoothresh;
 
 	modifiers_clearErrors(ob);
@@ -2219,6 +2221,8 @@ static void editbmesh_calc_modifiers(Scene *scene, Object *ob, BMEditMesh *em, D
 		if (do_init_statvis)
 			DM_update_statvis_color(scene, ob, *final_r);
 	}
+
+	do_loop_normals = (do_loop_normals || DM_get_loop_data_layer(*final_r, CD_CUSTOMLOOPNORMAL));
 
 	if (do_loop_normals) {
 		/* Compute loop normals */
