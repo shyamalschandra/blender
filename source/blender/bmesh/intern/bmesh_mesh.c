@@ -487,13 +487,13 @@ static void bm_mesh_edges_sharp_tag(BMesh *bm, const float (*vnos)[3], const flo
 			 * If the angle between both its polys' normals is below split_angle value,
 			 * and it is tagged as such,
 			 * and both its faces are smooth,
-			 * and both its faces have compatible (non-flipped) normals, i.e. both loops on the same edge do not share
-			 *     the same vertex.
+			 * and both its faces have compatible (non-flipped) normals,
+			 * i.e. both loops on the same edge do not share the same vertex.
 			 */
 			if (is_angle_smooth &&
-			    BM_elem_flag_test_bool(e, BM_ELEM_SMOOTH) &&
-			    BM_elem_flag_test_bool(l_a->f, BM_ELEM_SMOOTH) &&
-			    BM_elem_flag_test_bool(l_b->f, BM_ELEM_SMOOTH) &&
+			    BM_elem_flag_test(e, BM_ELEM_SMOOTH) &&
+			    BM_elem_flag_test(l_a->f, BM_ELEM_SMOOTH) &&
+			    BM_elem_flag_test(l_b->f, BM_ELEM_SMOOTH) &&
 			    l_a->v != l_b->v)
 			{
 				const float *no;
@@ -570,8 +570,8 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 
 		l_curr = l_first = BM_FACE_FIRST_LOOP(f_curr);
 		do {
-			if (BM_elem_flag_test_bool(l_curr->e, BM_ELEM_TAG) &&
-			    (!r_lnors_spaces || BM_elem_flag_test_bool(l_curr->v, BM_ELEM_TAG)))
+			if (BM_elem_flag_test(l_curr->e, BM_ELEM_TAG) &&
+			    (!r_lnors_spaces || BM_elem_flag_test(l_curr->v, BM_ELEM_TAG)))
 			{
 				/* A smooth edge, and we are not generating lnors_spaces, or the related vertex is sharp.
 				 * We skip it because it is either:
@@ -581,8 +581,8 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 				 *   are just fine!
 				 */
 			}
-			else if (!BM_elem_flag_test_bool(l_curr->e, BM_ELEM_TAG) &&
-			         !BM_elem_flag_test_bool(l_curr->prev->e, BM_ELEM_TAG))
+			else if (!BM_elem_flag_test(l_curr->e, BM_ELEM_TAG) &&
+			         !BM_elem_flag_test(l_curr->prev->e, BM_ELEM_TAG))
 			{
 				/* Simple case (both edges around that vertex are sharp in related polygon),
 				 * this vertex just takes its poly normal.
@@ -738,7 +738,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 						}
 					}
 
-					if (!BM_elem_flag_test_bool(e_next, BM_ELEM_TAG) || (e_next == e_org)) {
+					if (!BM_elem_flag_test(e_next, BM_ELEM_TAG) || (e_next == e_org)) {
 						/* Next edge is sharp, we have finished with this fan of faces around this vert! */
 						break;
 					}
