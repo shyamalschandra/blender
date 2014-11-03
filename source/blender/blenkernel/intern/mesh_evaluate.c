@@ -409,7 +409,7 @@ void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_
 	}
 }
 
-void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_custom_lnor[3], const short clnor_data[2])
+void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, const short clnor_data[2], float r_custom_lnor[3])
 {
 	/* NOP custom normal data or invalid lnor space, return. */
 	if (clnor_data[0] == 0 || lnor_space->ref_alpha == 0.0f || lnor_space->ref_beta == 0.0f) {
@@ -629,7 +629,7 @@ static void split_loop_nor_single_do(LoopSplitTaskDataCommon *common_data, LoopS
 		BKE_lnor_space_add_loop(lnors_spaces, lnor_space, ml_curr_index, false);
 
 		if (clnors_data) {
-			BKE_lnor_space_custom_data_to_normal(lnor_space, *lnor, clnors_data[ml_curr_index]);
+			BKE_lnor_space_custom_data_to_normal(lnor_space, clnors_data[ml_curr_index], *lnor);
 		}
 	}
 }
@@ -847,7 +847,7 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
 				}
 				/* Extra bonus: since smallstack is local to this func, no more need to empty it at all cost! */
 
-				BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, *clnor_ref);
+				BKE_lnor_space_custom_data_to_normal(lnor_space, *clnor_ref, lnor);
 			}
 		}
 

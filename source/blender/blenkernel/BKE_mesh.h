@@ -205,7 +205,7 @@ void BKE_lnor_space_define(
         struct BLI_Stack *edge_vectors);
 void BKE_lnor_space_add_loop(
         MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_space, const int ml_index, const bool add_to_list);
-void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, float r_custom_lnor[3], const short clnor_data[2]);
+void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, const short clnor_data[2], float r_custom_lnor[3]);
 void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float custom_lnor[3], short r_clnor_data[2]);
 
 bool BKE_mesh_has_custom_loop_normals(struct Mesh *me);

@@ -617,7 +617,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 					if (has_clnors) {
 						short (*clnor)[2] = clnors_data ? &clnors_data[l_curr_index] :
 						                                  BM_ELEM_CD_GET_VOID_P(l_curr, cd_loop_clnors_offset);
-						BKE_lnor_space_custom_data_to_normal(lnor_space, r_lnos[l_curr_index], *clnor);
+						BKE_lnor_space_custom_data_to_normal(lnor_space, *clnor, r_lnos[l_curr_index]);
 					}
 				}
 			}
@@ -782,7 +782,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 								/* We still have to consume the stack! */
 								while (BLI_SMALLSTACK_POP(clnors));
 							}
-							BKE_lnor_space_custom_data_to_normal(lnor_space, lnor, *clnor_ref);
+							BKE_lnor_space_custom_data_to_normal(lnor_space, *clnor_ref, lnor);
 						}
 					}
 
