@@ -1022,6 +1022,8 @@ static void tselem_draw_icon(uiBlock *block, int xmax, float x, float y, TreeSto
 						UI_icon_draw(x, y, ICON_MOD_MESHDEFORM); break;  /* XXX, needs own icon */
 					case eModifierType_SetSplitNormal:
 						UI_icon_draw(x, y, ICON_MOD_SETSPLITNORMAL); break;
+					case eModifierType_CopySplitNormal:
+						UI_icon_draw(x, y, ICON_MOD_SETSPLITNORMAL); break;  /* XXX, needs own icon */
 					/* Default */
 					case eModifierType_None:
 					case eModifierType_ShapeKey:
