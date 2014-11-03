@@ -163,6 +163,10 @@ static void copySplitNormalModifier_do_facenormal(
 			/* Compute and store result. */
 			BLI_bvhtree_find_nearest(treeData.tree, tmp_co, &nearest, treeData.nearest_callback, &treeData);
 
+			/* XXX This is broken in polygon case - nearest.index is index of nearest tessellated face, not nearest poly!
+			 *     Not worth fixing this here, better to wait for transferdata code, which handles all that mess itself.
+			 */
+
 			if (facs[i] && nearest.index != -1) {
 				copy_v3_v3(cos[i], target_polynors[nearest.index]);
 				/* Bring normal back in own space! */
