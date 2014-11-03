@@ -1500,7 +1500,7 @@ static void mesh_calc_modifiers(Scene *scene, Object *ob, float (*inputVertexCos
 	/* XXX Same as above... For now, only weights preview in WPaint mode. */
 	const bool do_mod_wmcol = do_init_wmcol;
 
-	bool do_loop_normals = (me->flag & ME_AUTOSMOOTH);
+	bool do_loop_normals = (me->flag & ME_AUTOSMOOTH) != 0;
 	const float loop_normals_split_angle = me->smoothresh;
 
 	VirtualModifierData virtualModifierData;
@@ -2008,7 +2008,7 @@ static void editbmesh_calc_modifiers(Scene *scene, Object *ob, BMEditMesh *em, D
 	const bool do_mod_wmcol = do_init_wmcol;
 	VirtualModifierData virtualModifierData;
 
-	bool do_loop_normals = (((Mesh *)(ob->data))->flag & ME_AUTOSMOOTH);
+	bool do_loop_normals = (((Mesh *)(ob->data))->flag & ME_AUTOSMOOTH) != 0;
 	const float loop_normals_split_angle = ((Mesh *)(ob->data))->smoothresh;
 
 	modifiers_clearErrors(ob);
