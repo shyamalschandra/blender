@@ -83,6 +83,7 @@ typedef enum ModifierType {
 	eModifierType_LaplacianDeform   = 47,
 	eModifierType_Wireframe         = 48,
 	eModifierType_SetSplitNormal    = 49,
+	eModifierType_CopySplitNormal    = 50,
 	NUM_MODIFIER_TYPES
 } ModifierType;
 
@@ -1380,15 +1381,37 @@ typedef struct SetSplitNormalModifierData {
 /* SetSplitNormalModifierData.mode */
 enum {
 	MOD_SETSPLITNORMAL_MODE_ELLIPSOID    = 0,
-	MOD_SETSPLITNORMAL_MODE_GEOM_FACENOR = 1,
-	MOD_SETSPLITNORMAL_MODE_GEOM_LOOPNOR = 2,
+	MOD_SETSPLITNORMAL_MODE_TRACKTO      = 1,
 };
 
 /* SetSplitNormalModifierData.flags */
 enum {
-	MOD_SETSPLITNORMAL_INVERT_VGROUP = (1 << 0),
-	MOD_SETSPLITNORMAL_CENTER_BBOX   = (1 << 1),
-	MOD_SETSPLITNORMAL_USE_CURCLNORS = (1 << 2),
+	MOD_SETSPLITNORMAL_INVERT_VGROUP        = (1 << 0),
+	MOD_SETSPLITNORMAL_CENTER_BBOX          = (1 << 1),
+	MOD_SETSPLITNORMAL_USE_CURCLNORS        = (1 << 2),
+	MOD_SETSPLITNORMAL_USE_PARALLEL_TRACKTO = (1 << 3),
+};
+
+/* Copy Split Normals modifier */
+typedef struct CopySplitNormalModifierData {
+	ModifierData modifier;
+	char defgrp_name[64];  /* MAX_VGROUP_NAME */
+	struct Object *target;  /* Source of normals, or center of ellipsoid. */
+	short flags;
+	short mode;
+	short pad[2];
+} CopySplitNormalModifierData;
+
+/* CopySplitNormalModifierData.mode */
+enum {
+	MOD_COPYSPLITNORMAL_MODE_GEOM_FACENOR = 1,
+	MOD_COPYSPLITNORMAL_MODE_GEOM_LOOPNOR = 2,
+};
+
+/* CopySplitNormalModifierData.flags */
+enum {
+	MOD_COPYSPLITNORMAL_INVERT_VGROUP = (1 << 0),
+	MOD_COPYSPLITNORMAL_USE_CURCLNORS = (1 << 1),
 };
 
 

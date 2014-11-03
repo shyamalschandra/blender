@@ -1227,7 +1227,8 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
     def SET_SPLIT_NORMAL(self, layout, ob, md):
         has_vgroup = bool(md.vertex_group)
-        needs_object_bbox_center = (md.mode == 'ELLIPSOID') and not md.target
+        needs_object_bbox_center = (((md.mode == 'ELLIPSOID') and not md.target) or
+                                    ((md.mode == 'TRACKTO') and md.use_trackto_parallel))
 
         row = layout.row()
         row.prop(md, "mode", expand=True)
@@ -1239,6 +1240,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         sub = col.row()
         sub.active = needs_object_bbox_center
         sub.prop(md, "use_bbox_center")
+        col.prop(md, "use_current_custom_split_normals")
 
         col = split.column()
         row = col.row(align=True)
@@ -1246,7 +1248,28 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         sub = row.row(align=True)
         sub.active = has_vgroup
         sub.prop(md, "use_invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
+        row = col.row(align=True)
+        row.active = (md.mode == 'TRACKTO')
+        row.prop(md, "use_trackto_parallel")
+
+    def COPY_SPLIT_NORMAL(self, layout, ob, md):
+        has_vgroup = bool(md.vertex_group)
+
+        row = layout.row()
+        row.prop(md, "mode", expand=True)
+
+        split = layout.split()
+
+        col = split.column()
+        col.prop(md, "target", text="")
         col.prop(md, "use_current_custom_split_normals")
+
+        col = split.column()
+        row = col.row(align=True)
+        row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
+        sub = row.row(align=True)
+        sub.active = has_vgroup
+        sub.prop(md, "use_invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
 
 
 if __name__ == "__main__":  # only for live edit.
