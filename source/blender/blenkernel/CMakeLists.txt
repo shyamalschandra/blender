@@ -83,6 +83,7 @@ set(SRC
 	intern/curve.c
 	intern/customdata.c
 	intern/customdata_file.c
+	intern/data_transfer.c
 	intern/deform.c
 	intern/depsgraph.c
 	intern/displist.c
@@ -198,6 +199,7 @@ set(SRC
 	BKE_curve.h
 	BKE_customdata.h
 	BKE_customdata_file.h
+	BKE_data_transfer.h
 	BKE_deform.h
 	BKE_depsgraph.h
 	BKE_displist.h
@@ -272,6 +274,7 @@ set(SRC
 	tracking_private.h
 	intern/CCGSubSurf.h
 	intern/pbvh_intern.h
+	intern/data_transfer_intern.h
 )
 
 add_definitions(${GL_DEFINITIONS})
