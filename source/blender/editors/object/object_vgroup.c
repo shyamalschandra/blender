@@ -682,7 +682,7 @@ static void vgroup_normalize_active(Object *ob, eVGroupSelect subset_type)
 		return;
 	}
 
-	vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	defvert_normalize_subset(dvert_act, vgroup_validmap, vgroup_tot);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -703,7 +703,7 @@ static void vgroup_copy_active_to_sel(Object *ob, eVGroupSelect subset_type)
 	BMEditMesh *em = me->edit_btmesh;
 	MDeformVert *dvert_act;
 	int i, vgroup_tot, subset_count;
-	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 
 
 	if (em) {
@@ -1498,6 +1498,86 @@ static void vgroup_duplicate(Object *ob)
 	}
 }
 
+/**
+ * Return the subset type of the Vertex Group Selection
+ */
+bool *ED_vgroup_subset_from_select_type(Object *ob, eVGroupSelect subset_type, int *r_vgroup_tot, int *r_subset_count)
+{
+	bool *vgroup_validmap = NULL;
+	*r_vgroup_tot = BLI_countlist(&ob->defbase);
+
+	switch (subset_type) {
+		case WT_VGROUP_ACTIVE:
+		{
+			const int def_nr_active = ob->actdef - 1;
+			vgroup_validmap = MEM_mallocN(*r_vgroup_tot * sizeof(*vgroup_validmap), __func__);
+			memset(vgroup_validmap, false, *r_vgroup_tot * sizeof(*vgroup_validmap));
+			if ((def_nr_active >= 0) && (def_nr_active < *r_vgroup_tot)) {
+				*r_subset_count = 1;
+				vgroup_validmap[def_nr_active] = true;
+			}
+			else {
+				*r_subset_count = 0;
+			}
+			break;
+		}
+		case WT_VGROUP_BONE_SELECT:
+		{
+			vgroup_validmap = BKE_objdef_selected_get(ob, *r_vgroup_tot, r_subset_count);
+			break;
+		}
+		case WT_VGROUP_BONE_DEFORM:
+		{
+			int i;
+			vgroup_validmap = BKE_objdef_validmap_get(ob, *r_vgroup_tot);
+			*r_subset_count = 0;
+			for (i = 0; i < *r_vgroup_tot; i++) {
+				if (vgroup_validmap[i] == true) {
+					*r_subset_count += 1;
+				}
+			}
+			break;
+		}
+		case WT_VGROUP_BONE_DEFORM_OFF:
+		{
+			int i;
+			vgroup_validmap = BKE_objdef_validmap_get(ob, *r_vgroup_tot);
+			*r_subset_count = 0;
+			for (i = 0; i < *r_vgroup_tot; i++) {
+				vgroup_validmap[i] = !vgroup_validmap[i];
+				if (vgroup_validmap[i] == true) {
+					*r_subset_count += 1;
+				}
+			}
+			break;
+		}
+		case WT_VGROUP_ALL:
+		default:
+		{
+			vgroup_validmap = MEM_mallocN(*r_vgroup_tot * sizeof(*vgroup_validmap), __func__);
+			memset(vgroup_validmap, true, *r_vgroup_tot * sizeof(*vgroup_validmap));
+			*r_subset_count = *r_vgroup_tot;
+			break;
+		}
+	}
+
+	return vgroup_validmap;
+}
+
+/**
+ * store indices from the vgroup_validmap (faster lookups in some cases)
+ */
+void ED_vgroup_subset_to_index_array(const bool *vgroup_validmap, const int vgroup_tot,
+                                     int *r_vgroup_subset_map)
+{
+	int i, j = 0;
+	for (i = 0; i < vgroup_tot; i++) {
+		if (vgroup_validmap[i]) {
+			r_vgroup_subset_map[j++] = i;
+		}
+	}
+}
+
 static void vgroup_normalize(Object *ob)
 {
 	MDeformWeight *dw;
@@ -2125,7 +2205,7 @@ static void vgroup_blend_subset(Object *ob, const bool *vgroup_validmap, const i
 
 	BLI_SMALLSTACK_DECLARE(dv_stack, MDeformVert *);
 
-	BKE_objdef_vgroup_subset_to_index_array(vgroup_validmap, vgroup_tot, vgroup_subset_map);
+	ED_vgroup_subset_to_index_array(vgroup_validmap, vgroup_tot, vgroup_subset_map);
 	ED_vgroup_parray_alloc(ob->data, &dvert_array, &dvert_tot, false);
 	memset(vgroup_subset_weights, 0, sizeof(*vgroup_subset_weights) * subset_count);
 
@@ -3406,7 +3486,7 @@ static int vertex_group_levels_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_levels_subset(ob, vgroup_validmap, vgroup_tot, subset_count, offset, gain);
 	MEM_freeN((void *)vgroup_validmap);
 	
@@ -3472,7 +3552,7 @@ static int vertex_group_normalize_all_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_normalize_all(ob, vgroup_validmap, vgroup_tot, subset_count, lock_active);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -3594,7 +3674,7 @@ static int vertex_group_invert_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_invert_subset(ob, vgroup_validmap, vgroup_tot, subset_count, auto_assign, auto_remove);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -3635,7 +3715,7 @@ static int vertex_group_blend_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_blend_subset(ob, vgroup_validmap, vgroup_tot, subset_count, fac);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -3711,7 +3791,7 @@ static int vertex_group_clean_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_clean_subset(ob, vgroup_validmap, vgroup_tot, subset_count, limit, keep_single);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -3752,7 +3832,7 @@ static int vertex_group_quantize_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	vgroup_quantize_subset(ob, vgroup_validmap, vgroup_tot, subset_count, steps);
 	MEM_freeN((void *)vgroup_validmap);
 
@@ -3790,7 +3870,7 @@ static int vertex_group_limit_total_exec(bContext *C, wmOperator *op)
 
 	int subset_count, vgroup_tot;
 
-	const bool *vgroup_validmap = BKE_objdef_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+	const bool *vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 	int remove_tot = vgroup_limit_total_subset(ob, vgroup_validmap, vgroup_tot, subset_count, limit);
 	MEM_freeN((void *)vgroup_validmap);
 
