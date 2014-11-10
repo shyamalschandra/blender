@@ -39,6 +39,7 @@
 #include "DNA_armature_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
+#include "DNA_scene_types.h"
 
 /* --- functions for getting vgroup aligned maps --- */
 
@@ -158,3 +159,86 @@ bool *BKE_objdef_selected_get(Object *ob, int defbase_tot, int *r_dg_flags_sel_t
 
 	return dg_selection;
 }
+
+
+/**
+ * Return the subset type of the Vertex Group Selection
+ */
+bool *BKE_objdef_vgroup_subset_from_select_type(
+        Object *ob, eVGroupSelect subset_type, int *r_vgroup_tot, int *r_subset_count)
+{
+	bool *vgroup_validmap = NULL;
+	*r_vgroup_tot = BLI_countlist(&ob->defbase);
+
+	switch (subset_type) {
+		case WT_VGROUP_ACTIVE:
+		{
+			const int def_nr_active = ob->actdef - 1;
+			vgroup_validmap = MEM_mallocN(*r_vgroup_tot * sizeof(*vgroup_validmap), __func__);
+			memset(vgroup_validmap, false, *r_vgroup_tot * sizeof(*vgroup_validmap));
+			if ((def_nr_active >= 0) && (def_nr_active < *r_vgroup_tot)) {
+				*r_subset_count = 1;
+				vgroup_validmap[def_nr_active] = true;
+			}
+			else {
+				*r_subset_count = 0;
+			}
+			break;
+		}
+		case WT_VGROUP_BONE_SELECT:
+		{
+			vgroup_validmap = BKE_objdef_selected_get(ob, *r_vgroup_tot, r_subset_count);
+			break;
+		}
+		case WT_VGROUP_BONE_DEFORM:
+		{
+			int i;
+			vgroup_validmap = BKE_objdef_validmap_get(ob, *r_vgroup_tot);
+			*r_subset_count = 0;
+			for (i = 0; i < *r_vgroup_tot; i++) {
+				if (vgroup_validmap[i] == true) {
+					*r_subset_count += 1;
+				}
+			}
+			break;
+		}
+		case WT_VGROUP_BONE_DEFORM_OFF:
+		{
+			int i;
+			vgroup_validmap = BKE_objdef_validmap_get(ob, *r_vgroup_tot);
+			*r_subset_count = 0;
+			for (i = 0; i < *r_vgroup_tot; i++) {
+				vgroup_validmap[i] = !vgroup_validmap[i];
+				if (vgroup_validmap[i] == true) {
+					*r_subset_count += 1;
+				}
+			}
+			break;
+		}
+		case WT_VGROUP_ALL:
+		default:
+		{
+			vgroup_validmap = MEM_mallocN(*r_vgroup_tot * sizeof(*vgroup_validmap), __func__);
+			memset(vgroup_validmap, true, *r_vgroup_tot * sizeof(*vgroup_validmap));
+			*r_subset_count = *r_vgroup_tot;
+			break;
+		}
+	}
+
+	return vgroup_validmap;
+}
+
+/**
+ * store indices from the vgroup_validmap (faster lookups in some cases)
+ */
+void BKE_objdef_vgroup_subset_to_index_array(
+        const bool *vgroup_validmap, const int vgroup_tot, int *r_vgroup_subset_map)
+{
+	int i, j = 0;
+	for (i = 0; i < vgroup_tot; i++) {
+		if (vgroup_validmap[i]) {
+			r_vgroup_subset_map[j++] = i;
+		}
+	}
+}
+

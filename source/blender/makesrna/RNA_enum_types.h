@@ -184,6 +184,14 @@ extern EnumPropertyItem linestyle_geometry_modifier_type_items[];
 
 extern EnumPropertyItem window_cursor_items[];
 
+extern EnumPropertyItem DT_method_vertex_items[];
+extern EnumPropertyItem DT_method_edge_items[];
+extern EnumPropertyItem DT_method_loop_items[];
+extern EnumPropertyItem DT_method_poly_items[];
+extern EnumPropertyItem DT_mix_mode_items[];
+extern EnumPropertyItem DT_fromlayers_select_items[];
+extern EnumPropertyItem DT_tolayers_select_items[];
+
 struct bContext;
 struct PointerRNA;
 struct PropertyRNA;
