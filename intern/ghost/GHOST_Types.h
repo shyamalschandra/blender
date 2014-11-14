@@ -400,8 +400,7 @@ typedef enum {
 	GHOST_kTrackpadEventScroll,
 	GHOST_kTrackpadEventRotate,
 	GHOST_kTrackpadEventSwipe, /* Reserved, not used for now */
-	GHOST_kTrackpadEventMagnify,
-	GHOST_kTrackpadEventUntouch,
+	GHOST_kTrackpadEventMagnify
 } GHOST_TTrackpadEventSubTypes;
 	
 
