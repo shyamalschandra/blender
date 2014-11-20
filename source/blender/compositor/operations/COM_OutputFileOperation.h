@@ -34,7 +34,7 @@
 
 /* Writes the image to a single-layer file. */
 class OutputSingleLayerOperation : public NodeOperation {
-protected:
+private:
 	const RenderData *m_rd;
 	const bNodeTree *m_tree;
 	
@@ -47,11 +47,9 @@ protected:
 
 	const ColorManagedViewSettings *m_viewSettings;
 	const ColorManagedDisplaySettings *m_displaySettings;
-
-	const char *m_viewName;
 public:
 	OutputSingleLayerOperation(const RenderData *rd, const bNodeTree *tree, DataType datatype, ImageFormatData *format, const char *path,
-	                           const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings, const char *viewName);
+	                           const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings);
 	
 	void executeRegion(rcti *rect, unsigned int tileNumber);
 	bool isOutputOperation(bool rendering) const { return true; }
@@ -77,7 +75,7 @@ struct OutputOpenExrLayer {
 
 /* Writes inputs into OpenEXR multilayer channels. */
 class OutputOpenExrMultiLayerOperation : public NodeOperation {
-protected:
+private:
 	typedef std::vector<OutputOpenExrLayer> LayerList;
 	
 	const RenderData *m_rd;
@@ -86,10 +84,9 @@ protected:
 	char m_path[FILE_MAX];
 	char m_exr_codec;
 	LayerList m_layers;
-	const char *m_viewName;
 	
 public:
-	OutputOpenExrMultiLayerOperation(const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, const char *viewName);
+	OutputOpenExrMultiLayerOperation(const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec);
 	
 	void add_layer(const char *name, DataType datatype, bool use_layer);
 	
@@ -101,9 +98,5 @@ public:
 
 	bool isFileOutputOperation() const { return true; }
 };
-
-void add_exr_channels(void *exrhandle, const char *layerName, const DataType datatype, const char *viewName, const size_t width, float *buf);
-void free_exr_channels(void *exrhandle, const RenderData *rd, const char *layerName, const DataType datatype);
-int get_datatype_size(DataType datatype);
 
 #endif

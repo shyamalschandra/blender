@@ -210,9 +210,7 @@ typedef struct View3D {
 	
 	/* drawflags, denoting state */
 	char zbuf, transp, xray;
-
-	char eye;				/* multiview current eye - for internal use */
-	char pad3[4];
+	char pad3[5];
 
 	void *properties_storage;		/* Nkey panel stores stuff here (runtime only!) */
 	struct Material *defmaterial;	/* used by matcap now */
@@ -220,20 +218,8 @@ typedef struct View3D {
 	/* XXX deprecated? */
 	struct bGPdata *gpd  DNA_DEPRECATED;		/* Grease-Pencil Data (annotation layers) */
 
-	 /* multiview - stereo 3d */
-	short stereo3d_flag;
-	char stereo3d_camera;
-	char pad4;
-	float stereo3d_convergence_factor;
-	float stereo3d_volume_alpha;
-	float stereo3d_convergence_alpha;
 } View3D;
 
-
-/* View3D->stereo_flag (short) */
-#define V3D_S3D_DISPCAMERAS		(1 << 0)
-#define V3D_S3D_DISPPLANE		(1 << 1)
-#define V3D_S3D_DISPVOLUME		(1 << 2)
 
 /* View3D->flag (short) */
 /*#define V3D_DISPIMAGE		1*/ /*UNUSED*/
@@ -295,6 +281,7 @@ typedef struct View3D {
 #define V3D_SHOW_SOLID_MATCAP	8192	/* runtime flag */
 #define V3D_OCCLUDE_WIRE		16384
 #define V3D_SHADELESS_TEX		32768
+
 
 /* View3D->around */
 #define V3D_CENTER		 0

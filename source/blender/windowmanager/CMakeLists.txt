@@ -64,7 +64,6 @@ set(SRC
 	intern/wm_operators.c
 	intern/wm_subwindow.c
 	intern/wm_window.c
-	intern/wm_stereo.c
 
 	WM_api.h
 	WM_keymap.h

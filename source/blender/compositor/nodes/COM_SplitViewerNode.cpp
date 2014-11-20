@@ -22,8 +22,6 @@
 
 #include "COM_SplitViewerNode.h"
 #include "BKE_global.h"
-#include "BKE_image.h"
-#include "BKE_scene.h"
 
 #include "COM_SplitOperation.h"
 #include "COM_ViewerOperation.h"
@@ -57,8 +55,6 @@ void SplitViewerNode::convertToOperations(NodeConverter &converter, const Compos
 	viewerOperation->setImageUser(imageUser);
 	viewerOperation->setViewSettings(context.getViewSettings());
 	viewerOperation->setDisplaySettings(context.getDisplaySettings());
-	viewerOperation->setRenderData(context.getRenderData());
-	viewerOperation->setViewName(context.getViewName());
 
 	/* defaults - the viewer node has these options but not exposed for split view
 	 * we could use the split to define an area of interest on one axis at least */
@@ -73,8 +69,4 @@ void SplitViewerNode::convertToOperations(NodeConverter &converter, const Compos
 
 	if (do_output)
 		converter.registerViewer(viewerOperation);
-
-	if (image && BKE_scene_render_view_first(context.getRenderData(), context.getViewName())) {
-		BKE_image_verify_viewer_views(context.getRenderData(), image, imageUser);
-	}
 }
