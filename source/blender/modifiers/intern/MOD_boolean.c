@@ -33,6 +33,10 @@
  *  \ingroup modifiers
  */
 
+#ifdef WITH_MOD_BOOLEAN
+#  define USE_BMESH
+#endif
+
 #include <stdio.h>
 
 #include "DNA_object_types.h"
@@ -50,6 +54,16 @@
 #include "MOD_util.h"
 
 #include "PIL_time.h"
+#include "PIL_time_utildefines.h"
+
+#ifdef USE_BMESH
+#include "BLI_math_geom.h"
+#include "MEM_guardedalloc.h"
+
+#include "bmesh.h"
+#include "bmesh_tools.h"
+#include "tools/bmesh_intersect.h"
+#endif
 
 static void copyData(ModifierData *md, ModifierData *target)
 {
@@ -118,6 +132,99 @@ static DerivedMesh *get_quick_derivedMesh(DerivedMesh *derivedData, DerivedMesh 
 	return result;
 }
 
+#ifdef USE_BMESH
+
+struct BMIsectUserData {
+	int face_tot_first_mesh;
+};
+
+/**
+ * Compare selected/unselected.
+ */
+static int bm_face_isect_pair(BMFace *f, void *user_data)
+{
+	struct BMIsectUserData *data = user_data;
+
+	return (BM_elem_index_get(f) < data->face_tot_first_mesh);
+}
+
+static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
+                                  DerivedMesh *derivedData,
+                                  ModifierApplyFlag flag)
+{
+	BooleanModifierData *bmd = (BooleanModifierData *) md;
+	DerivedMesh *dm;
+
+	if (!bmd->object)
+		return derivedData;
+
+	dm = get_dm_for_modifier(bmd->object, flag);
+
+	if (dm) {
+		DerivedMesh *result;
+
+		/* when one of objects is empty (has got no faces) we could speed up
+		 * calculation a bit returning one of objects' derived meshes (or empty one)
+		 * Returning mesh is depended on modifiers operation (sergey) */
+		result = get_quick_derivedMesh(derivedData, dm, bmd->operation);
+
+		if (result == NULL) {
+			BMesh *bm;
+			const BMAllocTemplate allocsize = BMALLOC_TEMPLATE_FROM_DM(derivedData, dm);
+			(void)ob;
+
+			TIMEIT_START(NewBooleanDerivedMesh);
+			bm = BM_mesh_create(&allocsize);
+
+			DM_to_bmesh_ex(derivedData, bm, true);
+			DM_to_bmesh_ex(dm, bm, true);
+
+
+			if (1) {
+				/* create tessface & intersect */
+				const int looptris_tot = poly_to_tri_count(bm->totface, bm->totloop);
+				int tottri;
+				BMLoop *(*looptris)[3];
+
+				struct BMIsectUserData user_data = {0};
+
+				looptris = MEM_mallocN(sizeof(*looptris) * looptris_tot, __func__);
+
+				BM_bmesh_calc_tessellation(bm, looptris, &tottri);
+
+				user_data.face_tot_first_mesh = dm->getNumPolys(dm);
+
+				BM_mesh_intersect(
+				        bm,
+				        looptris, tottri,
+				        bm_face_isect_pair, &user_data,
+				        false, true, FLT_EPSILON);
+
+				MEM_freeN(looptris);
+			}
+
+			result = CDDM_from_bmesh(bm, true);
+
+			BM_mesh_free(bm);
+
+			result->dirty |= DM_DIRTY_NORMALS;
+
+			TIMEIT_END(NewBooleanDerivedMesh);
+
+			return result;
+		}
+
+		/* if new mesh returned, return it; otherwise there was
+		 * an error, so delete the modifier object */
+		if (result)
+			return result;
+		else
+			modifier_setError(md, "Cannot execute boolean operation");
+	}
+
+	return derivedData;
+}
+#else // USE_BMESH
 static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
                                   DerivedMesh *derivedData,
                                   ModifierApplyFlag flag)
@@ -157,6 +264,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 	
 	return derivedData;
 }
+#endif // USE_BMESH
 #else // WITH_MOD_BOOLEAN
 static DerivedMesh *applyModifier(ModifierData *UNUSED(md), Object *UNUSED(ob),
                                   DerivedMesh *derivedData,
