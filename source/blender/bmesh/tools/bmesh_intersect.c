@@ -868,9 +868,10 @@ static void raycast_callback(void *userdata,
 	}
 }
 
-static bool UNUSED_FUNCTION(isect_bvhtree_point_v3)(BVHTree *tree,
-                                                    BMLoop *(*looptris)[3],
-                                                    const float co[3])
+static bool isect_bvhtree_point_v3(
+        BVHTree *tree,
+        BMLoop *(*looptris)[3],
+        const float co[3])
 {
 	RaycastData raycast_data = {
 		looptris,
@@ -882,7 +883,9 @@ static bool UNUSED_FUNCTION(isect_bvhtree_point_v3)(BVHTree *tree,
 		0
 	};
 	BVHTreeRayHit hit = {0};
-	float D[3] = {1.0f, 0.0f, 0.0f};
+	float dir[3] = {1.0f, 0.0f, 0.0f};
+
+	// copy_v3_fl(dir, (float)M_SQRT1_3);
 
 	/* Need to initialize hit even tho it's not used.
 	 * This is to make it so kdotree believes we didn't intersect anything and
@@ -892,7 +895,7 @@ static bool UNUSED_FUNCTION(isect_bvhtree_point_v3)(BVHTree *tree,
 	hit.dist = FLT_MAX;
 
 	BLI_bvhtree_ray_cast(tree,
-	                     co, D,
+	                     co, dir,
 	                     0.0f,
 	                     &hit,
 	                     raycast_callback,
@@ -912,12 +915,14 @@ static bool UNUSED_FUNCTION(isect_bvhtree_point_v3)(BVHTree *tree,
  * leaving the resulting edges tagged.
  *
  * \param test_fn Return value: -1: skip, 0: tree_a, 1: tree_b (use_self == false)
+ * \param boolean_mode 0: no-boolean, 1: intersection... etc.
  */
 bool BM_mesh_intersect(
         BMesh *bm,
         struct BMLoop *(*looptris)[3], const int looptris_tot,
         int (*test_fn)(BMFace *f, void *user_data), void *user_data,
         const bool use_self, const bool use_separate,
+        const int boolean_mode,
         const float eps)
 {
 	struct ISectState s;
@@ -1041,9 +1046,13 @@ bool BM_mesh_intersect(
 		}
 		MEM_freeN(overlap);
 	}
-	BLI_bvhtree_free(tree_a);
-	if (tree_a != tree_b) {
-		BLI_bvhtree_free(tree_b);
+
+	if (boolean_mode == 0) {
+		/* no booleans, just free immediate */
+		BLI_bvhtree_free(tree_a);
+		if (tree_a != tree_b) {
+			BLI_bvhtree_free(tree_b);
+		}
 	}
 
 #else
@@ -1421,6 +1430,79 @@ bool BM_mesh_intersect(
 #else
 	(void)use_separate;
 #endif  /* USE_SEPARATE */
+
+	if ((boolean_mode != 0) && BLI_gset_size(s.wire_edges)) {
+
+		{
+			GSetIterator gs_iter;
+
+			/* TODO, avoid calling? */
+			BM_mesh_elem_hflag_disable_all(bm, BM_EDGE, BM_ELEM_TAG, false);
+
+			GSET_ITER (gs_iter, s.wire_edges) {
+				BMEdge *e = BLI_gsetIterator_getKey(&gs_iter);
+				BM_elem_flag_enable(e, BM_ELEM_TAG);
+			}
+		}
+
+		{
+			/* group vars */
+			int *groups_array;
+			int (*group_index)[2];
+			int group_tot;
+			int i;
+			bool is_inside;
+			BMFace **ftable;
+
+			BM_mesh_elem_table_ensure(bm, BM_FACE);
+			ftable = bm->ftable;
+
+			groups_array = MEM_mallocN(sizeof(*groups_array) * (size_t)bm->totface, __func__);
+			group_tot = BM_mesh_calc_face_groups(
+			        bm, groups_array, &group_index,
+			        NULL, NULL,
+			        0, BM_EDGE);
+
+			/* first check if island is inside */
+
+			/* TODO, find if islands are inside/outside,
+			 * for now remove alternate islands, as simple testcase */
+
+
+			for (i = 0; i < group_tot; i++) {
+				int fg     = group_index[i][0];
+				int fg_end = group_index[i][1] + fg;
+
+				is_inside = true;
+
+				{
+					/* for now assyme this is an OK face to test with (not degenerate!) */
+					BMFace *f = ftable[groups_array[fg]];
+					float co[3];
+					BM_face_calc_center_mean(f, co);
+					if (isect_bvhtree_point_v3(test_fn(f, user_data) == 1 ? tree_a : tree_b, looptris, co)) {
+						is_inside = false;
+					}
+				}
+
+				if (is_inside) {
+					for (; fg != fg_end; fg++) {
+						BM_face_kill_loose(bm, ftable[groups_array[fg]]);
+					}
+				}
+				is_inside = !is_inside;
+			}
+
+			MEM_freeN(groups_array);
+			MEM_freeN(group_index);
+		}
+
+		/* no booleans, just free immediate */
+		BLI_bvhtree_free(tree_a);
+		if (tree_a != tree_b) {
+			BLI_bvhtree_free(tree_b);
+		}
+	}
 
 	has_isect = (BLI_ghash_size(s.face_edges) != 0);
 
