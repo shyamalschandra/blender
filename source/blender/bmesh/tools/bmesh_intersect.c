@@ -48,6 +48,7 @@
 #include "BLI_array.h"
 
 #include "BLI_kdopbvh.h"
+#include "BLI_buffer.h"
 
 #include "bmesh.h"
 #include "bmesh_intersect.h"  /* own include */
@@ -771,6 +772,140 @@ static void bm_isect_tri_tri(
 		}
 	}
 }
+
+#ifdef USE_BVH
+
+typedef struct RaycastData {
+	/*const*/ BMLoop *(*looptris)[3];
+	BLI_Buffer z_buffer;
+	float z_buffer_storage[64];
+	int num_isect;
+} RaycastData;
+
+#define BLI_buffer_init_static(type_, flag_, static_storage_, static_count_) \
+	{ \
+	/* clear the static memory if this is a calloc'd array */ \
+	((void)((flag_ & BLI_BUFFER_USE_CALLOC) ? \
+	          memset(static_storage_, 0, sizeof(static_storage_)) : NULL \
+	), /* memset-end */ \
+	                    static_storage_), \
+	                    sizeof(type_), \
+	                    0, \
+	                    static_count_, \
+	                    BLI_BUFFER_USE_STATIC | flag_}
+
+/* TODO(sergey): Make inline? */
+BLI_INLINE bool raycast_has_depth(const RaycastData *raycast_data, float depth)
+{
+	int i;
+#ifdef USE_DUMP
+	printf("%s: Searching for depth %f\n", __func__, (double)depth);
+#endif
+	/* TODO(sergey): Replace with bisect. */
+	for (i = 0; i < raycast_data->z_buffer.count; ++i) {
+		float current_depth = BLI_buffer_at(&raycast_data->z_buffer,
+		                                    float,
+		                                    i);
+#ifdef USE_DUMP
+		printf("  Current depth %f\n", (double)depth);
+#endif
+		/* TODO(sergey): Perhaps after making BVH watertight we can get rid of
+		 * the fabsf() alculation?  Or maybe at least it'll allow getting rid of
+		 * such an obscure epsilon here.
+		 */
+		if (fabsf(current_depth - depth) < FLT_EPSILON * 10) {
+#ifdef USE_DUMP
+			printf("  Found depth %f\n", (double)depth);
+#endif
+			return true;
+		}
+	}
+	return false;
+}
+
+/* TODO(sergey): Make inline? */
+BLI_INLINE void raycast_append_depth(RaycastData *raycast_data, float depth)
+{
+#ifdef USE_DUMP
+	printf("%s: Adding depth %f\n", __func__, (double)depth);
+#endif
+	/* TODO(sergey): Preserve z-buffer sorted state. */
+	BLI_buffer_append(&raycast_data->z_buffer, float, depth);
+}
+
+static void raycast_callback(void *userdata,
+                             int index,
+                             const BVHTreeRay *ray,
+                             BVHTreeRayHit *hit)
+{
+	RaycastData *raycast_data = userdata;
+	/*const*/ BMLoop *(*looptris)[3] = raycast_data->looptris;
+	const float *v0 = looptris[index][0]->v->co;
+	const float *v1 = looptris[index][1]->v->co;
+	const float *v2 = looptris[index][2]->v->co;
+	float dist, uv[2];
+	(void) hit;  /* Ignored. */
+	if (isect_ray_tri_epsilon_v3(ray->origin, ray->direction,
+	                             v0, v1, v2,
+	                             &dist,
+	                             uv,
+	                             FLT_EPSILON))
+	{
+		if (dist >= 0.0f && !raycast_has_depth(raycast_data, dist)) {
+#ifdef USE_DUMP
+			printf("%s:\n", __func__);
+			print_v3("  origin", ray->origin);
+			print_v3("  direction", ray->direction);
+			print_v2("  uv", uv);
+			printf("  dist %f\n", dist);
+			print_v3("  v0", v0);
+			print_v3("  v1", v1);
+			print_v3("  v2", v2);
+#endif
+			raycast_data->num_isect++;
+			raycast_append_depth(raycast_data, dist);
+		}
+	}
+}
+
+static bool UNUSED_FUNCTION(isect_bvhtree_point_v3)(BVHTree *tree,
+                                                    BMLoop *(*looptris)[3],
+                                                    const float co[3])
+{
+	RaycastData raycast_data = {
+		looptris,
+		BLI_buffer_init_static(float,
+		                       0,
+		                       raycast_data.z_buffer_storage,
+		                       ARRAY_SIZE(raycast_data.z_buffer_storage)),
+		{0},
+		0
+	};
+	BVHTreeRayHit hit = {0};
+	float D[3] = {1.0f, 0.0f, 0.0f};
+
+	/* Need to initialize hit even tho it's not used.
+	 * This is to make it so kdotree believes we didn't intersect anything and
+	 * keeps calling the intersect callback.
+	 */
+	hit.index = -1;
+	hit.dist = FLT_MAX;
+
+	BLI_bvhtree_ray_cast(tree,
+	                     co, D,
+	                     0.0f,
+	                     &hit,
+	                     raycast_callback,
+	                     &raycast_data);
+
+#ifdef USE_DUMP
+	printf("%s: Total intersections: %d\n", __func__, raycast_data.num_isect);
+#endif
+
+	return (raycast_data.num_isect & 1) == 1;
+}
+
+#endif
 
 /**
  * Intersect tessellated faces
