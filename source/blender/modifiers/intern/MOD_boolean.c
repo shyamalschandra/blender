@@ -203,6 +203,47 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 				MEM_freeN(looptris);
 			}
 
+			{
+				/* group vars */
+				int *groups_array;
+				int (*group_index)[2];
+				int group_tot;
+				int i;
+				bool is_inside;
+				BMFace **ftable;
+
+				BM_mesh_elem_table_ensure(bm, BM_FACE);
+				ftable = bm->ftable;
+
+				groups_array = MEM_mallocN(sizeof(*groups_array) * bm->totface, __func__);
+				group_tot = BM_mesh_calc_face_groups(
+				        bm, groups_array, &group_index,
+				        NULL, NULL,
+				        0, BM_EDGE);
+
+				/* first check if island is inside */
+
+				/* TODO, find if islands are inside/outside,
+				 * for now remove alternate islands, as simple testcase */
+				is_inside = false;
+
+
+				for (i = 0; i < group_tot; i++) {
+					int fg     = group_index[i][0];
+					int fg_end = group_index[i][1] + fg;
+
+					if (is_inside) {
+						for (; fg != fg_end; fg++) {
+							BM_face_kill(bm, ftable[groups_array[fg]]);
+						}
+					}
+					is_inside = !is_inside;
+				}
+
+				MEM_freeN(groups_array);
+				MEM_freeN(group_index);
+			}
+
 			result = CDDM_from_bmesh(bm, true);
 
 			BM_mesh_free(bm);
