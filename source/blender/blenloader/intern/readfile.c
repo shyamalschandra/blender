@@ -141,13 +141,9 @@
 #include "BKE_treehash.h"
 #include "BKE_sound.h"
 
-#include "IMB_imbuf.h"  // for proxy / timecode versioning stuff
 
 #include "NOD_common.h"
 #include "NOD_socket.h"
-#include "NOD_composite.h"
-#include "NOD_shader.h"
-#include "NOD_texture.h"
 
 #include "BLO_readfile.h"
 #include "BLO_undofile.h"
@@ -157,7 +153,6 @@
 
 #include "readfile.h"
 
-#include "PIL_time.h"
 
 #include <errno.h>
 
@@ -1128,6 +1123,8 @@ void blo_freefiledata(FileData *fd)
 			oldnewmap_free(fd->imamap);
 		if (fd->movieclipmap)
 			oldnewmap_free(fd->movieclipmap);
+		if (fd->soundmap)
+			oldnewmap_free(fd->soundmap);
 		if (fd->packedmap)
 			oldnewmap_free(fd->packedmap);
 		if (fd->libmap && !(fd->flags & FD_FLAGS_NOT_MY_LIBMAP))
@@ -1218,6 +1215,13 @@ static void *newmclipadr(FileData *fd, void *adr)      /* used to restore movie 
 {
 	if (fd->movieclipmap && adr)
 		return oldnewmap_lookup_and_inc(fd->movieclipmap, adr, true);
+	return NULL;
+}
+
+static void *newsoundadr(FileData *fd, void *adr)      /* used to restore sound data after undo */
+{
+	if (fd->soundmap && adr)
+		return oldnewmap_lookup_and_inc(fd->soundmap, adr, true);
 	return NULL;
 }
 
@@ -1434,6 +1438,37 @@ void blo_end_movieclip_pointer_map(FileData *fd, Main *oldmain)
 				if (node->type == CMP_NODE_MOVIEDISTORTION)
 					node->storage = newmclipadr(fd, node->storage);
 		}
+	}
+}
+
+void blo_make_sound_pointer_map(FileData *fd, Main *oldmain)
+{
+	bSound *sound = oldmain->sound.first;
+	
+	fd->soundmap = oldnewmap_new();
+	
+	for (; sound; sound = sound->id.next) {
+		if (sound->waveform)
+			oldnewmap_insert(fd->soundmap, sound->waveform, sound->waveform, 0);			
+	}
+}
+
+/* set old main sound caches to zero if it has been restored */
+/* this works because freeing old main only happens after this call */
+void blo_end_sound_pointer_map(FileData *fd, Main *oldmain)
+{
+	OldNew *entry = fd->soundmap->entries;
+	bSound *sound = oldmain->sound.first;
+	int i;
+	
+	/* used entries were restored, so we put them to zero */
+	for (i = 0; i < fd->soundmap->nentries; i++, entry++) {
+		if (entry->nr > 0)
+			entry->newp = NULL;
+	}
+	
+	for (; sound; sound = sound->id.next) {
+		sound->waveform = newsoundadr(fd, sound->waveform);
 	}
 }
 
@@ -3220,6 +3255,7 @@ static void direct_link_world(FileData *fd, World *wrld)
 	}
 	
 	wrld->preview = direct_link_preview_image(fd, wrld->preview);
+	BLI_listbase_clear(&wrld->gpumaterial);
 }
 
 
@@ -5457,7 +5493,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	}
 
 	if (sce->ed) {
-		ListBase *old_seqbasep = &((Editing *)sce->ed)->seqbase;
+		ListBase *old_seqbasep = &sce->ed->seqbase;
 		
 		ed = sce->ed = newdataadr(fd, sce->ed);
 		
@@ -5471,6 +5507,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 			seq->seq1= newdataadr(fd, seq->seq1);
 			seq->seq2= newdataadr(fd, seq->seq2);
 			seq->seq3= newdataadr(fd, seq->seq3);
+			
 			/* a patch: after introduction of effects with 3 input strips */
 			if (seq->seq3 == NULL) seq->seq3 = seq->seq2;
 			
@@ -5695,6 +5732,21 @@ static void lib_link_windowmanager(FileData *fd, Main *main)
 
 /* ****************** READ GREASE PENCIL ***************** */
 
+/* relink's grease pencil data's refs */
+static void lib_link_gpencil(FileData *fd, Main *main)
+{
+	bGPdata *gpd;
+	
+	for (gpd = main->gpencil.first; gpd; gpd = gpd->id.next) {
+		if (gpd->id.flag & LIB_NEED_LINK) {
+			gpd->id.flag -= LIB_NEED_LINK;
+			
+			if (gpd->adt)
+				lib_link_animdata(fd, &gpd->id, gpd->adt);
+		}
+	}
+}
+
 /* relinks grease-pencil data - used for direct_link and old file linkage */
 static void direct_link_gpencil(FileData *fd, bGPdata *gpd)
 {
@@ -5705,6 +5757,10 @@ static void direct_link_gpencil(FileData *fd, bGPdata *gpd)
 	/* we must firstly have some grease-pencil data to link! */
 	if (gpd == NULL)
 		return;
+	
+	/* relink animdata */
+	gpd->adt = newdataadr(fd, gpd->adt);
+	direct_link_animdata(fd, gpd->adt);
 	
 	/* relink layers */
 	link_list(fd, &gpd->layers);
@@ -6776,13 +6832,25 @@ static void direct_link_sound(FileData *fd, bSound *sound)
 {
 	sound->handle = NULL;
 	sound->playback_handle = NULL;
-	sound->waveform = NULL;
 
-	// versioning stuff, if there was a cache, then we enable caching:
+	/* versioning stuff, if there was a cache, then we enable caching: */
 	if (sound->cache) {
 		sound->flags |= SOUND_FLAGS_CACHING;
 		sound->cache = NULL;
 	}
+
+	if (fd->soundmap) {
+		sound->waveform = newsoundadr(fd, sound->waveform);
+	}	
+	else {
+		sound->waveform = NULL;
+	}
+		
+	if (sound->mutex)
+		sound->mutex = BLI_mutex_alloc();
+	
+	/* clear waveform loading flag */
+	sound->flags &= ~SOUND_FLAGS_WAVEFORM_LOADING;
 
 	sound->packedfile = direct_link_packedfile(fd, sound->packedfile);
 	sound->newpackedfile = direct_link_packedfile(fd, sound->newpackedfile);
@@ -7665,6 +7733,7 @@ static void lib_link_all(FileData *fd, Main *main)
 	lib_link_movieclip(fd, main);
 	lib_link_mask(fd, main);
 	lib_link_linestyle(fd, main);
+	lib_link_gpencil(fd, main);
 
 	lib_link_mesh(fd, main);		/* as last: tpage images with users at zero */
 	
@@ -8770,6 +8839,12 @@ static void expand_linestyle(FileData *fd, Main *mainvar, FreestyleLineStyle *li
 	}
 }
 
+static void expand_gpencil(FileData *fd, Main *mainvar, bGPdata *gpd)
+{
+	if (gpd->adt)
+		expand_animdata(fd, mainvar, gpd->adt);
+}
+
 void BLO_main_expander(void (*expand_doit_func)(void *, Main *, void *))
 {
 	expand_doit = expand_doit_func;
@@ -8863,6 +8938,9 @@ void BLO_expand_main(void *fdhandle, Main *mainvar)
 						break;
 					case ID_LS:
 						expand_linestyle(fd, mainvar, (FreestyleLineStyle *)id);
+						break;
+					case ID_GD:
+						expand_gpencil(fd, mainvar, (bGPdata *)id);
 						break;
 					}
 					

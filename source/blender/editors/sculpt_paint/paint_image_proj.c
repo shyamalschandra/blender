@@ -50,7 +50,6 @@
 
 #include "BLF_translation.h"
 
-#include "PIL_time.h"
 
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
@@ -62,7 +61,6 @@
 #include "DNA_object_types.h"
 
 #include "BKE_camera.h"
-#include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
 #include "BKE_DerivedMesh.h"
@@ -80,10 +78,8 @@
 #include "BKE_scene.h"
 #include "BKE_texture.h"
 
-#include "UI_view2d.h"
 #include "UI_interface.h"
 
-#include "ED_image.h"
 #include "ED_mesh.h"
 #include "ED_node.h"
 #include "ED_paint.h"
@@ -101,7 +97,6 @@
 #include "RNA_enum_types.h"
 
 #include "GPU_draw.h"
-#include "GPU_buffers.h"
 
 #include "IMB_colormanagement.h"
 
@@ -3795,10 +3790,9 @@ static void do_projectpaint_clone_f(ProjPaintState *ps, ProjPixel *projPixel, fl
 	}
 }
 
-/* do_projectpaint_smear*
- *
- * note, mask is used to modify the alpha here, this is not correct since it allows
- * accumulation of color greater then 'projPixel->mask' however in the case of smear its not
+/**
+ * \note mask is used to modify the alpha here, this is not correct since it allows
+ * accumulation of color greater than 'projPixel->mask' however in the case of smear its not
  * really that important to be correct as it is with clone and painting
  */
 static void do_projectpaint_smear(ProjPaintState *ps, ProjPixel *projPixel, float mask,
@@ -5130,6 +5124,8 @@ static bool proj_paint_add_slot(bContext *C, wmOperator *op)
 			DAG_id_tag_update(&ma->id, 0);
 			ED_area_tag_redraw(CTX_wm_area(C));
 			
+			BKE_paint_proj_mesh_data_check(scene, ob, NULL, NULL, NULL, NULL);			
+			
 			return true;
 		}
 	}
@@ -5288,6 +5284,8 @@ static int add_simple_uvs_exec(bContext *C, wmOperator *UNUSED(op))
 	if (synch_selection)
 		scene->toolsettings->uv_flag |= UV_SYNC_SELECTION;
 
+	BKE_paint_proj_mesh_data_check(scene, ob, NULL, NULL, NULL, NULL);
+	
 	DAG_id_tag_update(ob->data, 0);
 	WM_event_add_notifier(C, NC_GEOM | ND_DATA, ob->data);
 	WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);

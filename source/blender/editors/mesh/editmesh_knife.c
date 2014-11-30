@@ -1410,8 +1410,9 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 	{
 		/* Scale the epsilon by the zoom level
 		 * to compensate for projection imprecision, see T41164 */
-		float zoom_xy[2] = {kcd->vc.rv3d->winmat[0][0],
-		                    kcd->vc.rv3d->winmat[1][1]};
+		const float zoom_xy[2] = {
+		        kcd->vc.rv3d->winmat[0][0],
+		        kcd->vc.rv3d->winmat[1][1]};
 		eps_scale = len_v2(zoom_xy);
 	}
 
@@ -3012,12 +3013,22 @@ static int knifetool_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				}
 				else {
 					kcd->is_drag_hold = false;
+
+					/* needed because the last face 'hit' is ignored when dragging */
+					knifetool_update_mval(kcd, kcd->curr.mval);
 				}
 
 				ED_region_tag_redraw(kcd->ar);
 				break;
 			case KNF_MODAL_ADD_CUT_CLOSED:
 				if (kcd->mode == MODE_DRAGGING) {
+
+					/* shouldn't be possible with default key-layout, just incase... */
+					if (kcd->is_drag_hold) {
+						kcd->is_drag_hold = false;
+						knifetool_update_mval(kcd, kcd->curr.mval);
+					}
+
 					kcd->prev = kcd->curr;
 					kcd->curr = kcd->init;
 

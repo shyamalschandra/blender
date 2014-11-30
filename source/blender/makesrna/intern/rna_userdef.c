@@ -35,6 +35,8 @@
 
 #include "BLI_utildefines.h"
 
+#include "BKE_appdir.h"
+#include "BKE_DerivedMesh.h"
 #include "BKE_sound.h"
 #include "BKE_addon.h"
 
@@ -48,6 +50,7 @@
 #include "WM_types.h"
 
 #include "BLF_translation.h"
+#include "GPU_buffers.h"
 
 #ifdef WITH_CYCLES
 static EnumPropertyItem compute_device_type_items[] = {
@@ -104,6 +107,10 @@ EnumPropertyItem navigation_mode_items[] = {
 
 #include "BKE_addon.h"
 
+#ifdef WITH_SDL_DYNLOAD
+#  include "sdlew.h"
+#endif
+
 static void rna_userdef_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
 {
 	WM_main_add_notifier(NC_WINDOW, NULL);
@@ -135,6 +142,15 @@ static void rna_userdef_language_update(Main *UNUSED(bmain), Scene *UNUSED(scene
 	BLF_cache_clear();
 	BLF_lang_set(NULL);
 	UI_reinit_font();
+}
+
+static void rna_userdef_vbo_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
+{
+	Object *ob;
+	
+	for (ob = bmain->object.first; ob; ob = ob->id.next) {
+		GPU_drawobject_free(ob->derivedFinal);
+	}
 }
 
 static void rna_userdef_show_manipulator_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -410,7 +426,7 @@ static void rna_userdef_pathcompare_remove(ReportList *reports, PointerRNA *path
 
 static void rna_userdef_temp_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
 {
-	BLI_temp_dir_init(U.tempdir);
+	BKE_tempdir_init(U.tempdir);
 }
 
 static void rna_userdef_text_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
@@ -510,37 +526,38 @@ static EnumPropertyItem *rna_userdef_compute_device_itemf(bContext *UNUSED(C), P
 static EnumPropertyItem *rna_userdef_audio_device_itemf(bContext *UNUSED(C), PointerRNA *UNUSED(ptr),
                                                         PropertyRNA *UNUSED(prop), bool *r_free)
 {
-#ifdef WITH_JACK
-	int jack_supported = sound_is_jack_supported();
+	int index = 0;
+	int totitem = 0;
+	EnumPropertyItem *item = NULL;
 
-	if (jack_supported) {
-		return audio_device_items;
-	}
-	else {
-		int index = 0;
-		int totitem = 0;
-		EnumPropertyItem *item = NULL;
-
-		/* NONE */
-		RNA_enum_item_add(&item, &totitem, &audio_device_items[index++]);
+	/* NONE */
+	RNA_enum_item_add(&item, &totitem, &audio_device_items[index++]);
 
 #ifdef WITH_SDL
-		RNA_enum_item_add(&item, &totitem, &audio_device_items[index++]);
+#  ifdef WITH_SDL_DYNLOAD
+	if (sdlewInit() == SDLEW_SUCCESS)
+#  endif
+	{
+		RNA_enum_item_add(&item, &totitem, &audio_device_items[index]);
+	}
+	index++;
 #endif
 
 #ifdef WITH_OPENAL
-		RNA_enum_item_add(&item, &totitem, &audio_device_items[index++]);
+	RNA_enum_item_add(&item, &totitem, &audio_device_items[index++]);
 #endif
 
-		RNA_enum_item_end(&item, &totitem);
-		*r_free = true;
-
-		return item;
+#ifdef WITH_JACK
+	if (sound_is_jack_supported()) {
+		RNA_enum_item_add(&item, &totitem, &audio_device_items[index]);
 	}
-#else
-	(void)r_free;
-	return audio_device_items;
+	index++;
 #endif
+
+	RNA_enum_item_end(&item, &totitem);
+	*r_free = true;
+
+	return item;
 }
 
 #ifdef WITH_INTERNATIONAL
@@ -3946,7 +3963,7 @@ static void rna_def_userdef_system(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "VBOs",
 	                         "Use Vertex Buffer Objects (or Vertex Arrays, if unsupported) for viewport rendering");
 	/* this isn't essential but nice to check if VBO draws any differently */
-	RNA_def_property_update(prop, NC_WINDOW, NULL);
+	RNA_def_property_update(prop, NC_WINDOW, "rna_userdef_vbo_update");
 
 	prop = RNA_def_property(srna, "anisotropic_filter", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "anisotropic_filter");

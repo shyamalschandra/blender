@@ -81,6 +81,10 @@ if(WITH_GAMEENGINE)
 endif()
 
 if(WITH_SDL)
+	if(WITH_SDL_DYNLOAD)
+		add_definitions(-DWITH_SDL_DYNLOAD)
+		blender_include_dirs(../../extern/sdlew/include)
+	endif()
 	add_definitions(-DWITH_SDL)
 endif()
 
@@ -624,36 +628,38 @@ elseif(WIN32)
 			install(DIRECTORY DESTINATION ${TARGETDIR_VER}/python)
 			install(DIRECTORY DESTINATION ${TARGETDIR_VER}/python/lib)
 
-			execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib")
-
 			if(\"\${CMAKE_INSTALL_CONFIG_NAME}\" STREQUAL \"Debug\")
-				add_custom_target(python_std_lib
-					COMMAND ${CMAKE_COMMAND} -E tar xzfv "${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_d.tar.gz"
-					WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib)
+				add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib
+					COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib"
+					COMMAND ${CMAKE_COMMAND} -E tar xzfv "${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_d.tar.gz -C ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib")
 			else()
-				add_custom_target(python_std_lib
-					COMMAND ${CMAKE_COMMAND} -E tar xzfv "${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}.tar.gz"
-					WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib)
+				add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib
+					COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib"
+					COMMAND ${CMAKE_COMMAND} -E tar xzfv "${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}.tar.gz -C ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib")
 			endif()
-
-			add_dependencies(blender python_std_lib)
 
 			# release/site-packages
-			add_custom_target(python_site-packages
-					COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/release/site-packages ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/)
-
-			add_dependencies(blender python_site-packages)
+			install(DIRECTORY ${LIBDIR}/release/site-packages
+					DESTINATION ${BLENDER_VERSION}/python/lib
+					PATTERN ".svn" EXCLUDE
+					PATTERN "__pycache__" EXCLUDE           # * any cache *
+					PATTERN "*.pyc" EXCLUDE                 # * any cache *
+					PATTERN "*.pyo" EXCLUDE                 # * any cache *)
+					)
 
 			if(WITH_PYTHON_INSTALL_NUMPY)
-				add_custom_target(python_numpy
-					COMMAND ${CMAKE_COMMAND} -E tar xzfv "${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_numpy_1.8.tar.gz"
+				add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages/numpy
+					COMMAND ${CMAKE_COMMAND} -E tar xzvf "${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_numpy_1.8.tar.gz"
+					DEPENDS ${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_numpy_1.8.tar.gz
 					WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages)
+				install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages/numpy
+						DESTINATION ${BLENDER_VERSION}/python/lib/site-packages)
 			endif()
 
-			add_dependencies(blender python_numpy)
 
 			install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib
-					DESTINATION ${BLENDER_VERSION}/python	)
+					DESTINATION ${BLENDER_VERSION}/python
+					PATTERN 'site-packages/*' EXCLUDE)
 
 		endif()
 
@@ -813,6 +819,14 @@ elseif(APPLE)
 		MACOSX_BUNDLE_SHORT_VERSION_STRING ${BLENDER_VERSION}
 		MACOSX_BUNDLE_LONG_VERSION_STRING "${BLENDER_VERSION} ${BLENDER_DATE}")
 
+	# Gather the date in finder-style
+	execute_process(COMMAND date "+%m/%d/%Y/%H:%M"
+	OUTPUT_VARIABLE SETFILE_DATE
+	OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+	# Give the bundle actual creation/modification date
+	execute_process(COMMAND SetFile -d ${SETFILE_DATE} -m ${SETFILE_DATE} ${EXECUTABLE_OUTPUT_PATH}/blender.app)
+
 	install(
 		TARGETS blender
 		DESTINATION "."
@@ -837,7 +851,7 @@ elseif(APPLE)
 	if(WITH_OPENMP AND CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT ${CMAKE_C_COMPILER_VERSION} VERSION_LESS '3.4')
 		install(
 			FILES ${LIBDIR}/openmp/lib/libiomp5.dylib
-			DESTINATION blender.app/Contents/MacOS
+			DESTINATION blender.app/Contents/Resources/lib/
 		)
 	endif()
 
@@ -896,6 +910,9 @@ elseif(APPLE)
 			"file(REMOVE_RECURSE ${PLAYER_TARGETDIR_VER})"
 		)
 
+		# Give the bundle actual creation/modification date
+		execute_process(COMMAND SetFile -d ${SETFILE_DATE} -m ${SETFILE_DATE} ${EXECUTABLE_OUTPUT_PATH}/blenderplayer.app)
+
 		install(
 			FILES ${OSX_APP_PLAYER_SOURCEDIR}/Contents/PkgInfo
 			DESTINATION blenderplayer.app/Contents
@@ -905,6 +922,14 @@ elseif(APPLE)
 			${OSX_APP_PLAYER_SOURCEDIR}/Contents/Resources
 			blenderplayer.app/Contents/
 		)
+
+		if(WITH_OPENMP AND CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT ${CMAKE_C_COMPILER_VERSION} VERSION_LESS '3.4')
+		install(
+		FILES ${LIBDIR}/openmp/lib/libiomp5.dylib
+		DESTINATION blenderplayer.app/Contents/Resources/lib/
+		)
+		endif()
+
 
 		# python
 		if(WITH_PYTHON AND NOT WITH_PYTHON_FRAMEWORK)

@@ -178,6 +178,15 @@ if(UNIX AND NOT APPLE)
 	set(_init_GAMEENGINE                     OFF)
 endif()
 
+
+#-----------------------------------------------------------------------------
+# Options
+
+# First platform spesific non-cached vars
+if(UNIX AND NOT APPLE)
+	set(WITH_X11 ON)
+endif()
+
 # Blender internal features
 option(WITH_BLENDER "Build blender (disable to build only the blender player)" ON)
 mark_as_advanced(WITH_BLENDER)
@@ -232,10 +241,6 @@ option(WITH_AUDASPACE    "Build with blenders audio library (only disable if you
 mark_as_advanced(WITH_AUDASPACE)
 
 option(WITH_OPENMP        "Enable OpenMP (has to be supported by the compiler)" ON)
-
-if(UNIX AND NOT APPLE)
-	set(WITH_X11 ON)
-endif()
 
 if(WITH_X11)
 	option(WITH_X11_XINPUT    "Enable X11 Xinput (tablet support and unicode input)"  ON)
@@ -295,6 +300,9 @@ option(WITH_OPENAL        "Enable OpenAL Support (http://www.openal.org)" ON)
 option(WITH_JACK          "Enable Jack Support (http://www.jackaudio.org)" ${_init_JACK})
 if(UNIX AND NOT APPLE)
 	option(WITH_JACK_DYNLOAD  "Enable runtime dynamic Jack libraries loading" OFF)
+endif()
+if(UNIX AND NOT APPLE)
+	option(WITH_SDL_DYNLOAD  "Enable runtime dynamic SDL libraries loading" OFF)
 endif()
 
 # Compression
@@ -826,16 +834,23 @@ if(UNIX AND NOT APPLE)
 	endif()
 
 	if(WITH_SDL)
-		find_package_wrapper(SDL)
-		mark_as_advanced(
-			SDLMAIN_LIBRARY
-			SDL_INCLUDE_DIR
-			SDL_LIBRARY
-			SDL_LIBRARY_TEMP
-		)
-		# unset(SDLMAIN_LIBRARY CACHE)
-		if(NOT SDL_FOUND)
-			set(WITH_SDL OFF)
+		if(WITH_SDL_DYNLOAD)
+			set(SDLMAIN_LIBRARY)
+			set(SDL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extern/sdlew/include/SDL2")
+			set(SDL_LIBRARY)
+			set(SDL_LIBRARY_TEMP)
+		else()
+			find_package_wrapper(SDL)
+			mark_as_advanced(
+				SDLMAIN_LIBRARY
+				SDL_INCLUDE_DIR
+				SDL_LIBRARY
+				SDL_LIBRARY_TEMP
+			)
+			# unset(SDLMAIN_LIBRARY CACHE)
+			if(NOT SDL_FOUND)
+				set(WITH_SDL OFF)
+			endif()
 		endif()
 	endif()
 
@@ -1040,6 +1055,9 @@ if(UNIX AND NOT APPLE)
 			message(FATAL_ERROR "LLVM not found.")
 		endif()
 
+	endif()
+
+	if(WITH_LLVM OR WITH_SDL_DYNLOAD)
 		# Fix for conflict with Mesa llvmpipe
 		set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -Wl,--version-script=${CMAKE_SOURCE_DIR}/source/creator/blender.map")
 	endif()
@@ -1060,11 +1078,9 @@ if(UNIX AND NOT APPLE)
 	
 		if(OSL_INCLUDES AND OSL_LIBRARIES AND OSL_COMPILER)
 			set(OSL_FOUND TRUE)
-			message(STATUS "OSL includes = ${OSL_INCLUDES}")
-			message(STATUS "OSL library = ${OSL_LIBRARIES}")
-			message(STATUS "OSL compiler = ${OSL_COMPILER}")
 		else()
 			message(STATUS "OSL not found")
+			set(WITH_CYCLES_OSL OFF)
 		endif()
 	endif()
 
@@ -1739,6 +1755,7 @@ elseif(WIN32)
 			set(OSL_FOUND TRUE)
 		else()
 			message(STATUS "OSL not found")
+			set(WITH_CYCLES_OSL OFF)
 		endif()
 	endif()
 
@@ -1922,8 +1939,9 @@ elseif(APPLE)
 	if(WITH_SDL)
 		set(SDL ${LIBDIR}/sdl)
 		set(SDL_INCLUDE_DIR ${SDL}/include)
-		set(SDL_LIBRARY SDL)
+		set(SDL_LIBRARY SDL2)
 		set(SDL_LIBPATH ${SDL}/lib)
+		set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -lazy_framework ForceFeedback")
 	endif()
 
 	set(PNG "${LIBDIR}/png")
@@ -2031,6 +2049,7 @@ elseif(APPLE)
 			set(OSL_FOUND TRUE)
 		else()
 			message(STATUS "OSL not found")
+			set(WITH_CYCLES_OSL OFF)
 		endif()
 	endif()
 	
@@ -2049,7 +2068,7 @@ elseif(APPLE)
 				link_directories(${LIBDIR}/openmp/lib)
 				# This is a workaround for our helperbinaries ( datatoc, masgfmt, ... ),
 				# They are linked also to omp lib, so we need it in builddir for runtime exexcution, TODO: remove all unneeded dependencies from these
-				execute_process(COMMAND ditto -arch ${CMAKE_OSX_ARCHITECTURES} ${LIBDIR}/openmp/lib/libiomp5.dylib ${CMAKE_BINARY_DIR}/bin/libiomp5.dylib) # for intermediate binaries, lib id @loader_path
+				execute_process(COMMAND ditto -arch ${CMAKE_OSX_ARCHITECTURES} ${LIBDIR}/openmp/lib/libiomp5.dylib ${CMAKE_BINARY_DIR}/Resources/lib/libiomp5.dylib) # for intermediate binaries, in respect to lib ID
 			endif()
 		endif()
 	endif()
@@ -2739,6 +2758,7 @@ if(FIRST_RUN)
 	info_cfg_text("Audio:")
 	info_cfg_option(WITH_OPENAL)
 	info_cfg_option(WITH_SDL)
+	info_cfg_option(WITH_SDL_DYNLOAD)
 	info_cfg_option(WITH_JACK)
 	info_cfg_option(WITH_JACK_DYNLOAD)
 	info_cfg_option(WITH_CODEC_AVI)

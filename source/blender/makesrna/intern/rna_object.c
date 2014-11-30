@@ -46,6 +46,8 @@
 #include "BKE_editmesh.h"
 #include "BKE_group.h" /* needed for BKE_group_object_exists() */
 #include "BKE_object.h" /* Needed for BKE_object_matrix_local_get() */
+#include "BKE_object_deform.h"
+
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
@@ -1389,7 +1391,7 @@ static void rna_Object_boundbox_get(PointerRNA *ptr, float *values)
 
 static bDeformGroup *rna_Object_vgroup_new(Object *ob, const char *name)
 {
-	bDeformGroup *defgroup = ED_vgroup_add_name(ob, name);
+	bDeformGroup *defgroup = BKE_object_defgroup_add_name(ob, name);
 
 	WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
 
@@ -1404,7 +1406,7 @@ static void rna_Object_vgroup_remove(Object *ob, ReportList *reports, PointerRNA
 		return;
 	}
 
-	ED_vgroup_delete(ob, defgroup);
+	BKE_object_defgroup_remove(ob, defgroup);
 	RNA_POINTER_INVALIDATE(defgroup_ptr);
 
 	WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
@@ -1412,7 +1414,7 @@ static void rna_Object_vgroup_remove(Object *ob, ReportList *reports, PointerRNA
 
 static void rna_Object_vgroup_clear(Object *ob)
 {
-	ED_vgroup_clear(ob);
+	BKE_object_defgroup_remove_all(ob);
 
 	WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
 }
@@ -1422,7 +1424,7 @@ static void rna_VertexGroup_vertex_add(ID *id, bDeformGroup *def, ReportList *re
 {
 	Object *ob = (Object *)id;
 
-	if (ED_vgroup_object_is_edit_mode(ob)) {
+	if (BKE_object_is_in_editmode_vgroup(ob)) {
 		BKE_report(reports, RPT_ERROR, "VertexGroup.add(): cannot be called while object is in edit mode");
 		return;
 	}
@@ -1437,7 +1439,7 @@ static void rna_VertexGroup_vertex_remove(ID *id, bDeformGroup *dg, ReportList *
 {
 	Object *ob = (Object *)id;
 
-	if (ED_vgroup_object_is_edit_mode(ob)) {
+	if (BKE_object_is_in_editmode_vgroup(ob)) {
 		BKE_report(reports, RPT_ERROR, "VertexGroup.remove(): cannot be called while object is in edit mode");
 		return;
 	}
@@ -2727,16 +2729,16 @@ static void rna_def_object(BlenderRNA *brna)
 	/* Grease Pencil */
 	prop = RNA_def_property(srna, "grease_pencil", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "gpd");
-	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_struct_type(prop, "GreasePencil");
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
 	RNA_def_property_ui_text(prop, "Grease Pencil Data", "Grease Pencil datablock");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 	
 	/* pose */
 	prop = RNA_def_property(srna, "pose_library", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "poselib");
-	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_struct_type(prop, "Action");
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
 	RNA_def_property_ui_text(prop, "Pose Library", "Action used as a pose library for armatures");
 
 	prop = RNA_def_property(srna, "pose", PROP_POINTER, PROP_NONE);

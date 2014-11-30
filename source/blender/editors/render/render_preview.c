@@ -60,6 +60,7 @@
 #include "DNA_brush_types.h"
 #include "DNA_screen_types.h"
 
+#include "BKE_appdir.h"
 #include "BKE_brush.h"
 #include "BKE_context.h"
 #include "BKE_colortools.h"
@@ -78,14 +79,11 @@
 
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
-#include "IMB_colormanagement.h"
 
-#include "GPU_extensions.h"
 
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
 
-#include "PIL_time.h"
 
 #include "RE_pipeline.h"
 #include "RE_engine.h"
@@ -96,9 +94,7 @@
 #include "ED_datafiles.h"
 #include "ED_render.h"
 
-#include "UI_interface.h"
 
-#include "render_intern.h"
 
 ImBuf *get_brush_icon(Brush *brush)
 {
@@ -121,7 +117,7 @@ ImBuf *get_brush_icon(Brush *brush)
 
 				// otherwise lets try to find it in other directories
 				if (!(brush->icon_imbuf)) {
-					folder = BLI_get_folder(BLENDER_DATAFILES, "brushicons");
+					folder = BKE_appdir_folder_id(BLENDER_DATAFILES, "brushicons");
 
 					BLI_make_file_string(G.main->name, path, folder, brush->icon_filepath);
 
@@ -1180,12 +1176,11 @@ void ED_preview_shader_job(const bContext *C, void *owner, ID *id, ID *parent, M
 	WM_jobs_start(CTX_wm_manager(C), wm_job);
 }
 
-void ED_preview_kill_jobs(const struct bContext *C)
+void ED_preview_kill_jobs(wmWindowManager *wm, Main *bmain)
 {
-	wmWindowManager *wm = CTX_wm_manager(C);
 	if (wm)
 		WM_jobs_kill(wm, NULL, common_preview_startjob);
-	
-	ED_viewport_render_kill_jobs(C, false);
+
+	ED_viewport_render_kill_jobs(wm, bmain, false);
 }
 

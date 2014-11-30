@@ -35,7 +35,6 @@
 
 #include "BLI_utildefines.h"
 
-#include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_types.h"
 
@@ -45,6 +44,14 @@
 #  ifndef snprintf
 #    define snprintf _snprintf
 #  endif
+#endif
+
+/* stub for BLI_abort() */
+#ifndef NDEBUG
+void BLI_system_backtrace(FILE *fp)
+{
+	(void)fp;
+}
 #endif
 
 /* Replace if different */
