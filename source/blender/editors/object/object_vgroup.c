@@ -36,16 +36,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "DNA_cloth_types.h"
 #include "DNA_curve_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
-#include "DNA_object_force.h"
 #include "DNA_scene_types.h"
-#include "DNA_particle_types.h"
 
 #include "BLI_alloca.h"
 #include "BLI_array.h"
@@ -54,7 +51,6 @@
 #include "BLI_utildefines.h"
 #include "BLI_linklist_stack.h"
 
-#include "BLF_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_customdata.h"
@@ -1100,7 +1096,7 @@ static void ED_vgroup_nr_vert_add(Object *ob,
 					break;
 				case WEIGHT_SUBTRACT:
 					dw->weight -= weight;
-					/* if the weight is zero or less then
+					/* if the weight is zero or less than
 					 * remove the vert from the deform group
 					 */
 					if (dw->weight <= 0.0f) {

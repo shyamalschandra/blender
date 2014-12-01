@@ -178,6 +178,15 @@ if(UNIX AND NOT APPLE)
 	set(_init_GAMEENGINE                     OFF)
 endif()
 
+
+#-----------------------------------------------------------------------------
+# Options
+
+# First platform spesific non-cached vars
+if(UNIX AND NOT APPLE)
+	set(WITH_X11 ON)
+endif()
+
 # Blender internal features
 option(WITH_BLENDER "Build blender (disable to build only the blender player)" ON)
 mark_as_advanced(WITH_BLENDER)
@@ -232,10 +241,6 @@ option(WITH_AUDASPACE    "Build with blenders audio library (only disable if you
 mark_as_advanced(WITH_AUDASPACE)
 
 option(WITH_OPENMP        "Enable OpenMP (has to be supported by the compiler)" ON)
-
-if(UNIX AND NOT APPLE)
-	set(WITH_X11 ON)
-endif()
 
 if(WITH_X11)
 	option(WITH_X11_XINPUT    "Enable X11 Xinput (tablet support and unicode input)"  ON)
@@ -1073,11 +1078,9 @@ if(UNIX AND NOT APPLE)
 	
 		if(OSL_INCLUDES AND OSL_LIBRARIES AND OSL_COMPILER)
 			set(OSL_FOUND TRUE)
-			message(STATUS "OSL includes = ${OSL_INCLUDES}")
-			message(STATUS "OSL library = ${OSL_LIBRARIES}")
-			message(STATUS "OSL compiler = ${OSL_COMPILER}")
 		else()
 			message(STATUS "OSL not found")
+			set(WITH_CYCLES_OSL OFF)
 		endif()
 	endif()
 
@@ -1752,6 +1755,7 @@ elseif(WIN32)
 			set(OSL_FOUND TRUE)
 		else()
 			message(STATUS "OSL not found")
+			set(WITH_CYCLES_OSL OFF)
 		endif()
 	endif()
 
@@ -2045,6 +2049,7 @@ elseif(APPLE)
 			set(OSL_FOUND TRUE)
 		else()
 			message(STATUS "OSL not found")
+			set(WITH_CYCLES_OSL OFF)
 		endif()
 	endif()
 	

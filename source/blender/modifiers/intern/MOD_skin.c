@@ -79,8 +79,6 @@
 
 #include "bmesh.h"
 
-#include "MOD_util.h"
-
 typedef struct {
 	float mat[3][3];
 	/* Vert that edge is pointing away from, no relation to
@@ -328,8 +326,7 @@ static bool build_hull(SkinOutput *so, Frame **frames, int totframe)
 
 	return true;
 #else
-	(void)so, (void)frames, (void)totframe;
-	(void)skin_frame_find_contained_faces;
+	UNUSED_VARS(so, frames, totframe, skin_frame_find_contained_faces);
 	return false;
 #endif
 }
