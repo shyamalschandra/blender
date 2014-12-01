@@ -1050,17 +1050,3 @@ GHOST_TSuccess GHOST_WindowWin32::endProgressBar()
 	return GHOST_kFailure;
 }
 
-
-#ifdef WITH_INPUT_IME
-void GHOST_WindowWin32::beginIME(GHOST_TInt32 x, GHOST_TInt32 y, GHOST_TInt32 w, GHOST_TInt32 h, int completed)
-{
-	h = 20; /* text height */
-	this->getImeInput()->BeginIME(this->getHWND(),	GHOST_Rect(x, y - h , x, y), (bool)completed);
-}
-
-
-void GHOST_WindowWin32::endIME()
-{
-	this->getImeInput()->EndIME(this->getHWND());
-}
-#endif /* WITH_INPUT_IME */

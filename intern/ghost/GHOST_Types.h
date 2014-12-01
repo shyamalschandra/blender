@@ -190,10 +190,6 @@ typedef enum {
 
 	GHOST_kEventTimer,
 
-	GHOST_kEventImeCompositionStart,
-	GHOST_kEventImeComposition,
-	GHOST_kEventImeCompositionEnd,
-
 	GHOST_kNumEventTypes
 } GHOST_TEventType;
 
@@ -439,22 +435,6 @@ typedef struct {
 	/** The "dropped content" */
 	GHOST_TEventDataPtr data;
 } GHOST_TEventDragnDropData;
-
-/** similar to wmImeData */
-typedef struct {
-	/** size_t */
-	GHOST_TUserDataPtr result_len, composite_len; 
-	/** char * utf8 encoding */
-	GHOST_TUserDataPtr result, composite;
-	/** Cursor position in the IME composition. */
-	int cursor_position;
-	/** Represents the position of the beginning of the selection */
-	int target_start;
-	/** Represents the position of the end of the selection */
-	int target_end;
-	/** custom temporal data */
-	GHOST_TUserDataPtr tmp;
-} GHOST_TEventImeData;
 
 typedef struct {
 	int count;

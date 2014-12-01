@@ -48,7 +48,6 @@
 
 #include "WM_api.h"
 #include "WM_types.h"
-#include "wm_window.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -381,8 +380,6 @@ static void text_keymap(struct wmKeyConfig *keyconf)
 	WM_keymap_add_item(keymap, "TEXT_OT_autocomplete", SPACEKEY, KM_PRESS, KM_CTRL, 0);
 	
 	WM_keymap_add_item(keymap, "TEXT_OT_line_number", KM_TEXTINPUT, KM_ANY, KM_ANY, 0);
-
-	WM_keymap_add_item(keymap, "TEXT_OT_insert", WM_IME_COMPOSITE_START, KM_ANY, KM_ANY, 0);
 	WM_keymap_add_item(keymap, "TEXT_OT_insert", KM_TEXTINPUT, KM_ANY, KM_ANY, 0); // last!
 }
 
@@ -430,13 +427,6 @@ static void text_main_area_draw(const bContext *C, ARegion *ar)
 {
 	/* draw entirely, view changes should be handled here */
 	SpaceText *st = CTX_wm_space_text(C);
-#ifdef WITH_INPUT_IME
-	wmWindow *win = CTX_wm_window(C);
-	wmImeData *ime_data = win->ime_data;
-	bool is_ime_active = ime_data &&
-	                     ime_data->composite_len &&
-	                     BLI_rcti_isect_pt_v(&ar->winrct, &win->eventstate->x);
-#endif
 	//View2D *v2d = &ar->v2d;
 	
 	/* clear and setup matrix */
@@ -446,24 +436,8 @@ static void text_main_area_draw(const bContext *C, ARegion *ar)
 	// UI_view2d_view_ortho(v2d);
 		
 	/* data... */
+	draw_text_main(st, ar);
 	
-	/* get cursor position from draw_text_main and repositon ime window */
-#ifdef WITH_INPUT_IME
-	draw_text_main(win, st, ar);
-
-	if (is_ime_active) {
-		int x = ime_data->cursor_xy[0];
-		int y = ime_data->cursor_xy[1];
-
-		ui_region_to_window(ar, &x, &y);
-		wm_window_IME_begin(win, x + 5, y, 0, 0, false);
-
-		ime_data->cursor_xy[0] = ime_data->cursor_xy[1] = 0;
-	}
-#else
-	draw_text_main(win, st, ar);
-#endif
-
 	/* reset view matrix */
 	// UI_view2d_view_restore(C);
 	
@@ -478,13 +452,6 @@ static void text_cursor(wmWindow *win, ScrArea *sa, ARegion *ar)
 	if (st->text && BLI_rcti_isect_pt(&st->txtbar, win->eventstate->x - ar->winrct.xmin, st->txtbar.ymin)) {
 		wmcursor = CURSOR_STD;
 	}
-
-#ifdef WITH_INPUT_IME
-	/* enable IME if the text region has text which can be edited */
-	if (st->text && !st->text->id.lib) {
-		wm_window_IME_begin(win, ar->winrct.xmin, ar->winrct.ymin, 0, 0, true);
-	}
-#endif
 
 	WM_cursor_set(win, wmcursor);
 }

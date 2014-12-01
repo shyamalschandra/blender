@@ -2914,37 +2914,6 @@ static int text_insert_exec(bContext *C, wmOperator *op)
 	return OPERATOR_FINISHED;
 }
 
-static int text_insert_modal(bContext *C, wmOperator *op, const wmEvent *event)
-{
-	wmWindow *win = CTX_wm_window(C);
-	wmImeData *ime_data = win->ime_data;
-	Text *text = CTX_data_edit_text(C);
-
-	/* composition complete
-	* some Japanese IMEs return result without WM_IME_COMPOSITE_END event
-	*/
-	if (event->type == WM_IME_COMPOSITE_EVENT && ime_data->result_len) {
-		const char *str = "";
-		int ret;
-
-		if (ime_data->result) str = ime_data->result;
-		RNA_string_set(op->ptr, "text", str);
-		ret = text_insert_exec(C, op);
-		if (ret == OPERATOR_CANCELLED)
-			WM_event_add_notifier(C, NC_SPACE | ND_SPACE_TEXT, text);
-	}
-
-	if (event->type == WM_IME_COMPOSITE_END)
-		return OPERATOR_FINISHED;
-
-	if (event->type == WM_IME_COMPOSITE_EVENT) {
-		/* only redraw, don't clean away format */
-		WM_event_add_notifier(C, NC_SPACE | ND_SPACE_TEXT, text);
-	}
-
-	return OPERATOR_RUNNING_MODAL;
-}
-
 static int text_insert_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	int ret;
@@ -2957,18 +2926,6 @@ static int text_insert_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 		 * the modifiers in the utf8 character event make no sense.) */
 		if ((event->ctrl || event->oskey) && !event->utf8_buf[0]) {
 			return OPERATOR_PASS_THROUGH;
-		}
-		/* most IME shortcut for switch IME, fullwidth/halfwidth and so on */
-		if (WM_event_is_ime_switch(event))
-		{
-			return OPERATOR_PASS_THROUGH;
-		}
-		/* composition begin and enter modal */
-		else if (event->type == WM_IME_COMPOSITE_START) {
-			Text *text = CTX_data_edit_text(C);
-			WM_event_add_modal_handler(C, op);
-			txt_delete_selected(text);
-			return text_insert_modal(C, op, event);
 		}
 		else {
 			char str[BLI_UTF8_MAX + 1];
@@ -3008,7 +2965,6 @@ void TEXT_OT_insert(wmOperatorType *ot)
 	/* api callbacks */
 	ot->exec = text_insert_exec;
 	ot->invoke = text_insert_invoke;
-	ot->modal = text_insert_modal;
 	ot->poll = text_edit_poll;
 
 	/* properties */
