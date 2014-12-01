@@ -1008,4 +1008,6 @@ void UI_butstore_unregister(uiButStore *bs_handle, uiBut **but_p);
 
 int UI_calc_float_precision(int prec, double value);
 
+/* Utility */
+void ui_region_to_window(const struct ARegion *ar, int *x, int *y);
 #endif  /* __UI_INTERFACE_H__ */

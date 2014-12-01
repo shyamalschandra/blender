@@ -86,6 +86,7 @@
 
 #include "WM_api.h"
 #include "WM_types.h"
+#include "wm_window.h"
 
 /* place the mouse at the scaled down location when un-grabbing */
 #define USE_CONT_MOUSE_CORRECT
@@ -2425,8 +2426,47 @@ static bool ui_textedit_copypaste(uiBut *but, uiHandleButtonData *data, const in
 	return changed;
 }
 
+#ifdef WITH_INPUT_IME
+/* enable ime, and set up uibut ime data */
+static void ui_textedit_ime_begin(wmWindow *win, uiBut *UNUSED(but))
+{
+	/* XXX Is this really needed? */
+	int x, y;
+
+	/* enable IME and position to cursor, it's a trick */
+	x = win->eventstate->x;
+	/* flip y and move down a bit, prevent the IME panel cover the edit button */
+	y = win->eventstate->y - 12;
+
+	wm_window_IME_begin(win, x, y, 0, 0, true);
+}
+
+/* disable ime, and clear uibut ime data */
+static void ui_textedit_ime_end(wmWindow *win, uiBut *UNUSED(but))
+{
+	wm_window_IME_end(win);
+}
+
+void ui_but_ime_reposition(uiBut *but, int x, int y, int complete) 
+{
+	BLI_assert(but->active);
+
+	ui_region_to_window(but->active->region, &x, &y);
+	wm_window_IME_begin(but->active->window, x, y - 4, 0, 0, complete);
+}
+
+wmImeData *ui_but_get_ime_data(uiBut *but) 
+{
+	if (but->active && but->active->window)
+		return but->active->window->ime_data;
+	else
+		return NULL;
+}
+#endif /* WITH_INPUT_IME */
+
 static void ui_textedit_begin(bContext *C, uiBut *but, uiHandleButtonData *data)
 {
+	wmWindow *win = CTX_wm_window(C);
 	int len;
 
 	if (data->str) {
@@ -2482,12 +2522,18 @@ static void ui_textedit_begin(bContext *C, uiBut *but, uiHandleButtonData *data)
 	but->flag &= ~UI_BUT_REDALERT;
 
 	ui_but_update(but);
-	
-	WM_cursor_modal_set(CTX_wm_window(C), BC_TEXTEDITCURSOR);
+
+	WM_cursor_modal_set(win, BC_TEXTEDITCURSOR);
+
+#ifdef WITH_INPUT_IME
+	ui_textedit_ime_begin(win, but);
+#endif
 }
 
 static void ui_textedit_end(bContext *C, uiBut *but, uiHandleButtonData *data)
 {
+	wmWindow *win = CTX_wm_window(C);
+
 	if (but) {
 		if (ui_but_is_utf8(but)) {
 			int strip = BLI_utf8_invalid_strip(but->editstr, strlen(but->editstr));
@@ -2518,7 +2564,11 @@ static void ui_textedit_end(bContext *C, uiBut *but, uiHandleButtonData *data)
 		but->pos = -1;
 	}
 	
-	WM_cursor_modal_restore(CTX_wm_window(C));
+	WM_cursor_modal_restore(win);
+
+#ifdef WITH_INPUT_IME
+	ui_textedit_ime_end(win, but);
+#endif
 }
 
 static void ui_textedit_next_but(uiBlock *block, uiBut *actbut, uiHandleButtonData *data)
@@ -2582,6 +2632,10 @@ static void ui_do_but_textedit(bContext *C, uiBlock *block, uiBut *but, uiHandle
 {
 	int retval = WM_UI_HANDLER_CONTINUE;
 	bool changed = false, inbox = false, update = false;
+
+	wmWindow *win = CTX_wm_window(C);
+	wmImeData *ime_data = win->ime_data;
+	bool is_ime_composing = win->is_ime_composite;
 
 	switch (event->type) {
 		case MOUSEMOVE:
@@ -2660,7 +2714,7 @@ static void ui_do_but_textedit(bContext *C, uiBlock *block, uiBut *but, uiHandle
 		}
 	}
 
-	if (event->val == KM_PRESS) {
+	if (event->val == KM_PRESS && !is_ime_composing) {
 		switch (event->type) {
 			case VKEY:
 			case XKEY:
@@ -2776,7 +2830,14 @@ static void ui_do_but_textedit(bContext *C, uiBlock *block, uiBut *but, uiHandle
 				break;
 		}
 
-		if ((event->ascii || event->utf8_buf[0]) && (retval == WM_UI_HANDLER_CONTINUE)) {
+		if ((event->ascii || event->utf8_buf[0]) &&
+			(retval == WM_UI_HANDLER_CONTINUE) &&
+			!is_ime_composing
+#ifdef WITH_INPUT_IME
+			&& !WM_event_is_ime_switch(event)
+#endif
+			)
+		{
 			char ascii = event->ascii;
 			const char *utf8_buf = event->utf8_buf;
 
@@ -2810,6 +2871,24 @@ static void ui_do_but_textedit(bContext *C, uiBlock *block, uiBut *but, uiHandle
 		if (but->icon == ICON_VIEWZOOM)
 			update = true;
 	}
+
+#ifdef WITH_INPUT_IME
+	if (event->type == WM_IME_COMPOSITE_START || event->type == WM_IME_COMPOSITE_EVENT) {
+		but->editime = ime_data;
+		changed = true;
+		
+		if (event->type == WM_IME_COMPOSITE_START && but->selend > but->selsta)
+			ui_textedit_delete_selection(but, data);
+		if (event->type == WM_IME_COMPOSITE_EVENT && ime_data->result_len)
+			ui_textedit_type_buf(but, data,
+								 ime_data->result,
+								 ime_data->result_len);
+	}
+	else if (event->type == WM_IME_COMPOSITE_END) {
+		changed = true;
+		but->editime = NULL;
+	}
+#endif
 
 	if (changed) {
 		/* only update when typing for TAB key */
