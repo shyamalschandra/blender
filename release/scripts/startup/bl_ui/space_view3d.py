@@ -1095,7 +1095,6 @@ class VIEW3D_MT_object(Menu):
         layout.separator()
 
         layout.operator("object.join")
-        layout.operator("object.data_transfer")
 
         layout.separator()
 
