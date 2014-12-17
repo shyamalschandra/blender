@@ -51,14 +51,10 @@
 
 typedef struct {
 	PyObject_HEAD
-	BVHTreeFromMesh treedata;
 	Object *ob;
-} PyObjectBVHTree;
-
-typedef struct {
-	PyObject_HEAD
-	BMBVHTree *treedata;
-} PyBMeshBVHTree;
+	BVHTreeFromMesh meshdata;
+	BMBVHTree *bmdata;
+} PyBVHTree;
 
 /* -------------------------------------------------------------------- */
 /* Utility helper functions */
@@ -105,10 +101,49 @@ static PyObject *bvhtree_ray_hit_to_py(const float co[3], const float no[3], int
 }
 
 /* -------------------------------------------------------------------- */
-/* ObjectBVHTree */
+/* BVHTree */
 
-static int PyObjectBVHTree__tp_init(PyObjectBVHTree *self, PyObject *args, PyObject *kwargs)
+/* generic cleanup function for resetting everything */
+static void free_BVHTree(PyBVHTree *self)
 {
+	BVHTreeFromMesh *meshdata = &self->meshdata;
+	
+	self->ob = NULL;
+	free_bvhtree_from_mesh(meshdata);
+	
+	if (self->bmdata) {
+		BKE_bmbvh_free(self->bmdata);
+		self->bmdata = NULL;
+	}
+}
+
+static int PyBVHTree__tp_init(PyBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	self->ob = NULL;
+	memset(&self->meshdata, 0, sizeof(BVHTreeFromMesh));
+	self->bmdata = NULL;
+	
+	return 0;
+}
+
+static void PyBVHTree__tp_dealloc(PyBVHTree *self)
+{
+	free_BVHTree(self);
+	
+	Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+PyDoc_STRVAR(py_BVHTree_from_object_faces_doc,
+".. method:: from_faces(object)\n"
+"\n"
+"   Construct the BVHTree from mesh faces.\n"
+"\n"
+"   :arg object: Point 3d position.\n"
+"   :type object: :class:`Object`\n"
+);
+static PyObject *py_BVHTree_from_object_faces(PyBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	BVHTreeFromMesh *meshdata = &self->meshdata;
 	const char *keywords[] = {"object", NULL};
 	
 	PyObject *py_ob;
@@ -122,64 +157,37 @@ static int PyObjectBVHTree__tp_init(PyObjectBVHTree *self, PyObject *args, PyObj
 	
 	ob = PyC_RNA_AsPointer(py_ob, "Object");
 	if (!ob) {
-		return -1;
+		return NULL;
 	}
-	
-	memset(&self->treedata, 0, sizeof(BVHTreeFromMesh));
-	self->ob = ob;
-	
-	return 0;
-}
-
-static void PyObjectBVHTree__tp_dealloc(PyObjectBVHTree *self)
-{
-	free_bvhtree_from_mesh(&self->treedata);
-	Py_TYPE(self)->tp_free((PyObject *)self);
-}
-
-PyDoc_STRVAR(py_ObjectBVHTree_from_faces_doc,
-".. method:: from_faces(object)\n"
-"\n"
-"   Construct the BVHTree from mesh faces.\n"
-"\n"
-"   :arg object: Point 3d position.\n"
-"   :type object: :class:`Object`\n"
-);
-static PyObject *py_ObjectBVHTree_from_faces(PyObjectBVHTree *self)
-{
-	Object *ob = self->ob;
-	BVHTreeFromMesh *treedata = &self->treedata;
-	
-	/* free existing data */
-	free_bvhtree_from_mesh(treedata);
 	
 	if (ob->derivedFinal == NULL) {
 		PyErr_Format(PyExc_ValueError, "Object '%.200s' has no mesh data to be used for BVH tree", ob->id.name + 2);
 		return NULL;
 	}
 	
+	/* free existing data */
+	free_BVHTree(self);
+	
+	self->ob = ob;
 	/* no need to managing allocation or freeing of the BVH data. this is generated and freed as needed */
-	bvhtree_from_mesh_faces(treedata, ob->derivedFinal, 0.0f, 4, 6);
+	bvhtree_from_mesh_faces(meshdata, ob->derivedFinal, 0.0f, 4, 6);
 	
 	Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(py_ObjectBVHTree_free_doc,
+PyDoc_STRVAR(py_BVHTree_clear_doc,
 ".. method:: clear()\n"
 "\n"
 "   Remove all BVH data.\n"
 );
-static PyObject *py_ObjectBVHTree_free(PyObjectBVHTree *self)
+static PyObject *py_BVHTree_clear(PyBVHTree *self)
 {
-	BVHTreeFromMesh *treedata = &self->treedata;
-	
-	/* free existing data */
-	free_bvhtree_from_mesh(treedata);
+	free_BVHTree(self);
 	
 	Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(py_ObjectBVHTree_ray_cast_doc,
+PyDoc_STRVAR(py_BVHTree_ray_cast_doc,
 ".. method:: ray_cast(ray_start, ray_end)\n"
 "\n"
 "   Cast a ray onto the mesh.\n"
@@ -191,11 +199,11 @@ PyDoc_STRVAR(py_ObjectBVHTree_ray_cast_doc,
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
-static PyObject *py_ObjectBVHTree_ray_cast(PyObjectBVHTree *self, PyObject *args, PyObject *kwargs)
+static PyObject *py_BVHTree_ray_cast(PyBVHTree *self, PyObject *args, PyObject *kwargs)
 {
 	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
-	BVHTreeFromMesh *treedata = &self->treedata;
+	BVHTreeFromMesh *meshdata = &self->meshdata;
 	Object *ob = self->ob;
 	const char *keywords[] = {"ray_start", "ray_end", NULL};
 	
@@ -215,7 +223,7 @@ static PyObject *py_ObjectBVHTree_ray_cast(PyObjectBVHTree *self, PyObject *args
 		return NULL;
 	
 	/* may fail if the mesh has no faces, in that case the ray-cast misses */
-	if (treedata->tree && ob->derivedFinal) {
+	if (meshdata->tree && ob->derivedFinal) {
 		BVHTreeRayHit hit;
 		float ray_nor[3], dist;
 		sub_v3_v3v3(ray_nor, end, start);
@@ -223,8 +231,8 @@ static PyObject *py_ObjectBVHTree_ray_cast(PyObjectBVHTree *self, PyObject *args
 		dist = hit.dist = normalize_v3(ray_nor);
 		hit.index = -1;
 		
-		if (BLI_bvhtree_ray_cast(treedata->tree, start, ray_nor, 0.0f, &hit,
-		                         treedata->raycast_callback, treedata) != -1)
+		if (BLI_bvhtree_ray_cast(meshdata->tree, start, ray_nor, 0.0f, &hit,
+		                         meshdata->raycast_callback, meshdata) != -1)
 		{
 			if (hit.dist <= dist) {
 				int poly_index = dm_tessface_to_poly_index(ob->derivedFinal, hit.index);
@@ -238,23 +246,23 @@ static PyObject *py_ObjectBVHTree_ray_cast(PyObjectBVHTree *self, PyObject *args
 }
 
 
-static PyMethodDef PyObjectBVHTree_methods[] = {
-	{"from_faces", (PyCFunction)py_ObjectBVHTree_from_faces, METH_VARARGS | METH_KEYWORDS, py_ObjectBVHTree_from_faces_doc},
-	{"free", (PyCFunction)py_ObjectBVHTree_free, METH_NOARGS, py_ObjectBVHTree_free_doc},
-	{"ray_cast", (PyCFunction)py_ObjectBVHTree_ray_cast, METH_VARARGS | METH_KEYWORDS, py_ObjectBVHTree_ray_cast_doc},
+static PyMethodDef PyBVHTree_methods[] = {
+	{"from_object_faces", (PyCFunction)py_BVHTree_from_object_faces, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_object_faces_doc},
+	{"clear", (PyCFunction)py_BVHTree_clear, METH_VARARGS | METH_KEYWORDS, py_BVHTree_clear_doc},
+	{"ray_cast", (PyCFunction)py_BVHTree_ray_cast, METH_VARARGS | METH_KEYWORDS, py_BVHTree_ray_cast_doc},
 	{NULL, NULL, 0, NULL}
 };
 
-PyDoc_STRVAR(py_ObjectBVHTree_doc,
+PyDoc_STRVAR(py_BVHTree_doc,
 "BVH tree based on :class:`Mesh` data.\n"
 );
-PyTypeObject PyObjectBVHTree_Type = {
+PyTypeObject PyBVHTree_Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)
-	"ObjectBVHTree",                             /* tp_name */
-	sizeof(PyObjectBVHTree),                     /* tp_basicsize */
+	"BVHTree",                                   /* tp_name */
+	sizeof(PyBVHTree),                           /* tp_basicsize */
 	0,                                           /* tp_itemsize */
 	/* methods */
-	(destructor)PyObjectBVHTree__tp_dealloc,     /* tp_dealloc */
+	(destructor)PyBVHTree__tp_dealloc,           /* tp_dealloc */
 	NULL,                                        /* tp_print */
 	NULL,                                        /* tp_getattr */
 	NULL,                                        /* tp_setattr */
@@ -270,14 +278,14 @@ PyTypeObject PyObjectBVHTree_Type = {
 	NULL,                                        /* tp_setattro */
 	NULL,                                        /* tp_as_buffer */
 	Py_TPFLAGS_DEFAULT,                          /* tp_flags */
-	py_ObjectBVHTree_doc,                          /* Documentation string */
+	py_BVHTree_doc,                              /* Documentation string */
 	NULL,                                        /* tp_traverse */
 	NULL,                                        /* tp_clear */
 	NULL,                                        /* tp_richcompare */
 	0,                                           /* tp_weaklistoffset */
 	NULL,                                        /* tp_iter */
 	NULL,                                        /* tp_iternext */
-	(struct PyMethodDef *)PyObjectBVHTree_methods, /* tp_methods */
+	(struct PyMethodDef *)PyBVHTree_methods,     /* tp_methods */
 	NULL,                                        /* tp_members */
 	NULL,                                        /* tp_getset */
 	NULL,                                        /* tp_base */
@@ -285,7 +293,7 @@ PyTypeObject PyObjectBVHTree_Type = {
 	NULL,                                        /* tp_descr_get */
 	NULL,                                        /* tp_descr_set */
 	0,                                           /* tp_dictoffset */
-	(initproc)PyObjectBVHTree__tp_init,          /* tp_init */
+	(initproc)PyBVHTree__tp_init,                /* tp_init */
 	(allocfunc)PyType_GenericAlloc,              /* tp_alloc */
 	(newfunc)PyType_GenericNew,                  /* tp_new */
 	(freefunc)0,                                 /* tp_free */
@@ -324,19 +332,11 @@ PyMODINIT_FUNC PyInit_mathutils_bvhtree(void)
 		return NULL;
 	}
 
-	/* Register the 'ObjectBVHTree' class */
-	if (PyType_Ready(&PyObjectBVHTree_Type)) {
+	/* Register the 'BVHTree' class */
+	if (PyType_Ready(&PyBVHTree_Type)) {
 		return NULL;
 	}
-	PyModule_AddObject(m, "ObjectBVHTree", (PyObject *) &PyObjectBVHTree_Type);
-	
-#if 0
-	/* Register the 'BMeshBVHTree' class */
-	if (PyType_Ready(&PyBMeshBVHTree_Type)) {
-		return NULL;
-	}
-	PyModule_AddObject(m, "BMeshBVHTree", (PyObject *) &PyBMeshBVHTree_Type);
-#endif
+	PyModule_AddObject(m, "BVHTree", (PyObject *) &PyBVHTree_Type);
 
 	return m;
 }
