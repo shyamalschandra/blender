@@ -88,6 +88,15 @@ static int dm_tessface_to_poly_index(DerivedMesh *dm, int tessface_index)
 	return ORIGINDEX_NONE;
 }
 
+/* does additional range check for tessface_index */
+static int dm_tessface_to_poly_index_safe(DerivedMesh *dm, int tessface_index)
+{
+	if (tessface_index < dm->getNumTessFaces(dm))
+		return dm_tessface_to_poly_index(dm, tessface_index);
+	
+	return ORIGINDEX_NONE;
+}
+
 static PyObject *bvhtree_ray_hit_to_py(const float co[3], const float no[3], int index, float dist)
 {
 	PyObject *py_retval = PyTuple_New(4);
@@ -272,7 +281,7 @@ static PyObject *py_BVHTree_clear(PyBVHTree *self)
 }
 
 PyDoc_STRVAR(py_BVHTree_ray_cast_doc,
-".. method:: ray_cast(ray_start, ray_end)\n"
+".. method:: ray_cast(ray_start, ray_end, use_poly_index=True)\n"
 "\n"
 "   Cast a ray onto the mesh.\n"
 "\n"
@@ -280,6 +289,8 @@ PyDoc_STRVAR(py_BVHTree_ray_cast_doc,
 "   :type ray_start: :class:`Vector`\n"
 "   :arg ray_end: End location of the ray in object space.\n"
 "   :type ray_end: :class:`Vector`\n"
+"   :arg use_poly_index: Return poly index instead of tessface index.\n"
+"   :type use_poly_index: :boolean\n"
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
@@ -289,14 +300,18 @@ static PyObject *py_BVHTree_ray_cast(PyBVHTree *self, PyObject *args, PyObject *
 	
 	BVHTreeFromMesh *meshdata = &self->meshdata;
 	Object *ob = self->ob;
-	const char *keywords[] = {"ray_start", "ray_end", NULL};
+	const char *keywords[] = {"ray_start", "ray_end", "use_poly_index", NULL};
 	
 	PyObject *py_start, *py_end;
 	float start[3], end[3];
+	int use_poly_index = true;
+	float ray_nor[3], dist;
+	BVHTreeRayHit hit;
 	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!:ray_cast", (char **)keywords,
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!|i:ray_cast", (char **)keywords,
 	                                 &vector_Type, &py_start,
-	                                 &vector_Type, &py_end))
+	                                 &vector_Type, &py_end,
+	                                 &use_poly_index))
 	{
 		return NULL;
 	}
@@ -306,22 +321,19 @@ static PyObject *py_BVHTree_ray_cast(PyBVHTree *self, PyObject *args, PyObject *
 	if (!parse_vector(py_end, end))
 		return NULL;
 	
+	sub_v3_v3v3(ray_nor, end, start);
+	dist = hit.dist = normalize_v3(ray_nor);
+	hit.index = -1;
+	
 	/* may fail if the mesh has no faces, in that case the ray-cast misses */
-	if (meshdata->tree && ob->derivedFinal) {
-		BVHTreeRayHit hit;
-		float ray_nor[3], dist;
-		sub_v3_v3v3(ray_nor, end, start);
-
-		dist = hit.dist = normalize_v3(ray_nor);
-		hit.index = -1;
-		
+	if (meshdata->tree && meshdata->raycast_callback && ob->derivedFinal)
+	{
 		if (BLI_bvhtree_ray_cast(meshdata->tree, start, ray_nor, 0.0f, &hit,
 		                         meshdata->raycast_callback, meshdata) != -1)
 		{
 			if (hit.dist <= dist) {
-				int poly_index = dm_tessface_to_poly_index(ob->derivedFinal, hit.index);
-				
-				return bvhtree_ray_hit_to_py(hit.co, hit.no, poly_index, hit.dist);
+				int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, hit.index) : hit.index;
+				return bvhtree_ray_hit_to_py(hit.co, hit.no, ret_index, hit.dist);
 			}
 		}
 	}
