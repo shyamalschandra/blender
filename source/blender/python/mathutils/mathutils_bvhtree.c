@@ -54,9 +54,13 @@
 
 typedef struct {
 	PyObject_HEAD
+	/* Object DerivedMesh data */
 	Object *ob;
 	BVHTreeFromMesh meshdata;
+	/* BMesh data */
 	BMBVHTree *bmdata;
+	BMLoop *(*bmlooptris)[3];
+	int bmtotlooptris;
 } PyBVHTree;
 
 /* -------------------------------------------------------------------- */
@@ -135,6 +139,11 @@ static void free_BVHTree(PyBVHTree *self)
 	self->ob = NULL;
 	free_bvhtree_from_mesh(meshdata);
 	
+	if (self->bmlooptris) {
+		MEM_freeN(self->bmlooptris);
+		self->bmlooptris = NULL;
+		self->bmtotlooptris = 0;
+	}
 	if (self->bmdata) {
 		BKE_bmbvh_free(self->bmdata);
 		self->bmdata = NULL;
@@ -297,8 +306,7 @@ static PyObject *py_BVHTree_from_bmesh(PyBVHTree *self, PyObject *args, PyObject
 	
 	PyObject *py_bm;
 	BMesh *bm;
-	int looptris_tot;
-	BMLoop *(*looptris)[3];
+	int tottri;
 	int flag = 0; /* TODO add optional RESPECT_SELECT and RESPECT_HIDDEN flag options */
 	
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!:from_bmesh", (char **)keywords,
@@ -311,9 +319,11 @@ static PyObject *py_BVHTree_from_bmesh(PyBVHTree *self, PyObject *args, PyObject
 	/* free existing data */
 	free_BVHTree(self);
 	
-	looptris_tot = poly_to_tri_count(bm->totface, bm->totloop);
-	looptris = MEM_mallocN(sizeof(*looptris) * (size_t)looptris_tot, __func__);
-	self->bmdata = BKE_bmbvh_new(bm, looptris, looptris_tot, flag, NULL, false);
+	self->bmtotlooptris = poly_to_tri_count(bm->totface, bm->totloop);
+	self->bmlooptris = MEM_mallocN(sizeof(*self->bmlooptris) * (size_t)self->bmtotlooptris, __func__);
+	BM_bmesh_calc_tessellation(bm, self->bmlooptris, &tottri);
+	
+	self->bmdata = BKE_bmbvh_new(bm, self->bmlooptris, tottri, flag, NULL, false);
 	
 	Py_RETURN_NONE;
 }
@@ -371,6 +381,10 @@ static PyObject *py_BVHTree_ray_cast(PyBVHTree *self, PyObject *args, PyObject *
 	if (!parse_vector(py_ray_end, ray_end))
 		return NULL;
 	
+	/* can only look up poly index for object mesh data */
+	if (!self->ob)
+		use_poly_index = false;
+	
 	sub_v3_v3v3(ray_nor, ray_end, ray_start);
 	ray_len = normalize_v3(ray_nor);
 	
@@ -393,6 +407,8 @@ static PyObject *py_BVHTree_ray_cast(PyBVHTree *self, PyObject *args, PyObject *
 	else if (bmdata) {
 		BMFace *hit_face;
 		float hit_co[3], hit_dist;
+		
+		hit_dist = ray_len;
 		
 		hit_face = BKE_bmbvh_ray_cast(bmdata, ray_start, ray_nor, 0.0f, &hit_dist, hit_co, NULL);
 		if (hit_face && hit_dist <= ray_len) {
