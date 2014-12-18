@@ -133,15 +133,15 @@ static void PyBVHTree__tp_dealloc(PyBVHTree *self)
 	Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
-PyDoc_STRVAR(py_BVHTree_from_object_faces_doc,
+PyDoc_STRVAR(py_BVHTree_from_object_verts_doc,
 ".. method:: from_faces(object)\n"
 "\n"
-"   Construct the BVHTree from mesh faces.\n"
+"   Construct the BVHTree from mesh vertices.\n"
 "\n"
-"   :arg object: Point 3d position.\n"
+"   :arg object: Object used for constructing the BVH tree.\n"
 "   :type object: :class:`Object`\n"
 );
-static PyObject *py_BVHTree_from_object_faces(PyBVHTree *self, PyObject *args, PyObject *kwargs)
+static PyObject *py_BVHTree_from_object_verts(PyBVHTree *self, PyObject *args, PyObject *kwargs)
 {
 	BVHTreeFromMesh *meshdata = &self->meshdata;
 	const char *keywords[] = {"object", NULL};
@@ -149,7 +149,7 @@ static PyObject *py_BVHTree_from_object_faces(PyBVHTree *self, PyObject *args, P
 	PyObject *py_ob;
 	Object *ob;
 	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O:from_faces", (char **)keywords,
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O:from_object_verts", (char **)keywords,
 	                                 &py_ob))
 	{
 		return NULL;
@@ -169,8 +169,92 @@ static PyObject *py_BVHTree_from_object_faces(PyBVHTree *self, PyObject *args, P
 	free_BVHTree(self);
 	
 	self->ob = ob;
-	/* no need to managing allocation or freeing of the BVH data. this is generated and freed as needed */
+	
+	bvhtree_from_mesh_verts(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+	
+	Py_RETURN_NONE;
+}
+
+PyDoc_STRVAR(py_BVHTree_from_object_faces_doc,
+".. method:: from_faces(object)\n"
+"\n"
+"   Construct the BVHTree from mesh faces.\n"
+"\n"
+"   :arg object: Object used for constructing the BVH tree.\n"
+"   :type object: :class:`Object`\n"
+);
+static PyObject *py_BVHTree_from_object_faces(PyBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	BVHTreeFromMesh *meshdata = &self->meshdata;
+	const char *keywords[] = {"object", NULL};
+	
+	PyObject *py_ob;
+	Object *ob;
+	
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O:from_object_faces", (char **)keywords,
+	                                 &py_ob))
+	{
+		return NULL;
+	}
+	
+	ob = PyC_RNA_AsPointer(py_ob, "Object");
+	if (!ob) {
+		return NULL;
+	}
+	
+	if (ob->derivedFinal == NULL) {
+		PyErr_Format(PyExc_ValueError, "Object '%.200s' has no mesh data to be used for BVH tree", ob->id.name + 2);
+		return NULL;
+	}
+	
+	/* free existing data */
+	free_BVHTree(self);
+	
+	self->ob = ob;
+	
 	bvhtree_from_mesh_faces(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+	
+	Py_RETURN_NONE;
+}
+
+PyDoc_STRVAR(py_BVHTree_from_object_edges_doc,
+".. method:: from_edges(object)\n"
+"\n"
+"   Construct the BVHTree from mesh edges.\n"
+"\n"
+"   :arg object: Object used for constructing the BVH tree.\n"
+"   :type object: :class:`Object`\n"
+);
+static PyObject *py_BVHTree_from_object_edges(PyBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	BVHTreeFromMesh *meshdata = &self->meshdata;
+	const char *keywords[] = {"object", NULL};
+	
+	PyObject *py_ob;
+	Object *ob;
+	
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O:from_object_edges", (char **)keywords,
+	                                 &py_ob))
+	{
+		return NULL;
+	}
+	
+	ob = PyC_RNA_AsPointer(py_ob, "Object");
+	if (!ob) {
+		return NULL;
+	}
+	
+	if (ob->derivedFinal == NULL) {
+		PyErr_Format(PyExc_ValueError, "Object '%.200s' has no mesh data to be used for BVH tree", ob->id.name + 2);
+		return NULL;
+	}
+	
+	/* free existing data */
+	free_BVHTree(self);
+	
+	self->ob = ob;
+	
+	bvhtree_from_mesh_edges(meshdata, ob->derivedFinal, 0.0f, 4, 6);
 	
 	Py_RETURN_NONE;
 }
@@ -247,7 +331,9 @@ static PyObject *py_BVHTree_ray_cast(PyBVHTree *self, PyObject *args, PyObject *
 
 
 static PyMethodDef PyBVHTree_methods[] = {
+	{"from_object_verts", (PyCFunction)py_BVHTree_from_object_verts, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_object_verts_doc},
 	{"from_object_faces", (PyCFunction)py_BVHTree_from_object_faces, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_object_faces_doc},
+	{"from_object_edges", (PyCFunction)py_BVHTree_from_object_edges, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_object_edges_doc},
 	{"clear", (PyCFunction)py_BVHTree_clear, METH_VARARGS | METH_KEYWORDS, py_BVHTree_clear_doc},
 	{"ray_cast", (PyCFunction)py_BVHTree_ray_cast, METH_VARARGS | METH_KEYWORDS, py_BVHTree_ray_cast_doc},
 	{NULL, NULL, 0, NULL}
