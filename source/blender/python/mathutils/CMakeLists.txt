@@ -22,6 +22,7 @@ set(INC
 	.
 	../../blenlib
 	../../blenkernel
+	../../bmesh
 	../../makesdna
 	../../../../intern/guardedalloc
 )

@@ -42,7 +42,10 @@
 #include "BKE_DerivedMesh.h"
 #include "BKE_editmesh_bvh.h"
 
+#include "bmesh.h"
+
 #include "../generic/py_capi_utils.h"
+#include "../bmesh/bmesh_py_types.h"
 
 #include "mathutils.h"
 #include "mathutils_bvhtree.h"  /* own include */
@@ -280,6 +283,41 @@ static PyObject *py_BVHTree_from_object_edges(PyBVHTree *self, PyObject *args, P
 	Py_RETURN_NONE;
 }
 
+PyDoc_STRVAR(py_BVHTree_from_bmesh_doc,
+".. method:: from_bmesh(object)\n"
+"\n"
+"   Construct the BVHTree from a :class: BMesh.\n"
+"\n"
+"   :arg bm: BMesh instance used for constructing the BVH tree.\n"
+"   :type bm: :class:`BMesh`\n"
+);
+static PyObject *py_BVHTree_from_bmesh(PyBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	const char *keywords[] = {"bm", NULL};
+	
+	PyObject *py_bm;
+	BMesh *bm;
+	int looptris_tot;
+	BMLoop *(*looptris)[3];
+	int flag = 0; /* TODO add optional RESPECT_SELECT and RESPECT_HIDDEN flag options */
+	
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!:from_bmesh", (char **)keywords,
+	                                 &BPy_BMesh_Type, &py_bm))
+	{
+		return NULL;
+	}
+	bm = ((BPy_BMesh *)py_bm)->bm;
+	
+	/* free existing data */
+	free_BVHTree(self);
+	
+	looptris_tot = poly_to_tri_count(bm->totface, bm->totloop);
+	looptris = MEM_mallocN(sizeof(*looptris) * (size_t)looptris_tot, __func__);
+	self->bmdata = BKE_bmbvh_new(bm, looptris, looptris_tot, flag, NULL, false);
+	
+	Py_RETURN_NONE;
+}
+
 PyDoc_STRVAR(py_BVHTree_clear_doc,
 ".. method:: clear()\n"
 "\n"
@@ -311,42 +349,55 @@ static PyObject *py_BVHTree_ray_cast(PyBVHTree *self, PyObject *args, PyObject *
 	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
 	BVHTreeFromMesh *meshdata = &self->meshdata;
+	BMBVHTree *bmdata = self->bmdata;
 	Object *ob = self->ob;
 	const char *keywords[] = {"ray_start", "ray_end", "use_poly_index", NULL};
 	
-	PyObject *py_start, *py_end;
-	float start[3], end[3];
+	PyObject *py_ray_start, *py_ray_end;
+	float ray_start[3], ray_end[3];
 	int use_poly_index = true;
-	float ray_nor[3], dist;
-	BVHTreeRayHit hit;
+	float ray_nor[3], ray_len;
 	
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!|i:ray_cast", (char **)keywords,
-	                                 &vector_Type, &py_start,
-	                                 &vector_Type, &py_end,
+	                                 &vector_Type, &py_ray_start,
+	                                 &vector_Type, &py_ray_end,
 	                                 &use_poly_index))
 	{
 		return NULL;
 	}
 	
-	if (!parse_vector(py_start, start))
+	if (!parse_vector(py_ray_start, ray_start))
 		return NULL;
-	if (!parse_vector(py_end, end))
+	if (!parse_vector(py_ray_end, ray_end))
 		return NULL;
 	
-	sub_v3_v3v3(ray_nor, end, start);
-	dist = hit.dist = normalize_v3(ray_nor);
-	hit.index = -1;
+	sub_v3_v3v3(ray_nor, ray_end, ray_start);
+	ray_len = normalize_v3(ray_nor);
 	
 	/* may fail if the mesh has no faces, in that case the ray-cast misses */
 	if (meshdata->tree && meshdata->raycast_callback && ob->derivedFinal)
 	{
-		if (BLI_bvhtree_ray_cast(meshdata->tree, start, ray_nor, 0.0f, &hit,
+		BVHTreeRayHit hit;
+		hit.dist = ray_len;
+		hit.index = -1;
+		
+		if (BLI_bvhtree_ray_cast(meshdata->tree, ray_start, ray_nor, 0.0f, &hit,
 		                         meshdata->raycast_callback, meshdata) != -1)
 		{
-			if (hit.dist <= dist) {
+			if (hit.dist <= ray_len) {
 				int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, hit.index) : hit.index;
 				return bvhtree_ray_hit_to_py(hit.co, hit.no, ret_index, hit.dist);
 			}
+		}
+	}
+	else if (bmdata) {
+		BMFace *hit_face;
+		float hit_co[3], hit_dist;
+		
+		hit_face = BKE_bmbvh_ray_cast(bmdata, ray_start, ray_nor, 0.0f, &hit_dist, hit_co, NULL);
+		if (hit_face && hit_dist <= ray_len) {
+			int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, BM_elem_index_get(hit_face)) : BM_elem_index_get(hit_face);
+			return bvhtree_ray_hit_to_py(hit_co, hit_face->no, ret_index, hit_dist);
 		}
 	}
 	
@@ -414,6 +465,7 @@ static PyMethodDef PyBVHTree_methods[] = {
 	{"from_object_verts", (PyCFunction)py_BVHTree_from_object_verts, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_object_verts_doc},
 	{"from_object_faces", (PyCFunction)py_BVHTree_from_object_faces, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_object_faces_doc},
 	{"from_object_edges", (PyCFunction)py_BVHTree_from_object_edges, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_object_edges_doc},
+	{"from_bmesh", (PyCFunction)py_BVHTree_from_bmesh, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_bmesh_doc},
 	{"clear", (PyCFunction)py_BVHTree_clear, METH_VARARGS | METH_KEYWORDS, py_BVHTree_clear_doc},
 	{"ray_cast", (PyCFunction)py_BVHTree_ray_cast, METH_VARARGS | METH_KEYWORDS, py_BVHTree_ray_cast_doc},
 	{"find_nearest", (PyCFunction)py_BVHTree_find_nearest, METH_VARARGS | METH_KEYWORDS, py_BVHTree_find_nearest_doc},
