@@ -97,7 +97,7 @@ static int dm_tessface_to_poly_index_safe(DerivedMesh *dm, int tessface_index)
 	return ORIGINDEX_NONE;
 }
 
-static PyObject *bvhtree_lookup_result_to_py(const float co[3], const float no[3], int index, float dist)
+static PyObject *bvhtree_ray_hit_to_py(const float co[3], const float no[3], int index, float dist)
 {
 	PyObject *py_retval = PyTuple_New(4);
 
@@ -105,6 +105,18 @@ static PyObject *bvhtree_lookup_result_to_py(const float co[3], const float no[3
 	PyTuple_SET_ITEM(py_retval, 1, Vector_CreatePyObject((float *)no, 3, Py_NEW, NULL));
 	PyTuple_SET_ITEM(py_retval, 2, PyLong_FromLong(index));
 	PyTuple_SET_ITEM(py_retval, 3, PyFloat_FromDouble(dist));
+
+	return py_retval;
+}
+
+static PyObject *bvhtree_nearest_to_py(const float co[3], const float no[3], int index, float dist_sq)
+{
+	PyObject *py_retval = PyTuple_New(4);
+
+	PyTuple_SET_ITEM(py_retval, 0, Vector_CreatePyObject((float *)co, 3, Py_NEW, NULL));
+	PyTuple_SET_ITEM(py_retval, 1, Vector_CreatePyObject((float *)no, 3, Py_NEW, NULL));
+	PyTuple_SET_ITEM(py_retval, 2, PyLong_FromLong(index));
+	PyTuple_SET_ITEM(py_retval, 3, PyFloat_FromDouble(dist_sq));
 
 	return py_retval;
 }
@@ -333,12 +345,12 @@ static PyObject *py_BVHTree_ray_cast(PyBVHTree *self, PyObject *args, PyObject *
 		{
 			if (hit.dist <= dist) {
 				int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, hit.index) : hit.index;
-				return bvhtree_lookup_result_to_py(hit.co, hit.no, ret_index, hit.dist);
+				return bvhtree_ray_hit_to_py(hit.co, hit.no, ret_index, hit.dist);
 			}
 		}
 	}
 	
-	return bvhtree_lookup_result_to_py(ZERO, ZERO, -1, 0.0f);
+	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
 }
 
 PyDoc_STRVAR(py_BVHTree_find_nearest_doc,
@@ -390,11 +402,11 @@ static PyObject *py_BVHTree_find_nearest(PyBVHTree *self, PyObject *args, PyObje
 		                             meshdata->nearest_callback, meshdata) != -1)
 		{
 			int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, nearest.index) : nearest.index;
-			return bvhtree_lookup_result_to_py(nearest.co, nearest.no, ret_index, nearest.dist_sq);
+			return bvhtree_nearest_to_py(nearest.co, nearest.no, ret_index, nearest.dist_sq);
 		}
 	}
 	
-	return bvhtree_lookup_result_to_py(ZERO, ZERO, -1, 0.0f);
+	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
 }
 
 
