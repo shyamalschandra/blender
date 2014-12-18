@@ -97,7 +97,7 @@ static int dm_tessface_to_poly_index_safe(DerivedMesh *dm, int tessface_index)
 	return ORIGINDEX_NONE;
 }
 
-static PyObject *bvhtree_ray_hit_to_py(const float co[3], const float no[3], int index, float dist)
+static PyObject *bvhtree_lookup_result_to_py(const float co[3], const float no[3], int index, float dist)
 {
 	PyObject *py_retval = PyTuple_New(4);
 
@@ -291,7 +291,7 @@ PyDoc_STRVAR(py_BVHTree_ray_cast_doc,
 "   :type ray_end: :class:`Vector`\n"
 "   :arg use_poly_index: Return poly index instead of tessface index.\n"
 "   :type use_poly_index: :boolean\n"
-"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index), index==-1 if no hit was found.\n"
+"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
 static PyObject *py_BVHTree_ray_cast(PyBVHTree *self, PyObject *args, PyObject *kwargs)
@@ -333,12 +333,68 @@ static PyObject *py_BVHTree_ray_cast(PyBVHTree *self, PyObject *args, PyObject *
 		{
 			if (hit.dist <= dist) {
 				int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, hit.index) : hit.index;
-				return bvhtree_ray_hit_to_py(hit.co, hit.no, ret_index, hit.dist);
+				return bvhtree_lookup_result_to_py(hit.co, hit.no, ret_index, hit.dist);
 			}
 		}
 	}
 	
-	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
+	return bvhtree_lookup_result_to_py(ZERO, ZERO, -1, 0.0f);
+}
+
+PyDoc_STRVAR(py_BVHTree_find_nearest_doc,
+".. method:: find_nearest(point, max_dist=1.84467e+19, use_poly_index=True)\n"
+"\n"
+"   Find the nearest element to a point.\n"
+"\n"
+"   :arg point: Find nearest element to this point.\n"
+"   :type ray_start: :class:`Vector`\n"
+"   :art max_dist: Maximum search distance\n"
+"   :type max_dist: :float\n"
+"   :arg use_poly_index: Return poly index instead of tessface index.\n"
+"   :type use_poly_index: :boolean\n"
+"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance_squared), index==-1 if no hit was found.\n"
+"   :rtype: :class:`tuple`\n"
+);
+static PyObject *py_BVHTree_find_nearest(PyBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
+	
+	BVHTreeFromMesh *meshdata = &self->meshdata;
+	Object *ob = self->ob;
+	const char *keywords[] = {"point", "max_dist", "use_poly_index", NULL};
+	
+	PyObject *py_point;
+	float point[3];
+	float max_dist = 1.844674352395373e+19f;
+	int use_poly_index = true;
+	BVHTreeNearest nearest;
+	
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!|fi:find_nearest", (char **)keywords,
+	                                 &vector_Type, &py_point,
+	                                 &max_dist,
+	                                 &use_poly_index))
+	{
+		return NULL;
+	}
+	
+	if (!parse_vector(py_point, point))
+		return NULL;
+	
+	nearest.index = -1;
+	nearest.dist_sq = max_dist * max_dist;
+	
+	/* may fail if the mesh has no faces, in that case the ray-cast misses */
+	if (meshdata->tree && meshdata->nearest_callback && ob->derivedFinal)
+	{
+		if (BLI_bvhtree_find_nearest(meshdata->tree, point, &nearest,
+		                             meshdata->nearest_callback, meshdata) != -1)
+		{
+			int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, nearest.index) : nearest.index;
+			return bvhtree_lookup_result_to_py(nearest.co, nearest.no, ret_index, nearest.dist_sq);
+		}
+	}
+	
+	return bvhtree_lookup_result_to_py(ZERO, ZERO, -1, 0.0f);
 }
 
 
@@ -348,6 +404,7 @@ static PyMethodDef PyBVHTree_methods[] = {
 	{"from_object_edges", (PyCFunction)py_BVHTree_from_object_edges, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_object_edges_doc},
 	{"clear", (PyCFunction)py_BVHTree_clear, METH_VARARGS | METH_KEYWORDS, py_BVHTree_clear_doc},
 	{"ray_cast", (PyCFunction)py_BVHTree_ray_cast, METH_VARARGS | METH_KEYWORDS, py_BVHTree_ray_cast_doc},
+	{"find_nearest", (PyCFunction)py_BVHTree_find_nearest, METH_VARARGS | METH_KEYWORDS, py_BVHTree_find_nearest_doc},
 	{NULL, NULL, 0, NULL}
 };
 
