@@ -439,6 +439,7 @@ static PyObject *py_BVHTree_find_nearest(PyBVHTree *self, PyObject *args, PyObje
 	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
 	BVHTreeFromMesh *meshdata = &self->meshdata;
+	BMBVHTree *bmdata = self->bmdata;
 	Object *ob = self->ob;
 	const char *keywords[] = {"point", "max_dist", "use_poly_index", NULL};
 	
@@ -470,6 +471,14 @@ static PyObject *py_BVHTree_find_nearest(PyBVHTree *self, PyObject *args, PyObje
 		{
 			int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, nearest.index) : nearest.index;
 			return bvhtree_nearest_to_py(nearest.co, nearest.no, ret_index, nearest.dist_sq);
+		}
+	}
+	else if (bmdata) {
+		BMVert *nearest_vert;
+		
+		nearest_vert = BKE_bmbvh_find_vert_closest(bmdata, point, max_dist);
+		if (nearest_vert) {
+			return bvhtree_ray_hit_to_py(nearest_vert->co, nearest_vert->no, BM_elem_index_get(nearest_vert), len_squared_v3v3(point, nearest_vert->co));
 		}
 	}
 	
