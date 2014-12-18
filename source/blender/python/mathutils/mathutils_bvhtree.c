@@ -155,9 +155,9 @@ static void PyBVHTree__tp_dealloc(PyBVHTree *self)
 }
 
 PyDoc_STRVAR(py_BVHTree_from_object_verts_doc,
-".. method:: from_faces(object)\n"
+".. method:: from_object_verts(object)\n"
 "\n"
-"   Construct the BVHTree from mesh vertices.\n"
+"   Construct the BVHTree from object vertices.\n"
 "\n"
 "   :arg object: Object used for constructing the BVH tree.\n"
 "   :type object: :class:`Object`\n"
@@ -197,9 +197,9 @@ static PyObject *py_BVHTree_from_object_verts(PyBVHTree *self, PyObject *args, P
 }
 
 PyDoc_STRVAR(py_BVHTree_from_object_faces_doc,
-".. method:: from_faces(object)\n"
+".. method:: from_object_faces(object)\n"
 "\n"
-"   Construct the BVHTree from mesh faces.\n"
+"   Construct the BVHTree from object faces.\n"
 "\n"
 "   :arg object: Object used for constructing the BVH tree.\n"
 "   :type object: :class:`Object`\n"
@@ -239,9 +239,9 @@ static PyObject *py_BVHTree_from_object_faces(PyBVHTree *self, PyObject *args, P
 }
 
 PyDoc_STRVAR(py_BVHTree_from_object_edges_doc,
-".. method:: from_edges(object)\n"
+".. method:: from_object_edges(object)\n"
 "\n"
-"   Construct the BVHTree from mesh edges.\n"
+"   Construct the BVHTree from object edges.\n"
 "\n"
 "   :arg object: Object used for constructing the BVH tree.\n"
 "   :type object: :class:`Object`\n"
