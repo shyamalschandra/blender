@@ -2506,9 +2506,6 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.click_timeout == 0)
-		U.click_timeout = 250;
-
 	if (U.pixelsize == 0.0f)
 		U.pixelsize = 1.0f;
 	

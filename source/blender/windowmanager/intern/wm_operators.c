@@ -3441,12 +3441,10 @@ static void tweak_gesture_modal(bContext *C, const wmEvent *event)
 			if (gesture->event_type == event->type) {
 				WM_gesture_end(C, gesture);
 
-#if 0 /* XXX Why? Disabled for now, as this conflicts with combined use of KM_HOLD and KM_RELEASE */
 				/* when tweak fails we should give the other keymap entries a chance */
 
 				/* XXX, assigning to readonly, BAD JUJU! */
 				((wmEvent *)event)->val = KM_RELEASE;
-#endif
 			}
 			break;
 		default:
@@ -4984,7 +4982,7 @@ void wm_window_keymap(wmKeyConfig *keyconf)
 	WM_keymap_verify_item(keymap, "WM_OT_debug_menu", DKEY, KM_PRESS, KM_ALT | KM_CTRL, 0);
 
 	/* menus that can be accessed anywhere in blender */
-	WM_keymap_verify_item(keymap, "WM_OT_search_menu", SPACEKEY, KM_CLICK, 0, 0);
+	WM_keymap_verify_item(keymap, "WM_OT_search_menu", SPACEKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_menu(keymap, "USERPREF_MT_ndof_settings", NDOF_BUTTON_MENU, KM_PRESS, 0, 0);
 
 	/* Space switching */
