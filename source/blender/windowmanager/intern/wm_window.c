@@ -35,7 +35,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "DNA_listBase.h"	
+#include "DNA_listBase.h"
 #include "DNA_screen_types.h"
 #include "DNA_windowmanager_types.h"
 
@@ -1092,6 +1092,57 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 	return 1;
 }
 
+/* KM_DBL_CLICK is set in wm_event_clicktype_set (wm_event_system.c)
+ * Normally, this should be there too, but for KM_CLICK/KM_HOLD, we need a
+ * time precision of a few milliseconds, which we can't get from there */
+static void wm_window_event_clicktype_set(const bContext *C)
+{
+	wmWindowManager *wm = CTX_wm_manager(C);
+
+	if (wm->winactive) {
+		wmWindow *win = wm->winactive;
+		wmEvent *event = win->eventstate;
+		short clicktype = event->clicktype;
+
+		BLI_assert(event != NULL);
+
+		/* we always want clicktype of last clicked button (to enable use with modifier keys)
+		 * unnecessary for mouse though*/
+		if (!ISMOUSE(event->type) &&
+		    event->val == KM_PRESS &&
+		    event->type != event->keymodifier)
+		{
+			event->is_key_pressed = false;
+		}
+
+		if (event->val == KM_PRESS && !event->is_key_pressed) {
+			event->is_key_pressed = true;
+			event->clicktime = PIL_check_seconds_timer();
+		}
+		else if (event->val == KM_RELEASE && event->is_key_pressed) {
+			event->is_key_pressed = false;
+		}
+
+		/* the actual test */
+		if ((PIL_check_seconds_timer() - event->clicktime) * 1000 <= U.click_timeout) {
+			if (event->val == KM_RELEASE) {
+				clicktype = KM_CLICK;
+			}
+		}
+		else if (event->is_key_pressed) {
+			clicktype = KM_HOLD;
+
+			/* the event we send in this case is a "dummy" event - don't send value */
+			event->val = 0;
+		}
+
+		/* send event with new clicktype */
+		if (event->clicktype != clicktype) {
+			event->clicktype = clicktype;
+			wm_event_add(win, event);
+		}
+	}
+}
 
 /* This timer system only gives maximum 1 timer event per redraw cycle,
  * to prevent queues to get overloaded.
@@ -1151,7 +1202,11 @@ void wm_window_process_events(const bContext *C)
 
 	if (hasevent)
 		GHOST_DispatchEvents(g_system);
-	
+
+	/* not nice to have this here, but it's the only place
+	 * that can call it with the needed time precision */
+	wm_window_event_clicktype_set(C);
+
 	hasevent |= wm_window_timer(C);
 
 	/* no event, we sleep 5 milliseconds */

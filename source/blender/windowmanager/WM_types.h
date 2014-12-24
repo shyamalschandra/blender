@@ -181,9 +181,11 @@ enum {
 #define KM_NOTHING	0
 #define KM_PRESS	1
 #define KM_RELEASE	2
-#define KM_CLICK	3
-#define KM_DBL_CLICK	4
 
+/* clicktype */
+#define KM_CLICK     3 /* clicked key (clicktime <= U.click_timeout) */
+#define KM_HOLD      4 /* held key    (clicktime >  U.click_timeout) */
+#define KM_DBL_CLICK 5 /* double click */
 
 /* ************** UI Handler ***************** */
 
@@ -421,12 +423,15 @@ typedef struct wmGesture {
 
 /* each event should have full modifier state */
 /* event comes from eventmanager and from keymap */
+/* XXX why is pad needed here? Seems like it can be removed */
 typedef struct wmEvent {
 	struct wmEvent *next, *prev;
 	
 	short type;			/* event code itself (short, is also in keymap) */
 	short val;			/* press, release, scrollvalue */
+	short clicktype;	/* click, hold or double click */
 	int x, y;			/* mouse pointer position, screen coord */
+	double clicktime;	/* the time since keypress started */
 	int mval[2];		/* region mouse position, name convention pre 2.5 :) */
 	char utf8_buf[6];	/* from, ghost if utf8 is enabled for the platform,
 						 * BLI_str_utf8_size() must _always_ be valid, check
@@ -434,19 +439,19 @@ typedef struct wmEvent {
 	char ascii;			/* from ghost, fallback if utf8 isn't set */
 	char pad;
 
-	/* previous state, used for double click and the 'click' */
+	bool is_key_pressed; /* is a (non-modifier) key is pressed? (keyboard, mouse, NDOF, ...) */
+
+	/* previous state, used for clicktype */
 	short prevtype;
 	short prevval;
 	int prevx, prevy;
 	double prevclicktime;
 	int prevclickx, prevclicky;
+	short prevclicktype;
 	
 	/* modifier states */
 	short shift, ctrl, alt, oskey;	/* oskey is apple or windowskey, value denotes order of pressed */
 	short keymodifier;				/* rawkey modifier */
-	
-	/* set in case a KM_PRESS went by unhandled */
-	short check_click;
 	
 	/* keymap item, set by handler (weak?) */
 	const char *keymap_idname;

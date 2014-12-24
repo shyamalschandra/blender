@@ -189,7 +189,7 @@ typedef struct wmWindow {
 	short cursor;       /* current mouse cursor type */
 	short lastcursor;   /* previous cursor when setting modal one */
 	short modalcursor;  /* the current modal cursor */
-	short grabcursor;           /* cursor grab mode */
+	short grabcursor;   /* cursor grab mode */
 	short addmousemove; /* internal: tag this for extra mousemove event, makes cursors/buttons active on UI switching */
 
 	int winid;                  /* winid also in screens, is for retrieving this window after read */
@@ -252,7 +252,8 @@ typedef struct wmKeyMapItem {
 
 	/* event */
 	short type;                     /* event code itself */
-	short val;                      /* KM_ANY, KM_PRESS, KM_NOTHING etc */
+	short val;                      /* NOTE: other than event->val this can be the value itself
+	                                 * (KM_ANY, KM_PRESS, etc) AND the clicktype (KM_DBL_CLICK, KM_HOLD, etc) */
 	short shift, ctrl, alt, oskey;  /* oskey is apple or windowskey, value denotes order of pressed */
 	short keymodifier;              /* rawkey modifier */
 
