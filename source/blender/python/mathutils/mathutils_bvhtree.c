@@ -91,7 +91,7 @@ static bool parse_vector(PyObject *vec, float value[3])
 
 static int dm_tessface_to_poly_index(DerivedMesh *dm, int tessface_index)
 {
-	if (tessface_index != ORIGINDEX_NONE) {
+	if (tessface_index != ORIGINDEX_NONE && tessface_index < dm->getNumTessFaces(dm)) {
 		/* double lookup */
 		const int *index_mf_to_mpoly;
 		if ((index_mf_to_mpoly = dm->getTessFaceDataArray(dm, CD_ORIGINDEX))) {
@@ -100,15 +100,6 @@ static int dm_tessface_to_poly_index(DerivedMesh *dm, int tessface_index)
 		}
 	}
 
-	return ORIGINDEX_NONE;
-}
-
-/* does additional range check for tessface_index */
-static int dm_tessface_to_poly_index_safe(DerivedMesh *dm, int tessface_index)
-{
-	if (tessface_index < dm->getNumTessFaces(dm))
-		return dm_tessface_to_poly_index(dm, tessface_index);
-	
 	return ORIGINDEX_NONE;
 }
 
@@ -324,7 +315,7 @@ static PyObject *py_DerivedMeshBVHTree_ray_cast(PyDerivedMeshBVHTree *self, PyOb
 		                         meshdata->raycast_callback, meshdata) != -1)
 		{
 			if (hit.dist <= ray_len) {
-				int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, hit.index) : hit.index;
+				int ret_index = use_poly_index ? dm_tessface_to_poly_index(ob->derivedFinal, hit.index) : hit.index;
 				return bvhtree_ray_hit_to_py(hit.co, hit.no, ret_index, hit.dist);
 			}
 		}
@@ -381,7 +372,7 @@ static PyObject *py_DerivedMeshBVHTree_find_nearest(PyDerivedMeshBVHTree *self, 
 		if (BLI_bvhtree_find_nearest(meshdata->tree, point, &nearest,
 		                             meshdata->nearest_callback, meshdata) != -1)
 		{
-			int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, nearest.index) : nearest.index;
+			int ret_index = use_poly_index ? dm_tessface_to_poly_index(ob->derivedFinal, nearest.index) : nearest.index;
 			return bvhtree_nearest_to_py(nearest.co, nearest.no, ret_index, nearest.dist_sq);
 		}
 	}
