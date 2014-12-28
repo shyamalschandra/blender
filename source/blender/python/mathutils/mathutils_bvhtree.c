@@ -54,14 +54,22 @@
 
 typedef struct {
 	PyObject_HEAD
+} PyBVHTree;
+
+typedef struct {
+	PyBVHTree base;
 	/* Object DerivedMesh data */
 	Object *ob;
 	BVHTreeFromMesh meshdata;
+} PyDerivedMeshBVHTree;
+
+typedef struct {
+	PyBVHTree base;
 	/* BMesh data */
 	BMBVHTree *bmdata;
 	BMLoop *(*bmlooptris)[3];
 	int bmtotlooptris;
-} PyBVHTree;
+} PyBMeshBVHTree;
 
 /* -------------------------------------------------------------------- */
 /* Utility helper functions */
@@ -131,369 +139,17 @@ static PyObject *bvhtree_nearest_to_py(const float co[3], const float no[3], int
 /* -------------------------------------------------------------------- */
 /* BVHTree */
 
-/* generic cleanup function for resetting everything */
-static void free_BVHTree(PyBVHTree *self)
-{
-	BVHTreeFromMesh *meshdata = &self->meshdata;
-	
-	self->ob = NULL;
-	free_bvhtree_from_mesh(meshdata);
-	
-	if (self->bmlooptris) {
-		MEM_freeN(self->bmlooptris);
-		self->bmlooptris = NULL;
-		self->bmtotlooptris = 0;
-	}
-	if (self->bmdata) {
-		BKE_bmbvh_free(self->bmdata);
-		self->bmdata = NULL;
-	}
-}
-
 static int PyBVHTree__tp_init(PyBVHTree *self, PyObject *args, PyObject *kwargs)
 {
-	self->ob = NULL;
-	memset(&self->meshdata, 0, sizeof(BVHTreeFromMesh));
-	self->bmdata = NULL;
-	
 	return 0;
 }
 
 static void PyBVHTree__tp_dealloc(PyBVHTree *self)
 {
-	free_BVHTree(self);
-	
 	Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
-PyDoc_STRVAR(py_BVHTree_from_object_verts_doc,
-".. method:: from_object_verts(object)\n"
-"\n"
-"   Construct the BVHTree from object vertices.\n"
-"\n"
-"   :arg object: Object used for constructing the BVH tree.\n"
-"   :type object: :class:`Object`\n"
-);
-static PyObject *py_BVHTree_from_object_verts(PyBVHTree *self, PyObject *args, PyObject *kwargs)
-{
-	BVHTreeFromMesh *meshdata = &self->meshdata;
-	const char *keywords[] = {"object", NULL};
-	
-	PyObject *py_ob;
-	Object *ob;
-	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O:from_object_verts", (char **)keywords,
-	                                 &py_ob))
-	{
-		return NULL;
-	}
-	
-	ob = PyC_RNA_AsPointer(py_ob, "Object");
-	if (!ob) {
-		return NULL;
-	}
-	
-	if (ob->derivedFinal == NULL) {
-		PyErr_Format(PyExc_ValueError, "Object '%.200s' has no mesh data to be used for BVH tree", ob->id.name + 2);
-		return NULL;
-	}
-	
-	/* free existing data */
-	free_BVHTree(self);
-	
-	self->ob = ob;
-	
-	bvhtree_from_mesh_verts(meshdata, ob->derivedFinal, 0.0f, 4, 6);
-	
-	Py_RETURN_NONE;
-}
-
-PyDoc_STRVAR(py_BVHTree_from_object_faces_doc,
-".. method:: from_object_faces(object)\n"
-"\n"
-"   Construct the BVHTree from object faces.\n"
-"\n"
-"   :arg object: Object used for constructing the BVH tree.\n"
-"   :type object: :class:`Object`\n"
-);
-static PyObject *py_BVHTree_from_object_faces(PyBVHTree *self, PyObject *args, PyObject *kwargs)
-{
-	BVHTreeFromMesh *meshdata = &self->meshdata;
-	const char *keywords[] = {"object", NULL};
-	
-	PyObject *py_ob;
-	Object *ob;
-	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O:from_object_faces", (char **)keywords,
-	                                 &py_ob))
-	{
-		return NULL;
-	}
-	
-	ob = PyC_RNA_AsPointer(py_ob, "Object");
-	if (!ob) {
-		return NULL;
-	}
-	
-	if (ob->derivedFinal == NULL) {
-		PyErr_Format(PyExc_ValueError, "Object '%.200s' has no mesh data to be used for BVH tree", ob->id.name + 2);
-		return NULL;
-	}
-	
-	/* free existing data */
-	free_BVHTree(self);
-	
-	self->ob = ob;
-	
-	bvhtree_from_mesh_faces(meshdata, ob->derivedFinal, 0.0f, 4, 6);
-	
-	Py_RETURN_NONE;
-}
-
-PyDoc_STRVAR(py_BVHTree_from_object_edges_doc,
-".. method:: from_object_edges(object)\n"
-"\n"
-"   Construct the BVHTree from object edges.\n"
-"\n"
-"   :arg object: Object used for constructing the BVH tree.\n"
-"   :type object: :class:`Object`\n"
-);
-static PyObject *py_BVHTree_from_object_edges(PyBVHTree *self, PyObject *args, PyObject *kwargs)
-{
-	BVHTreeFromMesh *meshdata = &self->meshdata;
-	const char *keywords[] = {"object", NULL};
-	
-	PyObject *py_ob;
-	Object *ob;
-	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O:from_object_edges", (char **)keywords,
-	                                 &py_ob))
-	{
-		return NULL;
-	}
-	
-	ob = PyC_RNA_AsPointer(py_ob, "Object");
-	if (!ob) {
-		return NULL;
-	}
-	
-	if (ob->derivedFinal == NULL) {
-		PyErr_Format(PyExc_ValueError, "Object '%.200s' has no mesh data to be used for BVH tree", ob->id.name + 2);
-		return NULL;
-	}
-	
-	/* free existing data */
-	free_BVHTree(self);
-	
-	self->ob = ob;
-	
-	bvhtree_from_mesh_edges(meshdata, ob->derivedFinal, 0.0f, 4, 6);
-	
-	Py_RETURN_NONE;
-}
-
-PyDoc_STRVAR(py_BVHTree_from_bmesh_doc,
-".. method:: from_bmesh(object)\n"
-"\n"
-"   Construct the BVHTree from a :class: BMesh.\n"
-"\n"
-"   :arg bm: BMesh instance used for constructing the BVH tree.\n"
-"   :type bm: :class:`BMesh`\n"
-);
-static PyObject *py_BVHTree_from_bmesh(PyBVHTree *self, PyObject *args, PyObject *kwargs)
-{
-	const char *keywords[] = {"bm", NULL};
-	
-	PyObject *py_bm;
-	BMesh *bm;
-	int tottri;
-	int flag = 0; /* TODO add optional RESPECT_SELECT and RESPECT_HIDDEN flag options */
-	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!:from_bmesh", (char **)keywords,
-	                                 &BPy_BMesh_Type, &py_bm))
-	{
-		return NULL;
-	}
-	bm = ((BPy_BMesh *)py_bm)->bm;
-	
-	/* free existing data */
-	free_BVHTree(self);
-	
-	self->bmtotlooptris = poly_to_tri_count(bm->totface, bm->totloop);
-	self->bmlooptris = MEM_mallocN(sizeof(*self->bmlooptris) * (size_t)self->bmtotlooptris, __func__);
-	BM_bmesh_calc_tessellation(bm, self->bmlooptris, &tottri);
-	
-	self->bmdata = BKE_bmbvh_new(bm, self->bmlooptris, tottri, flag, NULL, false);
-	
-	Py_RETURN_NONE;
-}
-
-PyDoc_STRVAR(py_BVHTree_clear_doc,
-".. method:: clear()\n"
-"\n"
-"   Remove all BVH data.\n"
-);
-static PyObject *py_BVHTree_clear(PyBVHTree *self)
-{
-	free_BVHTree(self);
-	
-	Py_RETURN_NONE;
-}
-
-PyDoc_STRVAR(py_BVHTree_ray_cast_doc,
-".. method:: ray_cast(ray_start, ray_end, use_poly_index=True)\n"
-"\n"
-"   Cast a ray onto the mesh.\n"
-"\n"
-"   :arg ray_start: Start location of the ray in object space.\n"
-"   :type ray_start: :class:`Vector`\n"
-"   :arg ray_end: End location of the ray in object space.\n"
-"   :type ray_end: :class:`Vector`\n"
-"   :arg use_poly_index: Return poly index instead of tessface index.\n"
-"   :type use_poly_index: :boolean\n"
-"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
-"   :rtype: :class:`tuple`\n"
-);
-static PyObject *py_BVHTree_ray_cast(PyBVHTree *self, PyObject *args, PyObject *kwargs)
-{
-	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
-	
-	BVHTreeFromMesh *meshdata = &self->meshdata;
-	BMBVHTree *bmdata = self->bmdata;
-	Object *ob = self->ob;
-	const char *keywords[] = {"ray_start", "ray_end", "use_poly_index", NULL};
-	
-	PyObject *py_ray_start, *py_ray_end;
-	float ray_start[3], ray_end[3];
-	int use_poly_index = true;
-	float ray_nor[3], ray_len;
-	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!|i:ray_cast", (char **)keywords,
-	                                 &vector_Type, &py_ray_start,
-	                                 &vector_Type, &py_ray_end,
-	                                 &use_poly_index))
-	{
-		return NULL;
-	}
-	
-	if (!parse_vector(py_ray_start, ray_start))
-		return NULL;
-	if (!parse_vector(py_ray_end, ray_end))
-		return NULL;
-	
-	/* can only look up poly index for object mesh data */
-	if (!self->ob)
-		use_poly_index = false;
-	
-	sub_v3_v3v3(ray_nor, ray_end, ray_start);
-	ray_len = normalize_v3(ray_nor);
-	
-	/* may fail if the mesh has no faces, in that case the ray-cast misses */
-	if (meshdata->tree && meshdata->raycast_callback && ob->derivedFinal)
-	{
-		BVHTreeRayHit hit;
-		hit.dist = ray_len;
-		hit.index = -1;
-		
-		if (BLI_bvhtree_ray_cast(meshdata->tree, ray_start, ray_nor, 0.0f, &hit,
-		                         meshdata->raycast_callback, meshdata) != -1)
-		{
-			if (hit.dist <= ray_len) {
-				int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, hit.index) : hit.index;
-				return bvhtree_ray_hit_to_py(hit.co, hit.no, ret_index, hit.dist);
-			}
-		}
-	}
-	else if (bmdata) {
-		BMFace *hit_face;
-		float hit_co[3], hit_dist;
-		
-		hit_dist = ray_len;
-		
-		hit_face = BKE_bmbvh_ray_cast(bmdata, ray_start, ray_nor, 0.0f, &hit_dist, hit_co, NULL);
-		if (hit_face && hit_dist <= ray_len) {
-			int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, BM_elem_index_get(hit_face)) : BM_elem_index_get(hit_face);
-			return bvhtree_ray_hit_to_py(hit_co, hit_face->no, ret_index, hit_dist);
-		}
-	}
-	
-	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
-}
-
-PyDoc_STRVAR(py_BVHTree_find_nearest_doc,
-".. method:: find_nearest(point, max_dist=1.84467e+19, use_poly_index=True)\n"
-"\n"
-"   Find the nearest element to a point.\n"
-"\n"
-"   :arg point: Find nearest element to this point.\n"
-"   :type ray_start: :class:`Vector`\n"
-"   :art max_dist: Maximum search distance\n"
-"   :type max_dist: :float\n"
-"   :arg use_poly_index: Return poly index instead of tessface index.\n"
-"   :type use_poly_index: :boolean\n"
-"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance_squared), index==-1 if no hit was found.\n"
-"   :rtype: :class:`tuple`\n"
-);
-static PyObject *py_BVHTree_find_nearest(PyBVHTree *self, PyObject *args, PyObject *kwargs)
-{
-	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
-	
-	BVHTreeFromMesh *meshdata = &self->meshdata;
-	BMBVHTree *bmdata = self->bmdata;
-	Object *ob = self->ob;
-	const char *keywords[] = {"point", "max_dist", "use_poly_index", NULL};
-	
-	PyObject *py_point;
-	float point[3];
-	float max_dist = 1.844674352395373e+19f;
-	int use_poly_index = true;
-	BVHTreeNearest nearest;
-	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!|fi:find_nearest", (char **)keywords,
-	                                 &vector_Type, &py_point,
-	                                 &max_dist,
-	                                 &use_poly_index))
-	{
-		return NULL;
-	}
-	
-	if (!parse_vector(py_point, point))
-		return NULL;
-	
-	nearest.index = -1;
-	nearest.dist_sq = max_dist * max_dist;
-	
-	/* may fail if the mesh has no faces, in that case the ray-cast misses */
-	if (meshdata->tree && meshdata->nearest_callback && ob->derivedFinal)
-	{
-		if (BLI_bvhtree_find_nearest(meshdata->tree, point, &nearest,
-		                             meshdata->nearest_callback, meshdata) != -1)
-		{
-			int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, nearest.index) : nearest.index;
-			return bvhtree_nearest_to_py(nearest.co, nearest.no, ret_index, nearest.dist_sq);
-		}
-	}
-	else if (bmdata) {
-		BMVert *nearest_vert;
-		
-		nearest_vert = BKE_bmbvh_find_vert_closest(bmdata, point, max_dist);
-		if (nearest_vert) {
-			return bvhtree_ray_hit_to_py(nearest_vert->co, nearest_vert->no, BM_elem_index_get(nearest_vert), len_squared_v3v3(point, nearest_vert->co));
-		}
-	}
-	
-	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
-}
-
-
 static PyMethodDef PyBVHTree_methods[] = {
-	{"from_object_verts", (PyCFunction)py_BVHTree_from_object_verts, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_object_verts_doc},
-	{"from_object_faces", (PyCFunction)py_BVHTree_from_object_faces, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_object_faces_doc},
-	{"from_object_edges", (PyCFunction)py_BVHTree_from_object_edges, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_object_edges_doc},
-	{"from_bmesh", (PyCFunction)py_BVHTree_from_bmesh, METH_VARARGS | METH_KEYWORDS, py_BVHTree_from_bmesh_doc},
-	{"clear", (PyCFunction)py_BVHTree_clear, METH_VARARGS | METH_KEYWORDS, py_BVHTree_clear_doc},
-	{"ray_cast", (PyCFunction)py_BVHTree_ray_cast, METH_VARARGS | METH_KEYWORDS, py_BVHTree_ray_cast_doc},
-	{"find_nearest", (PyCFunction)py_BVHTree_find_nearest, METH_VARARGS | METH_KEYWORDS, py_BVHTree_find_nearest_doc},
 	{NULL, NULL, 0, NULL}
 };
 
@@ -551,6 +207,474 @@ PyTypeObject PyBVHTree_Type = {
 };
 
 /* -------------------------------------------------------------------- */
+/* DerivedMeshBVHTree */
+
+static int PyDerivedMeshBVHTree__tp_init(PyDerivedMeshBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	BVHTreeFromMesh *meshdata = &self->meshdata;
+	const char *keywords[] = {"object", "type", NULL};
+	
+	PyObject *py_ob;
+	Object *ob;
+	const char *type = "FACES";
+	
+	if (PyBVHTree_Type.tp_init((PyObject *)self, args, kwargs) < 0)
+		return -1;
+	
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O|s:DerivedMeshBVHTree", (char **)keywords,
+	                                 &py_ob, &type))
+	{
+		return -1;
+	}
+	
+	ob = PyC_RNA_AsPointer(py_ob, "Object");
+	if (!ob) {
+		return -1;
+	}
+	
+	if (ob->derivedFinal == NULL) {
+		PyErr_Format(PyExc_ValueError, "Object '%.200s' has no mesh data to be used for BVH tree", ob->id.name + 2);
+		return -1;
+	}
+	
+	self->ob = ob;
+	
+	if (STREQ(type, "FACES")) {
+		bvhtree_from_mesh_faces(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+	}
+	else if (STREQ(type, "VERTS")) {
+		bvhtree_from_mesh_verts(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+	}
+	else if (STREQ(type, "EDGES")) {
+		bvhtree_from_mesh_edges(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+	}
+	else {
+		PyErr_Format(PyExc_ValueError, "'type' must be 'FACES', 'VERTS' or 'EDGES', not '%.200s'", type);
+		return -1;
+	}
+	
+	return 0;
+}
+
+static void PyDerivedMeshBVHTree__tp_dealloc(PyDerivedMeshBVHTree *self)
+{
+	BVHTreeFromMesh *meshdata = &self->meshdata;
+	
+	self->ob = NULL;
+	free_bvhtree_from_mesh(meshdata);
+	
+	Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+PyDoc_STRVAR(py_DerivedMeshBVHTree_ray_cast_doc,
+".. method:: ray_cast(ray_start, ray_end, use_poly_index=True)\n"
+"\n"
+"   Cast a ray onto the mesh.\n"
+"\n"
+"   :arg ray_start: Start location of the ray in object space.\n"
+"   :type ray_start: :class:`Vector`\n"
+"   :arg ray_end: End location of the ray in object space.\n"
+"   :type ray_end: :class:`Vector`\n"
+"   :arg use_poly_index: Return poly index instead of tessface index.\n"
+"   :type use_poly_index: :boolean\n"
+"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
+"   :rtype: :class:`tuple`\n"
+);
+static PyObject *py_DerivedMeshBVHTree_ray_cast(PyDerivedMeshBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
+	
+	BVHTreeFromMesh *meshdata = &self->meshdata;
+	Object *ob = self->ob;
+	const char *keywords[] = {"ray_start", "ray_end", "use_poly_index", NULL};
+	
+	PyObject *py_ray_start, *py_ray_end;
+	float ray_start[3], ray_end[3];
+	int use_poly_index = true;
+	float ray_nor[3], ray_len;
+	
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!|i:ray_cast", (char **)keywords,
+	                                 &vector_Type, &py_ray_start,
+	                                 &vector_Type, &py_ray_end,
+	                                 &use_poly_index))
+	{
+		return NULL;
+	}
+	
+	if (!parse_vector(py_ray_start, ray_start))
+		return NULL;
+	if (!parse_vector(py_ray_end, ray_end))
+		return NULL;
+	
+	/* can only look up poly index for object mesh data */
+	if (!self->ob)
+		use_poly_index = false;
+	
+	sub_v3_v3v3(ray_nor, ray_end, ray_start);
+	ray_len = normalize_v3(ray_nor);
+	
+	/* may fail if the mesh has no faces, in that case the ray-cast misses */
+	if (meshdata->tree && meshdata->raycast_callback && ob->derivedFinal)
+	{
+		BVHTreeRayHit hit;
+		hit.dist = ray_len;
+		hit.index = -1;
+		
+		if (BLI_bvhtree_ray_cast(meshdata->tree, ray_start, ray_nor, 0.0f, &hit,
+		                         meshdata->raycast_callback, meshdata) != -1)
+		{
+			if (hit.dist <= ray_len) {
+				int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, hit.index) : hit.index;
+				return bvhtree_ray_hit_to_py(hit.co, hit.no, ret_index, hit.dist);
+			}
+		}
+	}
+	
+	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
+}
+
+PyDoc_STRVAR(py_DerivedMeshBVHTree_find_nearest_doc,
+".. method:: find_nearest(point, max_dist=1.84467e+19, use_poly_index=True)\n"
+"\n"
+"   Find the nearest element to a point.\n"
+"\n"
+"   :arg point: Find nearest element to this point.\n"
+"   :type ray_start: :class:`Vector`\n"
+"   :art max_dist: Maximum search distance\n"
+"   :type max_dist: :float\n"
+"   :arg use_poly_index: Return poly index instead of tessface index.\n"
+"   :type use_poly_index: :boolean\n"
+"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance_squared), index==-1 if no hit was found.\n"
+"   :rtype: :class:`tuple`\n"
+);
+static PyObject *py_DerivedMeshBVHTree_find_nearest(PyDerivedMeshBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
+	
+	BVHTreeFromMesh *meshdata = &self->meshdata;
+	Object *ob = self->ob;
+	const char *keywords[] = {"point", "max_dist", "use_poly_index", NULL};
+	
+	PyObject *py_point;
+	float point[3];
+	float max_dist = 1.844674352395373e+19f;
+	int use_poly_index = true;
+	BVHTreeNearest nearest;
+	
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!|fi:find_nearest", (char **)keywords,
+	                                 &vector_Type, &py_point,
+	                                 &max_dist,
+	                                 &use_poly_index))
+	{
+		return NULL;
+	}
+	
+	if (!parse_vector(py_point, point))
+		return NULL;
+	
+	nearest.index = -1;
+	nearest.dist_sq = max_dist * max_dist;
+	
+	/* may fail if the mesh has no faces, in that case the ray-cast misses */
+	if (meshdata->tree && meshdata->nearest_callback && ob->derivedFinal)
+	{
+		if (BLI_bvhtree_find_nearest(meshdata->tree, point, &nearest,
+		                             meshdata->nearest_callback, meshdata) != -1)
+		{
+			int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, nearest.index) : nearest.index;
+			return bvhtree_nearest_to_py(nearest.co, nearest.no, ret_index, nearest.dist_sq);
+		}
+	}
+	
+	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
+}
+
+static PyMethodDef PyDerivedMeshBVHTree_methods[] = {
+	{"ray_cast", (PyCFunction)py_DerivedMeshBVHTree_ray_cast, METH_VARARGS | METH_KEYWORDS, py_DerivedMeshBVHTree_ray_cast_doc},
+	{"find_nearest", (PyCFunction)py_DerivedMeshBVHTree_find_nearest, METH_VARARGS | METH_KEYWORDS, py_DerivedMeshBVHTree_find_nearest_doc},
+	{NULL, NULL, 0, NULL}
+};
+
+PyDoc_STRVAR(py_DerivedMeshBVHTree_doc,
+"BVH tree based on :class:`Object` mesh data.\n"
+);
+PyTypeObject PyDerivedMeshBVHTree_Type = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	"DerivedMeshBVHTree",                        /* tp_name */
+	sizeof(PyDerivedMeshBVHTree),                /* tp_basicsize */
+	0,                                           /* tp_itemsize */
+	/* methods */
+	(destructor)PyDerivedMeshBVHTree__tp_dealloc,/* tp_dealloc */
+	NULL,                                        /* tp_print */
+	NULL,                                        /* tp_getattr */
+	NULL,                                        /* tp_setattr */
+	NULL,                                        /* tp_compare */
+	NULL,                                        /* tp_repr */
+	NULL,                                        /* tp_as_number */
+	NULL,                                        /* tp_as_sequence */
+	NULL,                                        /* tp_as_mapping */
+	NULL,                                        /* tp_hash */
+	NULL,                                        /* tp_call */
+	NULL,                                        /* tp_str */
+	NULL,                                        /* tp_getattro */
+	NULL,                                        /* tp_setattro */
+	NULL,                                        /* tp_as_buffer */
+	Py_TPFLAGS_DEFAULT,                          /* tp_flags */
+	py_DerivedMeshBVHTree_doc,                   /* Documentation string */
+	NULL,                                        /* tp_traverse */
+	NULL,                                        /* tp_clear */
+	NULL,                                        /* tp_richcompare */
+	0,                                           /* tp_weaklistoffset */
+	NULL,                                        /* tp_iter */
+	NULL,                                        /* tp_iternext */
+	(struct PyMethodDef *)PyDerivedMeshBVHTree_methods, /* tp_methods */
+	NULL,                                        /* tp_members */
+	NULL,                                        /* tp_getset */
+	NULL,                                        /* tp_base */
+	NULL,                                        /* tp_dict */
+	NULL,                                        /* tp_descr_get */
+	NULL,                                        /* tp_descr_set */
+	0,                                           /* tp_dictoffset */
+	(initproc)PyDerivedMeshBVHTree__tp_init,     /* tp_init */
+	(allocfunc)PyType_GenericAlloc,              /* tp_alloc */
+	(newfunc)PyType_GenericNew,                  /* tp_new */
+	(freefunc)0,                                 /* tp_free */
+	NULL,                                        /* tp_is_gc */
+	NULL,                                        /* tp_bases */
+	NULL,                                        /* tp_mro */
+	NULL,                                        /* tp_cache */
+	NULL,                                        /* tp_subclasses */
+	NULL,                                        /* tp_weaklist */
+	(destructor) NULL                            /* tp_del */
+};
+
+/* -------------------------------------------------------------------- */
+/* BMeshBVHTree */
+
+
+static int PyBMeshBVHTree__tp_init(PyBMeshBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	const char *keywords[] = {"bm", NULL};
+	
+	PyObject *py_bm;
+	BMesh *bm;
+	int tottri;
+	int flag = 0; /* TODO add optional RESPECT_SELECT and RESPECT_HIDDEN flag options */
+	
+	if (PyBVHTree_Type.tp_init((PyObject *)self, args, kwargs) < 0)
+		return -1;
+	
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!:from_bmesh", (char **)keywords,
+	                                 &BPy_BMesh_Type, &py_bm))
+	{
+		return -1;
+	}
+	bm = ((BPy_BMesh *)py_bm)->bm;
+	
+	self->bmtotlooptris = poly_to_tri_count(bm->totface, bm->totloop);
+	self->bmlooptris = MEM_mallocN(sizeof(*self->bmlooptris) * (size_t)self->bmtotlooptris, __func__);
+	BM_bmesh_calc_tessellation(bm, self->bmlooptris, &tottri);
+	
+	self->bmdata = BKE_bmbvh_new(bm, self->bmlooptris, tottri, flag, NULL, false);
+	
+	return 0;
+}
+
+static void PyBMeshBVHTree__tp_dealloc(PyBMeshBVHTree *self)
+{
+	if (self->bmlooptris) {
+		MEM_freeN(self->bmlooptris);
+		self->bmlooptris = NULL;
+		self->bmtotlooptris = 0;
+	}
+	if (self->bmdata) {
+		BKE_bmbvh_free(self->bmdata);
+		self->bmdata = NULL;
+	}
+	
+	Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+PyDoc_STRVAR(py_BMeshBVHTree_ray_cast_doc,
+".. method:: ray_cast(ray_start, ray_end, use_poly_index=True)\n"
+"\n"
+"   Cast a ray onto the mesh.\n"
+"\n"
+"   :arg ray_start: Start location of the ray in object space.\n"
+"   :type ray_start: :class:`Vector`\n"
+"   :arg ray_end: End location of the ray in object space.\n"
+"   :type ray_end: :class:`Vector`\n"
+"   :arg use_poly_index: Return poly index instead of tessface index.\n"
+"   :type use_poly_index: :boolean\n"
+"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
+"   :rtype: :class:`tuple`\n"
+);
+static PyObject *py_BMeshBVHTree_ray_cast(PyBMeshBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
+	
+	BMBVHTree *bmdata = self->bmdata;
+	const char *keywords[] = {"ray_start", "ray_end", "use_poly_index", NULL};
+	
+	PyObject *py_ray_start, *py_ray_end;
+	float ray_start[3], ray_end[3];
+	int use_poly_index = true;
+	float ray_nor[3], ray_len;
+	
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!|i:ray_cast", (char **)keywords,
+	                                 &vector_Type, &py_ray_start,
+	                                 &vector_Type, &py_ray_end,
+	                                 &use_poly_index))
+	{
+		return NULL;
+	}
+	
+	if (!parse_vector(py_ray_start, ray_start))
+		return NULL;
+	if (!parse_vector(py_ray_end, ray_end))
+		return NULL;
+	
+	/* Note: can only look up poly index for object mesh data,
+	 * XXX should use_poly_index argument be removed? kept for symmetry atm ...
+	 */
+	use_poly_index = false;
+	
+	sub_v3_v3v3(ray_nor, ray_end, ray_start);
+	ray_len = normalize_v3(ray_nor);
+	
+	/* may fail if the mesh has no faces, in that case the ray-cast misses */
+	if (bmdata) {
+		BMFace *hit_face;
+		float hit_co[3], hit_dist;
+		
+		hit_dist = ray_len;
+		
+		hit_face = BKE_bmbvh_ray_cast(bmdata, ray_start, ray_nor, 0.0f, &hit_dist, hit_co, NULL);
+		if (hit_face && hit_dist <= ray_len) {
+//			int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, BM_elem_index_get(hit_face)) : BM_elem_index_get(hit_face);
+			int ret_index = BM_elem_index_get(hit_face);
+			return bvhtree_ray_hit_to_py(hit_co, hit_face->no, ret_index, hit_dist);
+		}
+	}
+	
+	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
+}
+
+PyDoc_STRVAR(py_BMeshBVHTree_find_nearest_doc,
+".. method:: find_nearest(point, max_dist=1.84467e+19, use_poly_index=True)\n"
+"\n"
+"   Find the nearest element to a point.\n"
+"\n"
+"   :arg point: Find nearest element to this point.\n"
+"   :type ray_start: :class:`Vector`\n"
+"   :art max_dist: Maximum search distance\n"
+"   :type max_dist: :float\n"
+"   :arg use_poly_index: Return poly index instead of tessface index.\n"
+"   :type use_poly_index: :boolean\n"
+"   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance_squared), index==-1 if no hit was found.\n"
+"   :rtype: :class:`tuple`\n"
+);
+static PyObject *py_BMeshBVHTree_find_nearest(PyBMeshBVHTree *self, PyObject *args, PyObject *kwargs)
+{
+	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
+	
+	BMBVHTree *bmdata = self->bmdata;
+	const char *keywords[] = {"point", "max_dist", "use_poly_index", NULL};
+	
+	PyObject *py_point;
+	float point[3];
+	float max_dist = 1.844674352395373e+19f;
+	int use_poly_index = true;
+	
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!|fi:find_nearest", (char **)keywords,
+	                                 &vector_Type, &py_point,
+	                                 &max_dist,
+	                                 &use_poly_index))
+	{
+		return NULL;
+	}
+	
+	if (!parse_vector(py_point, point))
+		return NULL;
+	
+	/* Note: can only look up poly index for object mesh data,
+	 * XXX should use_poly_index argument be removed? kept for symmetry atm ...
+	 */
+	use_poly_index = false;
+	
+	/* may fail if the mesh has no faces, in that case the ray-cast misses */
+	if (bmdata) {
+		BMVert *nearest_vert;
+		
+		nearest_vert = BKE_bmbvh_find_vert_closest(bmdata, point, max_dist);
+		if (nearest_vert) {
+			return bvhtree_ray_hit_to_py(nearest_vert->co, nearest_vert->no, BM_elem_index_get(nearest_vert), len_squared_v3v3(point, nearest_vert->co));
+		}
+	}
+	
+	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
+}
+
+static PyMethodDef PyBMeshBVHTree_methods[] = {
+	{"ray_cast", (PyCFunction)py_BMeshBVHTree_ray_cast, METH_VARARGS | METH_KEYWORDS, py_BMeshBVHTree_ray_cast_doc},
+	{"find_nearest", (PyCFunction)py_BMeshBVHTree_find_nearest, METH_VARARGS | METH_KEYWORDS, py_BMeshBVHTree_find_nearest_doc},
+	{NULL, NULL, 0, NULL}
+};
+
+PyDoc_STRVAR(py_BMeshBVHTree_doc,
+"BVH tree based on :class:`BMesh` data.\n"
+);
+PyTypeObject PyBMeshBVHTree_Type = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	"BMeshBVHTree",                              /* tp_name */
+	sizeof(PyBMeshBVHTree),                      /* tp_basicsize */
+	0,                                           /* tp_itemsize */
+	/* methods */
+	(destructor)PyBMeshBVHTree__tp_dealloc,      /* tp_dealloc */
+	NULL,                                        /* tp_print */
+	NULL,                                        /* tp_getattr */
+	NULL,                                        /* tp_setattr */
+	NULL,                                        /* tp_compare */
+	NULL,                                        /* tp_repr */
+	NULL,                                        /* tp_as_number */
+	NULL,                                        /* tp_as_sequence */
+	NULL,                                        /* tp_as_mapping */
+	NULL,                                        /* tp_hash */
+	NULL,                                        /* tp_call */
+	NULL,                                        /* tp_str */
+	NULL,                                        /* tp_getattro */
+	NULL,                                        /* tp_setattro */
+	NULL,                                        /* tp_as_buffer */
+	Py_TPFLAGS_DEFAULT,                          /* tp_flags */
+	py_BMeshBVHTree_doc,                         /* Documentation string */
+	NULL,                                        /* tp_traverse */
+	NULL,                                        /* tp_clear */
+	NULL,                                        /* tp_richcompare */
+	0,                                           /* tp_weaklistoffset */
+	NULL,                                        /* tp_iter */
+	NULL,                                        /* tp_iternext */
+	(struct PyMethodDef *)PyBMeshBVHTree_methods,/* tp_methods */
+	NULL,                                        /* tp_members */
+	NULL,                                        /* tp_getset */
+	NULL,                                        /* tp_base */
+	NULL,                                        /* tp_dict */
+	NULL,                                        /* tp_descr_get */
+	NULL,                                        /* tp_descr_set */
+	0,                                           /* tp_dictoffset */
+	(initproc)PyBMeshBVHTree__tp_init,           /* tp_init */
+	(allocfunc)PyType_GenericAlloc,              /* tp_alloc */
+	(newfunc)PyType_GenericNew,                  /* tp_new */
+	(freefunc)0,                                 /* tp_free */
+	NULL,                                        /* tp_is_gc */
+	NULL,                                        /* tp_bases */
+	NULL,                                        /* tp_mro */
+	NULL,                                        /* tp_cache */
+	NULL,                                        /* tp_subclasses */
+	NULL,                                        /* tp_weaklist */
+	(destructor) NULL                            /* tp_del */
+};
+
+/* -------------------------------------------------------------------- */
 /* Module definition */
 
 PyDoc_STRVAR(py_bvhtree_doc,
@@ -576,11 +700,24 @@ PyMODINIT_FUNC PyInit_mathutils_bvhtree(void)
 		return NULL;
 	}
 
-	/* Register the 'BVHTree' class */
-	if (PyType_Ready(&PyBVHTree_Type)) {
+	/* Register classes */
+	if (PyType_Ready(&PyBVHTree_Type) < 0) {
 		return NULL;
 	}
+	
+	PyDerivedMeshBVHTree_Type.tp_base = &PyBVHTree_Type;
+	if (PyType_Ready(&PyDerivedMeshBVHTree_Type) < 0) {
+		return NULL;
+	}
+	
+	PyBMeshBVHTree_Type.tp_base = &PyBVHTree_Type;
+	if (PyType_Ready(&PyBMeshBVHTree_Type) < 0) {
+		return NULL;
+	}
+
 	PyModule_AddObject(m, "BVHTree", (PyObject *) &PyBVHTree_Type);
+	PyModule_AddObject(m, "DerivedMeshBVHTree", (PyObject *) &PyDerivedMeshBVHTree_Type);
+	PyModule_AddObject(m, "BMeshBVHTree", (PyObject *) &PyBMeshBVHTree_Type);
 
 	return m;
 }

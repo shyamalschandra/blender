@@ -29,5 +29,7 @@
 PyMODINIT_FUNC PyInit_mathutils_bvhtree(void);
 
 extern PyTypeObject PyBVHTree_Type;
+extern PyTypeObject PyDerivedMeshBVHTree_Type;
+extern PyTypeObject PyBMeshBVHTree_Type;
 
 #endif /* __MATHUTILS_BVHTREE_H__ */
