@@ -383,7 +383,14 @@ static PyMethodDef PyDerivedMeshBVHTree_methods[] = {
 };
 
 PyDoc_STRVAR(py_DerivedMeshBVHTree_doc,
-"BVH tree based on :class:`Object` mesh data.\n"
+".. method:: DerivedMeshBVHTree(object, type='POLYS')\n"
+"\n"
+"   BVH tree based on :class:`Object` mesh data.\n"
+"\n"
+"   :arg object: Mesh object.\n"
+"   :type object: :class:`Object`\n"
+"   :art type: Maximum search distance\n"
+"   :type type: :string in ['POLYS', 'FACES', 'VERTS', 'EDGES']\n"
 );
 PyTypeObject PyDerivedMeshBVHTree_Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)
@@ -590,7 +597,12 @@ static PyMethodDef PyBMeshBVHTree_methods[] = {
 };
 
 PyDoc_STRVAR(py_BMeshBVHTree_doc,
-"BVH tree based on :class:`BMesh` data.\n"
+".. method:: BMeshBVHTree(bm)\n"
+"\n"
+"   BVH tree based on :class:`BMesh` data.\n"
+"\n"
+"   :arg bm: BMesh data.\n"
+"   :type bm: :class:`BMesh`\n"
 );
 PyTypeObject PyBMeshBVHTree_Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)
