@@ -61,6 +61,7 @@ typedef struct {
 	/* Object DerivedMesh data */
 	Object *ob;
 	BVHTreeFromMesh meshdata;
+	bool use_poly_index;
 } PyDerivedMeshBVHTree;
 
 typedef struct {
@@ -207,7 +208,7 @@ static int PyDerivedMeshBVHTree__tp_init(PyDerivedMeshBVHTree *self, PyObject *a
 	
 	PyObject *py_ob;
 	Object *ob;
-	const char *type = "FACES";
+	const char *type = "POLYS";
 	
 	if (PyBVHTree_Type.tp_init((PyObject *)self, args, kwargs) < 0)
 		return -1;
@@ -232,15 +233,22 @@ static int PyDerivedMeshBVHTree__tp_init(PyDerivedMeshBVHTree *self, PyObject *a
 	
 	if (STREQ(type, "FACES")) {
 		bvhtree_from_mesh_faces(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+		self->use_poly_index = false;
+	}
+	else if (STREQ(type, "POLYS")) {
+		bvhtree_from_mesh_faces(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+		self->use_poly_index = true;
 	}
 	else if (STREQ(type, "VERTS")) {
 		bvhtree_from_mesh_verts(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+		self->use_poly_index = false;
 	}
 	else if (STREQ(type, "EDGES")) {
 		bvhtree_from_mesh_edges(meshdata, ob->derivedFinal, 0.0f, 4, 6);
+		self->use_poly_index = false;
 	}
 	else {
-		PyErr_Format(PyExc_ValueError, "'type' must be 'FACES', 'VERTS' or 'EDGES', not '%.200s'", type);
+		PyErr_Format(PyExc_ValueError, "'type' must be 'FACES', 'POLYS', 'VERTS' or 'EDGES', not '%.200s'", type);
 		return -1;
 	}
 	
@@ -258,7 +266,7 @@ static void PyDerivedMeshBVHTree__tp_dealloc(PyDerivedMeshBVHTree *self)
 }
 
 PyDoc_STRVAR(py_DerivedMeshBVHTree_ray_cast_doc,
-".. method:: ray_cast(ray_start, ray_end, use_poly_index=True)\n"
+".. method:: ray_cast(ray_start, ray_end)\n"
 "\n"
 "   Cast a ray onto the mesh.\n"
 "\n"
@@ -266,8 +274,6 @@ PyDoc_STRVAR(py_DerivedMeshBVHTree_ray_cast_doc,
 "   :type ray_start: :class:`Vector`\n"
 "   :arg ray_end: End location of the ray in object space.\n"
 "   :type ray_end: :class:`Vector`\n"
-"   :arg use_poly_index: Return poly index instead of tessface index.\n"
-"   :type use_poly_index: :boolean\n"
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
@@ -277,17 +283,15 @@ static PyObject *py_DerivedMeshBVHTree_ray_cast(PyDerivedMeshBVHTree *self, PyOb
 	
 	BVHTreeFromMesh *meshdata = &self->meshdata;
 	Object *ob = self->ob;
-	const char *keywords[] = {"ray_start", "ray_end", "use_poly_index", NULL};
+	const char *keywords[] = {"ray_start", "ray_end", NULL};
 	
 	PyObject *py_ray_start, *py_ray_end;
 	float ray_start[3], ray_end[3];
-	int use_poly_index = true;
 	float ray_nor[3], ray_len;
 	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!|i:ray_cast", (char **)keywords,
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!:ray_cast", (char **)keywords,
 	                                 &vector_Type, &py_ray_start,
-	                                 &vector_Type, &py_ray_end,
-	                                 &use_poly_index))
+	                                 &vector_Type, &py_ray_end))
 	{
 		return NULL;
 	}
@@ -296,10 +300,6 @@ static PyObject *py_DerivedMeshBVHTree_ray_cast(PyDerivedMeshBVHTree *self, PyOb
 		return NULL;
 	if (!parse_vector(py_ray_end, ray_end))
 		return NULL;
-	
-	/* can only look up poly index for object mesh data */
-	if (!self->ob)
-		use_poly_index = false;
 	
 	sub_v3_v3v3(ray_nor, ray_end, ray_start);
 	ray_len = normalize_v3(ray_nor);
@@ -315,7 +315,7 @@ static PyObject *py_DerivedMeshBVHTree_ray_cast(PyDerivedMeshBVHTree *self, PyOb
 		                         meshdata->raycast_callback, meshdata) != -1)
 		{
 			if (hit.dist <= ray_len) {
-				int ret_index = use_poly_index ? dm_tessface_to_poly_index(ob->derivedFinal, hit.index) : hit.index;
+				int ret_index = self->use_poly_index ? dm_tessface_to_poly_index(ob->derivedFinal, hit.index) : hit.index;
 				return bvhtree_ray_hit_to_py(hit.co, hit.no, ret_index, hit.dist);
 			}
 		}
@@ -325,7 +325,7 @@ static PyObject *py_DerivedMeshBVHTree_ray_cast(PyDerivedMeshBVHTree *self, PyOb
 }
 
 PyDoc_STRVAR(py_DerivedMeshBVHTree_find_nearest_doc,
-".. method:: find_nearest(point, max_dist=1.84467e+19, use_poly_index=True)\n"
+".. method:: find_nearest(point, max_dist=1.84467e+19)\n"
 "\n"
 "   Find the nearest element to a point.\n"
 "\n"
@@ -333,8 +333,6 @@ PyDoc_STRVAR(py_DerivedMeshBVHTree_find_nearest_doc,
 "   :type ray_start: :class:`Vector`\n"
 "   :art max_dist: Maximum search distance\n"
 "   :type max_dist: :float\n"
-"   :arg use_poly_index: Return poly index instead of tessface index.\n"
-"   :type use_poly_index: :boolean\n"
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance_squared), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
@@ -344,18 +342,16 @@ static PyObject *py_DerivedMeshBVHTree_find_nearest(PyDerivedMeshBVHTree *self, 
 	
 	BVHTreeFromMesh *meshdata = &self->meshdata;
 	Object *ob = self->ob;
-	const char *keywords[] = {"point", "max_dist", "use_poly_index", NULL};
+	const char *keywords[] = {"point", "max_dist", NULL};
 	
 	PyObject *py_point;
 	float point[3];
 	float max_dist = 1.844674352395373e+19f;
-	int use_poly_index = true;
 	BVHTreeNearest nearest;
 	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!|fi:find_nearest", (char **)keywords,
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!|f:find_nearest", (char **)keywords,
 	                                 &vector_Type, &py_point,
-	                                 &max_dist,
-	                                 &use_poly_index))
+	                                 &max_dist))
 	{
 		return NULL;
 	}
@@ -372,7 +368,7 @@ static PyObject *py_DerivedMeshBVHTree_find_nearest(PyDerivedMeshBVHTree *self, 
 		if (BLI_bvhtree_find_nearest(meshdata->tree, point, &nearest,
 		                             meshdata->nearest_callback, meshdata) != -1)
 		{
-			int ret_index = use_poly_index ? dm_tessface_to_poly_index(ob->derivedFinal, nearest.index) : nearest.index;
+			int ret_index = self->use_poly_index ? dm_tessface_to_poly_index(ob->derivedFinal, nearest.index) : nearest.index;
 			return bvhtree_nearest_to_py(nearest.co, nearest.no, ret_index, nearest.dist_sq);
 		}
 	}
@@ -487,7 +483,7 @@ static void PyBMeshBVHTree__tp_dealloc(PyBMeshBVHTree *self)
 }
 
 PyDoc_STRVAR(py_BMeshBVHTree_ray_cast_doc,
-".. method:: ray_cast(ray_start, ray_end, use_poly_index=True)\n"
+".. method:: ray_cast(ray_start, ray_end)\n"
 "\n"
 "   Cast a ray onto the mesh.\n"
 "\n"
@@ -495,8 +491,6 @@ PyDoc_STRVAR(py_BMeshBVHTree_ray_cast_doc,
 "   :type ray_start: :class:`Vector`\n"
 "   :arg ray_end: End location of the ray in object space.\n"
 "   :type ray_end: :class:`Vector`\n"
-"   :arg use_poly_index: Return poly index instead of tessface index.\n"
-"   :type use_poly_index: :boolean\n"
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
@@ -505,17 +499,15 @@ static PyObject *py_BMeshBVHTree_ray_cast(PyBMeshBVHTree *self, PyObject *args, 
 	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
 	BMBVHTree *bmdata = self->bmdata;
-	const char *keywords[] = {"ray_start", "ray_end", "use_poly_index", NULL};
+	const char *keywords[] = {"ray_start", "ray_end", NULL};
 	
 	PyObject *py_ray_start, *py_ray_end;
 	float ray_start[3], ray_end[3];
-	int use_poly_index = true;
 	float ray_nor[3], ray_len;
 	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!|i:ray_cast", (char **)keywords,
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!:ray_cast", (char **)keywords,
 	                                 &vector_Type, &py_ray_start,
-	                                 &vector_Type, &py_ray_end,
-	                                 &use_poly_index))
+	                                 &vector_Type, &py_ray_end))
 	{
 		return NULL;
 	}
@@ -524,11 +516,6 @@ static PyObject *py_BMeshBVHTree_ray_cast(PyBMeshBVHTree *self, PyObject *args, 
 		return NULL;
 	if (!parse_vector(py_ray_end, ray_end))
 		return NULL;
-	
-	/* Note: can only look up poly index for object mesh data,
-	 * XXX should use_poly_index argument be removed? kept for symmetry atm ...
-	 */
-	use_poly_index = false;
 	
 	sub_v3_v3v3(ray_nor, ray_end, ray_start);
 	ray_len = normalize_v3(ray_nor);
@@ -542,7 +529,6 @@ static PyObject *py_BMeshBVHTree_ray_cast(PyBMeshBVHTree *self, PyObject *args, 
 		
 		hit_face = BKE_bmbvh_ray_cast(bmdata, ray_start, ray_nor, 0.0f, &hit_dist, hit_co, NULL);
 		if (hit_face && hit_dist <= ray_len) {
-//			int ret_index = use_poly_index ? dm_tessface_to_poly_index_safe(ob->derivedFinal, BM_elem_index_get(hit_face)) : BM_elem_index_get(hit_face);
 			int ret_index = BM_elem_index_get(hit_face);
 			return bvhtree_ray_hit_to_py(hit_co, hit_face->no, ret_index, hit_dist);
 		}
@@ -552,7 +538,7 @@ static PyObject *py_BMeshBVHTree_ray_cast(PyBMeshBVHTree *self, PyObject *args, 
 }
 
 PyDoc_STRVAR(py_BMeshBVHTree_find_nearest_doc,
-".. method:: find_nearest(point, max_dist=1.84467e+19, use_poly_index=True)\n"
+".. method:: find_nearest(point, max_dist=1.84467e+19)\n"
 "\n"
 "   Find the nearest element to a point.\n"
 "\n"
@@ -560,8 +546,6 @@ PyDoc_STRVAR(py_BMeshBVHTree_find_nearest_doc,
 "   :type ray_start: :class:`Vector`\n"
 "   :art max_dist: Maximum search distance\n"
 "   :type max_dist: :float\n"
-"   :arg use_poly_index: Return poly index instead of tessface index.\n"
-"   :type use_poly_index: :boolean\n"
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance_squared), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
@@ -570,28 +554,21 @@ static PyObject *py_BMeshBVHTree_find_nearest(PyBMeshBVHTree *self, PyObject *ar
 	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
 	BMBVHTree *bmdata = self->bmdata;
-	const char *keywords[] = {"point", "max_dist", "use_poly_index", NULL};
+	const char *keywords[] = {"point", "max_dist", NULL};
 	
 	PyObject *py_point;
 	float point[3];
 	float max_dist = 1.844674352395373e+19f;
-	int use_poly_index = true;
 	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!|fi:find_nearest", (char **)keywords,
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!|f:find_nearest", (char **)keywords,
 	                                 &vector_Type, &py_point,
-	                                 &max_dist,
-	                                 &use_poly_index))
+	                                 &max_dist))
 	{
 		return NULL;
 	}
 	
 	if (!parse_vector(py_point, point))
 		return NULL;
-	
-	/* Note: can only look up poly index for object mesh data,
-	 * XXX should use_poly_index argument be removed? kept for symmetry atm ...
-	 */
-	use_poly_index = false;
 	
 	/* may fail if the mesh has no faces, in that case the ray-cast misses */
 	if (bmdata) {
