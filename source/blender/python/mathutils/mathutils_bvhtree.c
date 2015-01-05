@@ -75,21 +75,6 @@ typedef struct {
 /* -------------------------------------------------------------------- */
 /* Utility helper functions */
 
-static bool parse_vector(PyObject *vec, float value[3])
-{
-	if (BaseMath_ReadCallback((VectorObject *)vec) == -1)
-		return false;
-	
-	value[0] = ((VectorObject *)vec)->vec[0];
-	value[1] = ((VectorObject *)vec)->vec[1];
-	if (((VectorObject *)vec)->size > 2)
-		value[2] = ((VectorObject *)vec)->vec[2];
-	else
-		value[2] = 0.0f;  /* if its a 2d vector then set the z to be zero */
-	
-	return true;
-}
-
 static int dm_tessface_to_poly_index(DerivedMesh *dm, int tessface_index)
 {
 	if (tessface_index != ORIGINDEX_NONE && tessface_index < dm->getNumTessFaces(dm)) {
@@ -131,7 +116,7 @@ static PyObject *bvhtree_nearest_to_py(const float co[3], const float no[3], int
 /* -------------------------------------------------------------------- */
 /* BVHTree */
 
-static int PyBVHTree__tp_init(PyBVHTree *self, PyObject *args, PyObject *kwargs)
+static int PyBVHTree__tp_init(PyBVHTree *UNUSED(self), PyObject *UNUSED(args), PyObject *UNUSED(kwargs))
 {
 	return 0;
 }
@@ -277,28 +262,25 @@ PyDoc_STRVAR(py_DerivedMeshBVHTree_ray_cast_doc,
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
-static PyObject *py_DerivedMeshBVHTree_ray_cast(PyDerivedMeshBVHTree *self, PyObject *args, PyObject *kwargs)
+static PyObject *py_DerivedMeshBVHTree_ray_cast(PyDerivedMeshBVHTree *self, PyObject *args)
 {
+	const char *error_prefix = "ray_cast";
 	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
 	BVHTreeFromMesh *meshdata = &self->meshdata;
 	Object *ob = self->ob;
-	const char *keywords[] = {"ray_start", "ray_end", NULL};
 	
 	PyObject *py_ray_start, *py_ray_end;
 	float ray_start[3], ray_end[3];
 	float ray_nor[3], ray_len;
 	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!:ray_cast", (char **)keywords,
-	                                 &vector_Type, &py_ray_start,
-	                                 &vector_Type, &py_ray_end))
+	if (!PyArg_ParseTuple(args, (char *)"OO:ray_cast", &py_ray_start, &py_ray_end))
 	{
 		return NULL;
 	}
 	
-	if (!parse_vector(py_ray_start, ray_start))
-		return NULL;
-	if (!parse_vector(py_ray_end, ray_end))
+	if (mathutils_array_parse(ray_start, 2, 3, py_ray_start, error_prefix) == -1 ||
+	    mathutils_array_parse(ray_end, 2, 3, py_ray_end, error_prefix) == -1)
 		return NULL;
 	
 	sub_v3_v3v3(ray_nor, ray_end, ray_start);
@@ -336,27 +318,25 @@ PyDoc_STRVAR(py_DerivedMeshBVHTree_find_nearest_doc,
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance_squared), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
-static PyObject *py_DerivedMeshBVHTree_find_nearest(PyDerivedMeshBVHTree *self, PyObject *args, PyObject *kwargs)
+static PyObject *py_DerivedMeshBVHTree_find_nearest(PyDerivedMeshBVHTree *self, PyObject *args)
 {
+	const char *error_prefix = "find_nearest";
 	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
 	BVHTreeFromMesh *meshdata = &self->meshdata;
 	Object *ob = self->ob;
-	const char *keywords[] = {"point", "max_dist", NULL};
 	
 	PyObject *py_point;
 	float point[3];
 	float max_dist = 1.844674352395373e+19f;
 	BVHTreeNearest nearest;
 	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!|f:find_nearest", (char **)keywords,
-	                                 &vector_Type, &py_point,
-	                                 &max_dist))
+	if (!PyArg_ParseTuple(args, (char *)"O|f:find_nearest", &py_point, &max_dist))
 	{
 		return NULL;
 	}
 	
-	if (!parse_vector(py_point, point))
+	if (mathutils_array_parse(point, 2, 3, py_point, error_prefix) == -1)
 		return NULL;
 	
 	nearest.index = -1;
@@ -377,8 +357,8 @@ static PyObject *py_DerivedMeshBVHTree_find_nearest(PyDerivedMeshBVHTree *self, 
 }
 
 static PyMethodDef PyDerivedMeshBVHTree_methods[] = {
-	{"ray_cast", (PyCFunction)py_DerivedMeshBVHTree_ray_cast, METH_VARARGS | METH_KEYWORDS, py_DerivedMeshBVHTree_ray_cast_doc},
-	{"find_nearest", (PyCFunction)py_DerivedMeshBVHTree_find_nearest, METH_VARARGS | METH_KEYWORDS, py_DerivedMeshBVHTree_find_nearest_doc},
+	{"ray_cast", (PyCFunction)py_DerivedMeshBVHTree_ray_cast, METH_VARARGS, py_DerivedMeshBVHTree_ray_cast_doc},
+	{"find_nearest", (PyCFunction)py_DerivedMeshBVHTree_find_nearest, METH_VARARGS, py_DerivedMeshBVHTree_find_nearest_doc},
 	{NULL, NULL, 0, NULL}
 };
 
@@ -501,27 +481,24 @@ PyDoc_STRVAR(py_BMeshBVHTree_ray_cast_doc,
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
-static PyObject *py_BMeshBVHTree_ray_cast(PyBMeshBVHTree *self, PyObject *args, PyObject *kwargs)
+static PyObject *py_BMeshBVHTree_ray_cast(PyBMeshBVHTree *self, PyObject *args)
 {
+	const char *error_prefix = "ray_cast";
 	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
 	BMBVHTree *bmdata = self->bmdata;
-	const char *keywords[] = {"ray_start", "ray_end", NULL};
 	
 	PyObject *py_ray_start, *py_ray_end;
 	float ray_start[3], ray_end[3];
 	float ray_nor[3], ray_len;
 	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!O!:ray_cast", (char **)keywords,
-	                                 &vector_Type, &py_ray_start,
-	                                 &vector_Type, &py_ray_end))
+	if (!PyArg_ParseTuple(args, (char *)"OO:ray_cast", &py_ray_start, &py_ray_end))
 	{
 		return NULL;
 	}
 	
-	if (!parse_vector(py_ray_start, ray_start))
-		return NULL;
-	if (!parse_vector(py_ray_end, ray_end))
+	if (mathutils_array_parse(ray_start, 2, 3, py_ray_start, error_prefix) == -1 ||
+	    mathutils_array_parse(ray_end, 2, 3, py_ray_end, error_prefix) == -1)
 		return NULL;
 	
 	sub_v3_v3v3(ray_nor, ray_end, ray_start);
@@ -556,25 +533,23 @@ PyDoc_STRVAR(py_BMeshBVHTree_find_nearest_doc,
 "   :return: Returns a tuple (:class:`Vector` location, :class:`Vector` normal, int index, float distance_squared), index==-1 if no hit was found.\n"
 "   :rtype: :class:`tuple`\n"
 );
-static PyObject *py_BMeshBVHTree_find_nearest(PyBMeshBVHTree *self, PyObject *args, PyObject *kwargs)
+static PyObject *py_BMeshBVHTree_find_nearest(PyBMeshBVHTree *self, PyObject *args)
 {
+	const char *error_prefix = "find_nearest";
 	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
 	BMBVHTree *bmdata = self->bmdata;
-	const char *keywords[] = {"point", "max_dist", NULL};
 	
 	PyObject *py_point;
 	float point[3];
 	float max_dist = 1.844674352395373e+19f;
 	
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, (char *)"O!|f:find_nearest", (char **)keywords,
-	                                 &vector_Type, &py_point,
-	                                 &max_dist))
+	if (!PyArg_ParseTuple(args, (char *)"O|f:find_nearest", &py_point, &max_dist))
 	{
 		return NULL;
 	}
 	
-	if (!parse_vector(py_point, point))
+	if (mathutils_array_parse(point, 2, 3, py_point, error_prefix) == -1)
 		return NULL;
 	
 	/* may fail if the mesh has no faces, in that case the ray-cast misses */
@@ -591,8 +566,8 @@ static PyObject *py_BMeshBVHTree_find_nearest(PyBMeshBVHTree *self, PyObject *ar
 }
 
 static PyMethodDef PyBMeshBVHTree_methods[] = {
-	{"ray_cast", (PyCFunction)py_BMeshBVHTree_ray_cast, METH_VARARGS | METH_KEYWORDS, py_BMeshBVHTree_ray_cast_doc},
-	{"find_nearest", (PyCFunction)py_BMeshBVHTree_find_nearest, METH_VARARGS | METH_KEYWORDS, py_BMeshBVHTree_find_nearest_doc},
+	{"ray_cast", (PyCFunction)py_BMeshBVHTree_ray_cast, METH_VARARGS, py_BMeshBVHTree_ray_cast_doc},
+	{"find_nearest", (PyCFunction)py_BMeshBVHTree_find_nearest, METH_VARARGS, py_BMeshBVHTree_find_nearest_doc},
 	{NULL, NULL, 0, NULL}
 };
 
