@@ -45,6 +45,7 @@
 #include "bmesh.h"
 
 #include "../generic/py_capi_utils.h"
+#include "../generic/python_utildefines.h"
 #include "../bmesh/bmesh_py_types.h"
 
 #include "mathutils.h"
@@ -92,24 +93,22 @@ static int dm_tessface_to_poly_index(DerivedMesh *dm, int tessface_index)
 static PyObject *bvhtree_ray_hit_to_py(const float co[3], const float no[3], int index, float dist)
 {
 	PyObject *py_retval = PyTuple_New(4);
-
-	PyTuple_SET_ITEM(py_retval, 0, Vector_CreatePyObject(co, 3, NULL));
-	PyTuple_SET_ITEM(py_retval, 1, Vector_CreatePyObject(no, 3, NULL));
-	PyTuple_SET_ITEM(py_retval, 2, PyLong_FromLong(index));
-	PyTuple_SET_ITEM(py_retval, 3, PyFloat_FromDouble(dist));
-
+	PyTuple_SET_ITEMS(py_retval,
+	        Vector_CreatePyObject(co, 3, NULL),
+	        Vector_CreatePyObject(no, 3, NULL),
+	        PyLong_FromLong(index),
+	        PyFloat_FromDouble(dist));
 	return py_retval;
 }
 
 static PyObject *bvhtree_nearest_to_py(const float co[3], const float no[3], int index, float dist_sq)
 {
 	PyObject *py_retval = PyTuple_New(4);
-
-	PyTuple_SET_ITEM(py_retval, 0, Vector_CreatePyObject(co, 3, NULL));
-	PyTuple_SET_ITEM(py_retval, 1, Vector_CreatePyObject(no, 3, NULL));
-	PyTuple_SET_ITEM(py_retval, 2, PyLong_FromLong(index));
-	PyTuple_SET_ITEM(py_retval, 3, PyFloat_FromDouble(dist_sq));
-
+	PyTuple_SET_ITEMS(py_retval,
+	        Vector_CreatePyObject(co, 3, NULL),
+	        Vector_CreatePyObject(no, 3, NULL),
+	        PyLong_FromLong(index),
+	        PyFloat_FromDouble(dist_sq));
 	return py_retval;
 }
 
@@ -265,7 +264,6 @@ PyDoc_STRVAR(py_DerivedMeshBVHTree_ray_cast_doc,
 static PyObject *py_DerivedMeshBVHTree_ray_cast(PyDerivedMeshBVHTree *self, PyObject *args)
 {
 	const char *error_prefix = "ray_cast";
-	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
 	BVHTreeFromMesh *meshdata = &self->meshdata;
 	Object *ob = self->ob;
@@ -281,14 +279,15 @@ static PyObject *py_DerivedMeshBVHTree_ray_cast(PyDerivedMeshBVHTree *self, PyOb
 	
 	if (mathutils_array_parse(ray_start, 2, 3, py_ray_start, error_prefix) == -1 ||
 	    mathutils_array_parse(ray_end, 2, 3, py_ray_end, error_prefix) == -1)
+	{
 		return NULL;
+	}
 	
 	sub_v3_v3v3(ray_nor, ray_end, ray_start);
 	ray_len = normalize_v3(ray_nor);
 	
 	/* may fail if the mesh has no faces, in that case the ray-cast misses */
-	if (meshdata->tree && meshdata->raycast_callback && ob->derivedFinal)
-	{
+	if (meshdata->tree && meshdata->raycast_callback && ob->derivedFinal) {
 		BVHTreeRayHit hit;
 		hit.dist = ray_len;
 		hit.index = -1;
@@ -303,7 +302,7 @@ static PyObject *py_DerivedMeshBVHTree_ray_cast(PyDerivedMeshBVHTree *self, PyOb
 		}
 	}
 	
-	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
+	return bvhtree_ray_hit_to_py(NULL, NULL, -1, 0.0f);
 }
 
 PyDoc_STRVAR(py_DerivedMeshBVHTree_find_nearest_doc,
@@ -321,8 +320,7 @@ PyDoc_STRVAR(py_DerivedMeshBVHTree_find_nearest_doc,
 static PyObject *py_DerivedMeshBVHTree_find_nearest(PyDerivedMeshBVHTree *self, PyObject *args)
 {
 	const char *error_prefix = "find_nearest";
-	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
-	
+
 	BVHTreeFromMesh *meshdata = &self->meshdata;
 	Object *ob = self->ob;
 	
@@ -336,15 +334,15 @@ static PyObject *py_DerivedMeshBVHTree_find_nearest(PyDerivedMeshBVHTree *self, 
 		return NULL;
 	}
 	
-	if (mathutils_array_parse(point, 2, 3, py_point, error_prefix) == -1)
+	if (mathutils_array_parse(point, 2, 3, py_point, error_prefix) == -1) {
 		return NULL;
+	}
 	
 	nearest.index = -1;
 	nearest.dist_sq = max_dist * max_dist;
 	
 	/* may fail if the mesh has no faces, in that case the ray-cast misses */
-	if (meshdata->tree && meshdata->nearest_callback && ob->derivedFinal)
-	{
+	if (meshdata->tree && meshdata->nearest_callback && ob->derivedFinal) {
 		if (BLI_bvhtree_find_nearest(meshdata->tree, point, &nearest,
 		                             meshdata->nearest_callback, meshdata) != -1)
 		{
@@ -353,7 +351,7 @@ static PyObject *py_DerivedMeshBVHTree_find_nearest(PyDerivedMeshBVHTree *self, 
 		}
 	}
 	
-	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
+	return bvhtree_ray_hit_to_py(NULL, NULL, -1, 0.0f);
 }
 
 static PyMethodDef PyDerivedMeshBVHTree_methods[] = {
@@ -484,7 +482,6 @@ PyDoc_STRVAR(py_BMeshBVHTree_ray_cast_doc,
 static PyObject *py_BMeshBVHTree_ray_cast(PyBMeshBVHTree *self, PyObject *args)
 {
 	const char *error_prefix = "ray_cast";
-	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
 	BMBVHTree *bmdata = self->bmdata;
 	
@@ -499,7 +496,9 @@ static PyObject *py_BMeshBVHTree_ray_cast(PyBMeshBVHTree *self, PyObject *args)
 	
 	if (mathutils_array_parse(ray_start, 2, 3, py_ray_start, error_prefix) == -1 ||
 	    mathutils_array_parse(ray_end, 2, 3, py_ray_end, error_prefix) == -1)
+	{
 		return NULL;
+	}
 	
 	sub_v3_v3v3(ray_nor, ray_end, ray_start);
 	ray_len = normalize_v3(ray_nor);
@@ -518,7 +517,7 @@ static PyObject *py_BMeshBVHTree_ray_cast(PyBMeshBVHTree *self, PyObject *args)
 		}
 	}
 	
-	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
+	return bvhtree_ray_hit_to_py(NULL, NULL, -1, 0.0f);
 }
 
 PyDoc_STRVAR(py_BMeshBVHTree_find_nearest_doc,
@@ -536,7 +535,6 @@ PyDoc_STRVAR(py_BMeshBVHTree_find_nearest_doc,
 static PyObject *py_BMeshBVHTree_find_nearest(PyBMeshBVHTree *self, PyObject *args)
 {
 	const char *error_prefix = "find_nearest";
-	static const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
 	BMBVHTree *bmdata = self->bmdata;
 	
@@ -562,7 +560,7 @@ static PyObject *py_BMeshBVHTree_find_nearest(PyBMeshBVHTree *self, PyObject *ar
 		}
 	}
 	
-	return bvhtree_ray_hit_to_py(ZERO, ZERO, -1, 0.0f);
+	return bvhtree_ray_hit_to_py(NULL, NULL, -1, 0.0f);
 }
 
 static PyMethodDef PyBMeshBVHTree_methods[] = {
