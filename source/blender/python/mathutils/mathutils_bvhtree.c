@@ -93,8 +93,8 @@ static PyObject *bvhtree_ray_hit_to_py(const float co[3], const float no[3], int
 {
 	PyObject *py_retval = PyTuple_New(4);
 
-	PyTuple_SET_ITEM(py_retval, 0, Vector_CreatePyObject((float *)co, 3, Py_NEW, NULL));
-	PyTuple_SET_ITEM(py_retval, 1, Vector_CreatePyObject((float *)no, 3, Py_NEW, NULL));
+	PyTuple_SET_ITEM(py_retval, 0, Vector_CreatePyObject(co, 3, NULL));
+	PyTuple_SET_ITEM(py_retval, 1, Vector_CreatePyObject(no, 3, NULL));
 	PyTuple_SET_ITEM(py_retval, 2, PyLong_FromLong(index));
 	PyTuple_SET_ITEM(py_retval, 3, PyFloat_FromDouble(dist));
 
@@ -105,8 +105,8 @@ static PyObject *bvhtree_nearest_to_py(const float co[3], const float no[3], int
 {
 	PyObject *py_retval = PyTuple_New(4);
 
-	PyTuple_SET_ITEM(py_retval, 0, Vector_CreatePyObject((float *)co, 3, Py_NEW, NULL));
-	PyTuple_SET_ITEM(py_retval, 1, Vector_CreatePyObject((float *)no, 3, Py_NEW, NULL));
+	PyTuple_SET_ITEM(py_retval, 0, Vector_CreatePyObject(co, 3, NULL));
+	PyTuple_SET_ITEM(py_retval, 1, Vector_CreatePyObject(no, 3, NULL));
 	PyTuple_SET_ITEM(py_retval, 2, PyLong_FromLong(index));
 	PyTuple_SET_ITEM(py_retval, 3, PyFloat_FromDouble(dist_sq));
 
