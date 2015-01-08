@@ -418,7 +418,6 @@ static void node_draw_frame(const bContext *C, ARegion *ar, SpaceNode *snode,
 	rctf *rct = &node->totr;
 	int color_id = node_get_colorid(node);
 	unsigned char color[4];
-	float alpha;
 	
 	/* skip if out of view */
 	if (BLI_rctf_isect(&node->totr, &ar->v2d.cur, NULL) == false) {
@@ -428,14 +427,13 @@ static void node_draw_frame(const bContext *C, ARegion *ar, SpaceNode *snode,
 	}
 
 	UI_GetThemeColor4ubv(TH_NODE_FRAME, color);
-	alpha = (float)(color[3]) / 255.0f;
 	
 	/* shadow */
-	node_draw_shadow(snode, node, BASIS_RAD, alpha);
+	node_draw_shadow(snode, node, BASIS_RAD);
 	
 	/* body */
 	if (node->flag & NODE_CUSTOM_COLOR)
-		glColor4f(node->color[0], node->color[1], node->color[2], alpha);
+		glColor4f(node->color[0], node->color[1], node->color[2], (float)(color[3]) / 255.0f);
 	else
 		UI_ThemeColor4(TH_NODE_FRAME);
 	glEnable(GL_BLEND);

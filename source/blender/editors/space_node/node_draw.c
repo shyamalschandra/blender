@@ -72,7 +72,7 @@
 #endif
 
 /* XXX interface.h */
-extern void ui_draw_dropshadow(const rctf *rct, float radius, float aspect, float alpha, int select);
+extern void ui_draw_dropshadow(const rctf *rct, float radius, float aspect, int select);
 
 float ED_node_grid_size(void)
 {
@@ -743,13 +743,13 @@ static void node_toggle_button_cb(struct bContext *C, void *node_argv, void *op_
 	WM_operator_name_call(C, opname, WM_OP_INVOKE_DEFAULT, NULL);
 }
 
-void node_draw_shadow(SpaceNode *snode, bNode *node, float radius, float alpha)
+void node_draw_shadow(SpaceNode *snode, bNode *node, float radius)
 {
 	rctf *rct = &node->totr;
 	
 	UI_draw_roundbox_corner_set(UI_CNR_ALL);
 	if (node->parent == NULL)
-		ui_draw_dropshadow(rct, radius, snode->aspect, alpha, node->flag & SELECT);
+		ui_draw_dropshadow(rct, radius, snode->aspect, node->flag & SELECT);
 	else {
 		const float margin = 3.0f;
 		
@@ -785,7 +785,7 @@ static void node_draw_basis(const bContext *C, ARegion *ar, SpaceNode *snode, bN
 	}
 	
 	/* shadow */
-	node_draw_shadow(snode, node, BASIS_RAD, 1.0f);
+	node_draw_shadow(snode, node, BASIS_RAD);
 	
 	/* header uses color from backdrop, but we make it opaqie */
 	if (color_id == TH_NODE) {
@@ -960,7 +960,7 @@ static void node_draw_hidden(const bContext *C, ARegion *ar, SpaceNode *snode, b
 	char showname[128]; /* 128 is used below */
 	
 	/* shadow */
-	node_draw_shadow(snode, node, hiddenrad, 1.0f);
+	node_draw_shadow(snode, node, hiddenrad);
 
 	/* body */
 	UI_ThemeColor(color_id);
