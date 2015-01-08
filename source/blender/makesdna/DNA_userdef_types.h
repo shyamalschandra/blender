@@ -171,13 +171,12 @@ typedef struct ThemeUI {
 
 	char widget_emboss[4];
 
-	/* menu shadows: fac: 0 - 1 for blend factor, width: size of shadow in pixels, shadow: color of shadow */
-	float menu_shadow_fac;
-	short menu_shadow_width;
+	/* menu shadows: width: size of shadow in pixels, shadow: color of shadow */
 	char menu_shadow[4];
-	
-	short pad[3];
-	
+	short menu_shadow_width;
+
+	short pad;
+
 	char iconfile[256];	// FILE_MAXFILE length
 	float icon_alpha;
 

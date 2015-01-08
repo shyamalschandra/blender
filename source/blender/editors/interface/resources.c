@@ -854,7 +854,6 @@ void ui_theme_init_default(void)
 	rgba_char_args_set(btheme->tui.yaxis,   0, 220,   0, 255);
 	rgba_char_args_set(btheme->tui.zaxis,   0,   0, 220, 255);
 
-	btheme->tui.menu_shadow_fac = 0.5f;
 	btheme->tui.menu_shadow_width = 12;
 	
 	/* Bone Color Sets */
@@ -2331,9 +2330,7 @@ void init_userdef_do_versions(void)
 		bTheme *btheme;
 		
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
-			/* rna definition limits fac to 0.01 */
-			if (btheme->tui.menu_shadow_fac == 0.0f) {
-				btheme->tui.menu_shadow_fac = 0.5f;
+			if (btheme->tui.menu_shadow_width == 0) {
 				btheme->tui.menu_shadow_width = 12;
 			}
 		}
