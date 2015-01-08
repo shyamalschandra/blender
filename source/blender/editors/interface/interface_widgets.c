@@ -2096,7 +2096,7 @@ static void widget_softshadow(const rcti *rect, int roundboxalign, const float r
 	bTheme *btheme = UI_GetTheme();
 	uiWidgetBase wtb;
 	rcti rect1 = *rect;
-	float alphastep;
+	char alpha;
 	int step, totvert;
 	float quad_strip[WIDGET_SIZE_MAX * 2 + 2][2];
 	const float radout = UI_ThemeMenuShadowWidth();
@@ -2115,7 +2115,7 @@ static void widget_softshadow(const rcti *rect, int roundboxalign, const float r
 	totvert = round_box_shadow_edges(wtb.inner_v, &rect1, radin, roundboxalign & (UI_CNR_BOTTOM_RIGHT | UI_CNR_BOTTOM_LEFT), 0.0f);
 
 	/* we draw a number of increasing size alpha quad strips */
-	alphastep = 3.0f * btheme->tui.menu_shadow_fac / radout;
+	alpha = (3.0f * btheme->tui.menu_shadow[3] / radout);
 	
 	glEnableClientState(GL_VERTEX_ARRAY);
 
@@ -2124,7 +2124,7 @@ static void widget_softshadow(const rcti *rect, int roundboxalign, const float r
 		
 		round_box_shadow_edges(wtb.outer_v, &rect1, radin, UI_CNR_ALL, (float)step);
 		
-		glColor4ub(btheme->tui.menu_shadow[0], btheme->tui.menu_shadow[1], btheme->tui.menu_shadow[2], (alphastep * (1.0f - expfac)) * 255.0f);
+		glColor4ub(UNPACK3(btheme->tui.menu_shadow), (alpha * (1.0f - expfac)));
 
 		widget_verts_to_quad_strip(&wtb, totvert, quad_strip);
 

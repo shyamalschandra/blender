@@ -1036,7 +1036,7 @@ static void rna_def_userdef_theme_ui(BlenderRNA *brna)
 	
 	prop = RNA_def_property(srna, "menu_shadow", PROP_FLOAT, PROP_COLOR_GAMMA);
 	RNA_def_property_float_sdna(prop, NULL, "menu_shadow");
-	RNA_def_property_array(prop, 3);
+	RNA_def_property_array(prop, 4);
 	RNA_def_property_ui_text(prop, "Shadow Color", "Color of menu shadows");
 	RNA_def_property_update(prop, 0, "rna_userdef_update");
 	
