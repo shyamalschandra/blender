@@ -1052,7 +1052,7 @@ static void cdDM_drawMappedFacesGLSL(DerivedMesh *dm,
 	}
 	else {
 		GPUBuffer *buffer = NULL;
-		const char *varray = NULL;
+		char *varray = NULL;
 		int numdata = 0, elementsize = 0, offset;
 		int start = 0, numfaces = 0 /* , prevdraw = 0 */ /* UNUSED */, curface = 0;
 		int i;
@@ -1132,7 +1132,7 @@ static void cdDM_drawMappedFacesGLSL(DerivedMesh *dm,
 					}
 					if (numdata != 0) {
 						elementsize = GPU_attrib_element_size(datatypes, numdata);
-						buffer = GPU_buffer_alloc(elementsize * dm->drawObject->tot_triangle_point, true);
+						buffer = GPU_buffer_alloc(elementsize * dm->drawObject->tot_triangle_point, false);
 						if (buffer == NULL) {
 							GPU_buffer_unbind();
 							buffer = GPU_buffer_alloc(elementsize * dm->drawObject->tot_triangle_point, true);
@@ -2470,10 +2470,10 @@ static bool poly_gset_compare_fn(const void *k1, const void *k2)
 	    (pk1->totloops == pk2->totloops))
 	{
 		/* Equality - note that this does not mean equality of polys */
-		return 0;
+		return false;
 	}
 	else {
-		return 1;
+		return true;
 	}
 }
 

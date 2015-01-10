@@ -101,6 +101,7 @@
 #include "GHOST_Path-api.h"
 
 #include "UI_interface.h"
+#include "UI_interface_icons.h"
 #include "UI_view2d.h"
 
 #include "GPU_draw.h"
@@ -840,7 +841,7 @@ static ImBuf *blend_file_thumb(Scene *scene, bScreen *screen, int **thumb_pt)
 	if (scene->camera) {
 		ibuf = ED_view3d_draw_offscreen_imbuf_simple(scene, scene->camera,
 		                                             BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
-		                                             IB_rect, OB_SOLID, false, false, R_ADDSKY, err_out);
+		                                             IB_rect, OB_SOLID, false, false, false, R_ADDSKY, err_out);
 	}
 	else {
 		ibuf = ED_view3d_draw_offscreen_imbuf(scene, v3d, ar, BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
@@ -891,6 +892,24 @@ bool write_crash_blend(void)
 	else {
 		printf("failed: %s\n", path);
 		return 0;
+	}
+}
+
+static void UNUSED_FUNCTION(wm_ensure_previews)(bContext *C, Main *mainvar)
+{
+	ListBase *lb[] = {&mainvar->mat, &mainvar->tex, &mainvar->image, &mainvar->world, &mainvar->lamp, NULL};
+	ID *id;
+	int i;
+
+	for (i = 0; lb[i]; i++) {
+		for (id = lb[i]->first; id; id = id->next) {
+			/* Only preview non-library datablocks, lib ones do not pertain to this .blend file!
+			 * Same goes for ID with no user. */
+			if (!id->lib && (id->us != 0)) {
+				UI_id_icon_render(C, id, false, false);
+				UI_id_icon_render(C, id, true, false);
+			}
+		}
 	}
 }
 

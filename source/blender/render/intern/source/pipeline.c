@@ -2379,6 +2379,7 @@ static void do_render_seq(Render *re)
 	RenderResult *rr; /* don't assign re->result here as it might change during give_ibuf_seq */
 	int cfra = re->r.cfra;
 	SeqRenderData context;
+	int re_x, re_y;
 
 	re->i.cfra = cfra;
 
@@ -2392,13 +2393,18 @@ static void do_render_seq(Render *re)
 	if ((re->r.mode & R_BORDER) && (re->r.mode & R_CROP) == 0) {
 		/* if border rendering is used and cropping is disabled, final buffer should
 		 * be as large as the whole frame */
-		context = BKE_sequencer_new_render_data(re->eval_ctx, re->main, re->scene,
-		                                        re->winx, re->winy, 100);
+		re_x = re->winx;
+		re_y = re->winy;
 	}
 	else {
-		context = BKE_sequencer_new_render_data(re->eval_ctx, re->main, re->scene,
-		                                        re->result->rectx, re->result->recty, 100);
+		re_x = re->result->rectx;
+		re_y = re->result->recty;
 	}
+
+	BKE_sequencer_new_render_data(
+	        re->eval_ctx, re->main, re->scene,
+	        re_x, re_y, 100,
+	        &context);
 
 	out = BKE_sequencer_give_ibuf(&context, cfra, 0);
 
@@ -2834,6 +2840,9 @@ void RE_BlenderFrame(Render *re, Main *bmain, Scene *scene, SceneRenderLayer *sr
 		}
 
 		BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_POST); /* keep after file save */
+		if (write_still) {
+			BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_WRITE);
+		}
 	}
 
 	BLI_callback_exec(re->main, (ID *)scene, G.is_break ? BLI_CB_EVT_RENDER_CANCEL : BLI_CB_EVT_RENDER_COMPLETE);
@@ -3031,6 +3040,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 
 				if (G.is_break == false) {
 					BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_POST); /* keep after file save */
+					BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_WRITE);
 				}
 			}
 			else {
@@ -3114,6 +3124,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 
 			if (G.is_break == false) {
 				BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_POST); /* keep after file save */
+				BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_WRITE);
 			}
 		}
 	}

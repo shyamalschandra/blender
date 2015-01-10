@@ -102,8 +102,10 @@ typedef struct SeqRenderData {
 	bool is_proxy_render;
 } SeqRenderData;
 
-SeqRenderData BKE_sequencer_new_render_data(struct EvaluationContext *eval_ctx, struct Main *bmain,
-                                            struct Scene *scene, int rectx, int recty, int preview_render_size);
+void BKE_sequencer_new_render_data(
+        struct EvaluationContext *eval_ctx, struct Main *bmain, struct Scene *scene,
+        int rectx, int recty, int preview_render_size,
+        SeqRenderData *r_context);
 
 /* Wipe effect */
 enum {
@@ -393,7 +395,7 @@ struct Sequence *BKE_sequencer_add_sound_strip(struct bContext *C, ListBase *seq
 struct Sequence *BKE_sequencer_add_movie_strip(struct bContext *C, ListBase *seqbasep, struct SeqLoadInfo *seq_load);
 
 /* view3d draw callback, run when not in background view */
-typedef struct ImBuf *(*SequencerDrawView)(struct Scene *, struct Object *, int, int, unsigned int, int, bool, bool, int, char[256]);
+typedef struct ImBuf *(*SequencerDrawView)(struct Scene *, struct Object *, int, int, unsigned int, int, bool, bool, bool, int, char[256]);
 extern SequencerDrawView sequencer_view3d_cb;
 
 /* copy/paste */

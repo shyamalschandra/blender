@@ -222,6 +222,10 @@ bArmature *BKE_armature_copy(bArmature *arm)
 	newArm->act_edbone = NULL;
 	newArm->sketch = NULL;
 
+	if (arm->id.lib) {
+		BKE_id_lib_local_paths(G.main, arm->id.lib, &newArm->id);
+	}
+
 	return newArm;
 }
 
@@ -1654,6 +1658,7 @@ static void pose_proxy_synchronize(Object *ob, Object *from, int layer_protected
 			pchanw.next = pchan->next;
 			pchanw.parent = pchan->parent;
 			pchanw.child = pchan->child;
+			pchanw.custom_tx = pchan->custom_tx;
 
 			pchanw.mpath = pchan->mpath;
 			pchan->mpath = NULL;

@@ -2817,8 +2817,8 @@ void flushTransUVs(TransInfo *t)
 		td->loc2d[1] = td->loc[1] * invy;
 
 		if ((sima->flag & SI_PIXELSNAP) && (t->state != TRANS_CANCEL)) {
-			td->loc2d[0] = floorf(width * td->loc2d[0] + 0.5f) / width;
-			td->loc2d[1] = floorf(height * td->loc2d[1] + 0.5f) / height;
+			td->loc2d[0] = roundf(width * td->loc2d[0]) / width;
+			td->loc2d[1] = roundf(height * td->loc2d[1]) / height;
 		}
 	}
 }
@@ -3831,9 +3831,9 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 		/* only include BezTriples whose 'keyframe' occurs on the same side of the current frame as mouse */
 		for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
 			if (FrameOnMouseSide(t->frame_side, bezt->vec[1][0], cfra)) {
-				const bool sel2 = bezt->f2 & SELECT;
-				const bool sel1 = use_handle ? bezt->f1 & SELECT : sel2;
-				const bool sel3 = use_handle ? bezt->f3 & SELECT : sel2;
+				const bool sel2 = (bezt->f2 & SELECT) != 0;
+				const bool sel1 = use_handle ? (bezt->f1 & SELECT) != 0 : sel2;
+				const bool sel3 = use_handle ? (bezt->f3 & SELECT) != 0 : sel2;
 
 				if (!is_translation_mode || !(sel2)) {
 					if (sel1) {
@@ -3917,9 +3917,9 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 		/* only include BezTriples whose 'keyframe' occurs on the same side of the current frame as mouse (if applicable) */
 		for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
 			if (FrameOnMouseSide(t->frame_side, bezt->vec[1][0], cfra)) {
-				const bool sel2 = bezt->f2 & SELECT;
-				const bool sel1 = use_handle ? bezt->f1 & SELECT : sel2;
-				const bool sel3 = use_handle ? bezt->f3 & SELECT : sel2;
+				const bool sel2 = (bezt->f2 & SELECT) != 0;
+				const bool sel1 = use_handle ? (bezt->f1 & SELECT) != 0 : sel2;
+				const bool sel3 = use_handle ? (bezt->f3 & SELECT) != 0 : sel2;
 
 				TransDataCurveHandleFlags *hdata = NULL;
 				/* short h1=1, h2=1; */ /* UNUSED */
@@ -7372,7 +7372,7 @@ static void createTransGPencil(bContext *C, TransInfo *t)
 			bGPDstroke *gps;
 			
 			/* Make a new frame to work on if the layer's frame and the current scene frame don't match up 
-			 * - This is useful when animating as it saves that "uh-oh" moment when you realise you've
+			 * - This is useful when animating as it saves that "uh-oh" moment when you realize you've
 			 *   spent too much time editing the wrong frame...
 			 */
 			// XXX: should this be allowed when framelock is enabled?

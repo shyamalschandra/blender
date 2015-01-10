@@ -1431,8 +1431,6 @@ static char *rna_FaceCustomData_data_path(PointerRNA *ptr, const char *collectio
 }
 
 
-
-
 static char *rna_MeshUVLoop_path(PointerRNA *ptr)
 {
 	return rna_LoopCustomData_data_path(ptr, "uv_layers", CD_MLOOPUV);

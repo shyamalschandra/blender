@@ -66,17 +66,15 @@ static void ed_keymap_gpencil_general(wmKeyConfig *keyconf)
 	RNA_enum_set(kmi->ptr, "mode", GP_PAINTMODE_DRAW);
 	RNA_boolean_set(kmi->ptr, "wait_for_input", false);
 	
-#if 0 // XXX: disabled, since they won't be of any use anymore
 	/* draw - straight lines */
 	kmi = WM_keymap_add_item(keymap, "GPENCIL_OT_draw", LEFTMOUSE, KM_PRESS, KM_CTRL, DKEY);
 	RNA_enum_set(kmi->ptr, "mode", GP_PAINTMODE_DRAW_STRAIGHT);
 	RNA_boolean_set(kmi->ptr, "wait_for_input", false);
 	
 	/* draw - poly lines */
-	kmi = WM_keymap_add_item(keymap, "GPENCIL_OT_draw", LEFTMOUSE, KM_PRESS, KM_ALT, DKEY);
+	kmi = WM_keymap_add_item(keymap, "GPENCIL_OT_draw", RIGHTMOUSE, KM_PRESS, KM_CTRL, DKEY);
 	RNA_enum_set(kmi->ptr, "mode", GP_PAINTMODE_DRAW_POLY);
 	RNA_boolean_set(kmi->ptr, "wait_for_input", false);
-#endif	
 	
 	/* erase */
 	kmi = WM_keymap_add_item(keymap, "GPENCIL_OT_draw", RIGHTMOUSE, KM_PRESS, 0, DKEY);
@@ -112,6 +110,12 @@ static void ed_keymap_gpencil_editing(wmKeyConfig *keyconf)
 	/* set poll callback - so that this keymap only gets enabled when stroke editmode is enabled */
 	keymap->poll = gp_stroke_editmode_poll;
 	
+	/* ----------------------------------------------- */
+	
+	/* Exit EditMode */
+	kmi = WM_keymap_add_item(keymap, "WM_OT_context_toggle", TABKEY, KM_PRESS, 0, 0);
+	RNA_string_set(kmi->ptr, "data_path", "gpencil_data.use_stroke_edit_mode");
+	
 	/* Selection ------------------------------------- */
 	/* select all */
 	kmi = WM_keymap_add_item(keymap, "GPENCIL_OT_select_all", AKEY, KM_PRESS, 0, 0);
@@ -125,6 +129,12 @@ static void ed_keymap_gpencil_editing(wmKeyConfig *keyconf)
 	
 	/* border select */
 	WM_keymap_add_item(keymap, "GPENCIL_OT_select_border", BKEY, KM_PRESS, 0, 0);
+	
+	/* lasso select */
+	kmi = WM_keymap_add_item(keymap, "GPENCIL_OT_select_lasso", EVT_TWEAK_A, KM_ANY, KM_CTRL, 0);
+	RNA_boolean_set(kmi->ptr, "deselect", false);
+	kmi = WM_keymap_add_item(keymap, "GPENCIL_OT_select_lasso", EVT_TWEAK_A, KM_ANY, KM_SHIFT | KM_CTRL, 0);
+	RNA_boolean_set(kmi->ptr, "deselect", true);
 	
 	/* normal select */
 	WM_keymap_add_item(keymap, "GPENCIL_OT_select", SELECTMOUSE, KM_PRESS, 0, 0);
@@ -152,10 +162,22 @@ static void ed_keymap_gpencil_editing(wmKeyConfig *keyconf)
 	
 	/* delete */
 	WM_keymap_add_item(keymap, "GPENCIL_OT_delete", XKEY, KM_PRESS, 0, 0);
+	WM_keymap_add_item(keymap, "GPENCIL_OT_delete", DELKEY, KM_PRESS, 0, 0);
 	
+	/* copy + paste */
+	WM_keymap_add_item(keymap, "GPENCIL_OT_copy", CKEY, KM_PRESS, KM_CTRL, 0);
+	WM_keymap_add_item(keymap, "GPENCIL_OT_paste", VKEY, KM_PRESS, KM_CTRL, 0);
+	
+#ifdef __APPLE__
+	WM_keymap_add_item(keymap, "GPENCIL_OT_copy", CKEY, KM_PRESS, KM_OSKEY, 0);
+	WM_keymap_add_item(keymap, "GPENCIL_OT_paste", VKEY, KM_PRESS, KM_OSKEY, 0);
+#endif	
 	
 	/* Transform Tools */
 	kmi = WM_keymap_add_item(keymap, "TRANSFORM_OT_translate", GKEY, KM_PRESS, 0, 0);
+	RNA_boolean_set(kmi->ptr, "gpencil_strokes", true);
+	
+	kmi = WM_keymap_add_item(keymap, "TRANSFORM_OT_translate", EVT_TWEAK_S, KM_ANY, 0, 0);
 	RNA_boolean_set(kmi->ptr, "gpencil_strokes", true);
 	
 	kmi = WM_keymap_add_item(keymap, "TRANSFORM_OT_rotate", RKEY, KM_PRESS, 0, 0);
@@ -203,6 +225,7 @@ void ED_operatortypes_gpencil(void)
 	WM_operatortype_append(GPENCIL_OT_select_all);
 	WM_operatortype_append(GPENCIL_OT_select_circle);
 	WM_operatortype_append(GPENCIL_OT_select_border);
+	WM_operatortype_append(GPENCIL_OT_select_lasso);
 	
 	WM_operatortype_append(GPENCIL_OT_select_linked);
 	WM_operatortype_append(GPENCIL_OT_select_more);
@@ -210,6 +233,8 @@ void ED_operatortypes_gpencil(void)
 	
 	WM_operatortype_append(GPENCIL_OT_duplicate);
 	WM_operatortype_append(GPENCIL_OT_delete);
+	WM_operatortype_append(GPENCIL_OT_copy);
+	WM_operatortype_append(GPENCIL_OT_paste);
 	
 	/* Editing (Buttons) ------------ */
 	
@@ -219,11 +244,12 @@ void ED_operatortypes_gpencil(void)
 	WM_operatortype_append(GPENCIL_OT_layer_add);
 	WM_operatortype_append(GPENCIL_OT_layer_remove);
 	WM_operatortype_append(GPENCIL_OT_layer_move);
+	WM_operatortype_append(GPENCIL_OT_layer_duplicate);
 	
 	WM_operatortype_append(GPENCIL_OT_active_frame_delete);
 	
 	WM_operatortype_append(GPENCIL_OT_convert);
-	
+
 	/* Editing (Time) --------------- */
 }
 
@@ -231,7 +257,7 @@ void ED_operatormacros_gpencil(void)
 {
 	wmOperatorType *ot;
 	wmOperatorTypeMacro *otmacro;
-
+	
 	ot = WM_operatortype_append_macro("GPENCIL_OT_duplicate_move", "Duplicate Strokes",
 	                                  "Make copies of the selected Grease Pencil strokes and move them",
 	                                  OPTYPE_UNDO | OPTYPE_REGISTER);

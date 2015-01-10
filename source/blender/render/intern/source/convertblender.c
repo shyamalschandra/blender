@@ -5137,8 +5137,7 @@ void RE_Database_FromScene(Render *re, Main *bmain, Scene *scene, unsigned int l
 	re->totvlak=re->totvert=re->totstrand=re->totlamp=re->tothalo= 0;
 	re->lights.first= re->lights.last= NULL;
 	re->lampren.first= re->lampren.last= NULL;
-	
-	slurph_opt= 0;
+
 	re->i.partsdone = false;	/* signal now in use for previewrender */
 	
 	/* in localview, lamps are using normal layers, objects only local bits */
@@ -5200,8 +5199,6 @@ void RE_Database_FromScene(Render *re, Main *bmain, Scene *scene, unsigned int l
 		re->i.totlamp= re->totlamp;
 		re->stats_draw(re->sdh, &re->i);
 	}
-
-	slurph_opt= 1;
 }
 
 void RE_Database_Preprocess(Render *re)
@@ -5241,7 +5238,7 @@ void RE_Database_Preprocess(Render *re)
 		}
 		
 		if (!re->test_break(re->tbh))
-			project_renderdata(re, projectverto, re->r.mode & R_PANORAMA, 0, 1);
+			project_renderdata(re, projectverto, (re->r.mode & R_PANORAMA) != 0, 0, 1);
 		
 		/* Occlusion */
 		if ((re->wrld.mode & (WO_AMB_OCC|WO_ENV_LIGHT|WO_INDIRECT_LIGHT)) && !re->test_break(re->tbh))
@@ -5319,8 +5316,6 @@ static void database_fromscene_vectors(Render *re, Scene *scene, unsigned int la
 	re->totvlak=re->totvert=re->totstrand=re->totlamp=re->tothalo= 0;
 	re->i.totface=re->i.totvert=re->i.totstrand=re->i.totlamp=re->i.tothalo= 0;
 	re->lights.first= re->lights.last= NULL;
-
-	slurph_opt= 0;
 	
 	/* in localview, lamps are using normal layers, objects only local bits */
 	if (re->lay & 0xFF000000)
@@ -5341,7 +5336,7 @@ static void database_fromscene_vectors(Render *re, Scene *scene, unsigned int la
 	database_init_objects(re, lay, 0, 0, NULL, timeoffset);
 	
 	if (!re->test_break(re->tbh))
-		project_renderdata(re, projectverto, re->r.mode & R_PANORAMA, 0, 1);
+		project_renderdata(re, projectverto, (re->r.mode & R_PANORAMA) != 0, 0, 1);
 
 	/* do this in end, particles for example need cfra */
 	scene->r.cfra -= timeoffset;

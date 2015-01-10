@@ -72,6 +72,13 @@ class VIEW3D_HT_header(Header):
                 row.prop(toolsettings, "use_proportional_edit_objects", icon_only=True)
                 if toolsettings.use_proportional_edit_objects:
                     row.prop(toolsettings, "proportional_edit_falloff", icon_only=True)
+        else:
+            # Proportional editing
+            if context.gpencil_data and context.gpencil_data.use_stroke_edit_mode:
+                row = layout.row(align=True)
+                row.prop(toolsettings, "proportional_edit", icon_only=True)
+                if toolsettings.proportional_edit != 'DISABLED':
+                    row.prop(toolsettings, "proportional_edit_falloff", icon_only=True)
 
         # Snap
         if not obj or mode not in {'SCULPT', 'VERTEX_PAINT', 'WEIGHT_PAINT', 'TEXTURE_PAINT'}:
@@ -1088,6 +1095,8 @@ class VIEW3D_MT_object(Menu):
         layout.separator()
 
         layout.operator("object.join")
+        layout.operator("object.data_transfer")
+        layout.operator("object.datalayout_transfer")
 
         layout.separator()
 
@@ -2440,7 +2449,6 @@ class VIEW3D_MT_edit_curve_ctrlpoints(Menu):
         if edit_object.type == 'CURVE':
             layout.operator("transform.tilt")
             layout.operator("curve.tilt_clear")
-            layout.operator("curve.separate")
 
             layout.separator()
 

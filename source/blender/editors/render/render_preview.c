@@ -561,8 +561,9 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 				unsigned char *rect_byte = MEM_mallocN(rres.rectx * rres.recty * sizeof(int), "ed_preview_draw_rect");
 				float fx = rect->xmin + offx;
 				float fy = rect->ymin;
+				if (re)
+					RE_AcquiredResultGet32(re, &rres, (unsigned int *)rect_byte);
 				
-				RE_AcquiredResultGet32(re, &rres, (unsigned int *)rect_byte);
 				glaDrawPixelsSafe(fx, fy, rres.rectx, rres.recty, rres.rectx, GL_RGBA, GL_UNSIGNED_BYTE, rect_byte);
 				
 				MEM_freeN(rect_byte);
@@ -1095,6 +1096,26 @@ static void icon_preview_free(void *customdata)
 
 	BLI_freelistN(&ip->sizes);
 	MEM_freeN(ip);
+}
+
+void ED_preview_icon_render(const bContext *C, void *UNUSED(owner), ID *id, unsigned int *rect, int sizex, int sizey)
+{
+	IconPreview ip = {0};
+	short stop = false, update = false;
+	float progress = 0.0f;
+
+	/* customdata for preview thread */
+	ip.scene = CTX_data_scene(C);
+	ip.owner = id;
+	ip.id = id;
+
+	icon_preview_add_size(&ip, rect, sizex, sizey);
+
+	icon_preview_startjob_all_sizes(&ip, &stop, &update, &progress);
+
+	icon_preview_endjob(&ip);
+
+	BLI_freelistN(&ip.sizes);
 }
 
 void ED_preview_icon_job(const bContext *C, void *owner, ID *id, unsigned int *rect, int sizex, int sizey)
