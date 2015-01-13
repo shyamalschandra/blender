@@ -178,26 +178,18 @@ static FileSelect file_select_do(bContext *C, int selected_idx, bool do_diropen)
 		params->active_file = selected_idx;
 
 		if (S_ISDIR(file->type)) {
-			const bool is_parent_dir = STREQ(file->relname, "..");
-
 			if (do_diropen == false) {
 				params->file[0] = '\0';
 				retval = FILE_SELECT_DIR;
 			}
 			/* the path is too long and we are not going up! */
-			else if (!is_parent_dir && strlen(params->dir) + strlen(file->relname) >= FILE_MAX) {
+			else if (strcmp(file->relname, "..") && strlen(params->dir) + strlen(file->relname) >= FILE_MAX) {
 				// XXX error("Path too long, cannot enter this directory");
 			}
 			else {
-				if (is_parent_dir) {
+				if (strcmp(file->relname, "..") == 0) {
 					/* avoids /../../ */
 					BLI_parent_dir(params->dir);
-
-					if (params->recursion_level > 1) {
-						/* Disable 'dirtree' recursion when going up in tree! */
-						params->recursion_level = 1;
-						filelist_setrecursion(sfile->files, params->recursion_level);
-					}
 				}
 				else {
 					BLI_cleanup_dir(G.main->name, params->dir);
@@ -508,7 +500,7 @@ static int bookmark_add_exec(bContext *C, wmOperator *UNUSED(op))
 	if (params->dir[0] != '\0') {
 		char name[FILE_MAX];
 	
-		fsmenu_insert_entry(fsmenu, FS_CATEGORY_BOOKMARKS, params->dir, NULL, FS_INSERT_SAVE);
+		fsmenu_insert_entry(fsmenu, FS_CATEGORY_BOOKMARKS, params->dir, FS_INSERT_SAVE);
 		BLI_make_file_string("/", name, BKE_appdir_folder_id_create(BLENDER_USER_CONFIG, NULL), BLENDER_BOOKMARK_FILE);
 		fsmenu_write_file(fsmenu, name);
 	}
@@ -532,20 +524,11 @@ void FILE_OT_bookmark_add(wmOperatorType *ot)
 static int bookmark_delete_exec(bContext *C, wmOperator *op)
 {
 	ScrArea *sa = CTX_wm_area(C);
-	SpaceFile *sfile = CTX_wm_space_file(C);
 	struct FSMenu *fsmenu = fsmenu_get();
 	int nentries = fsmenu_get_nentries(fsmenu, FS_CATEGORY_BOOKMARKS);
-
-	PropertyRNA *prop = RNA_struct_find_property(op->ptr, "index");
-
-	if (prop) {
-		int index;
-		if (RNA_property_is_set(op->ptr, prop)) {
-			index = RNA_int_get(op->ptr, "index");
-		}
-		else {  /* if index unset, use active bookmark... */
-			index = sfile->bookmarknr;
-		}
+	
+	if (RNA_struct_find_property(op->ptr, "index")) {
+		int index = RNA_int_get(op->ptr, "index");
 		if ((index > -1) && (index < nentries)) {
 			char name[FILE_MAX];
 			
@@ -577,149 +560,19 @@ void FILE_OT_bookmark_delete(wmOperatorType *ot)
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
-enum {
-	FILE_BOOKMARK_MOVE_TOP = -2,
-	FILE_BOOKMARK_MOVE_UP = -1,
-	FILE_BOOKMARK_MOVE_DOWN = 1,
-	FILE_BOOKMARK_MOVE_BOTTOM = 2,
-};
-
-static int bookmark_move_exec(bContext *C, wmOperator *op)
-{
-	ScrArea *sa = CTX_wm_area(C);
-	SpaceFile *sfile = CTX_wm_space_file(C);
-	struct FSMenu *fsmenu = fsmenu_get();
-	struct FSMenuEntry *fsmentry = fsmenu_get_category(fsmenu, FS_CATEGORY_BOOKMARKS);
-	struct FSMenuEntry *fsme_psrc, *fsme_pdst, *fsme;
-
-	char fname[FILE_MAX];
-
-	const int direction = RNA_enum_get(op->ptr, "direction");
-	const int totitems = fsmenu_get_nentries(fsmenu, FS_CATEGORY_BOOKMARKS);
-	const int act_index = sfile->bookmarknr;
-	int new_index, i;
-
-	switch (direction) {
-		case FILE_BOOKMARK_MOVE_TOP:
-			new_index = 0;
-			break;
-		case FILE_BOOKMARK_MOVE_BOTTOM:
-			new_index = totitems - 1;
-			break;
-		case FILE_BOOKMARK_MOVE_UP:
-		case FILE_BOOKMARK_MOVE_DOWN:
-		default:
-			new_index = (totitems + act_index + direction) % totitems;
-			break;
-	}
-
-	if (new_index == act_index) {
-		return OPERATOR_CANCELLED;
-	}
-
-	fsme_psrc = fsme_pdst = NULL;
-
-	if (new_index < act_index) {
-		for (fsme = fsmentry, i = 0; fsme; fsme = fsme->next, i++) {
-			if (i == new_index - 1) {
-				fsme_pdst = fsme;
-			}
-			else if (i == act_index - 1) {
-				fsme_psrc = fsme;
-				break;
-			}
-		}
-
-		BLI_assert(fsme_psrc && fsme_psrc->next && (!fsme_pdst || fsme_pdst->next));
-
-		fsme = fsme_psrc->next;
-		fsme_psrc->next = fsme->next;
-		if (fsme_pdst) {
-			fsme->next = fsme_pdst->next;
-			fsme_pdst->next = fsme;
-		}
-		else {
-			/* destination is first element of the list... */
-			fsme->next = fsmentry;
-			fsmentry = fsme;
-			fsmenu_set_category(fsmenu, FS_CATEGORY_BOOKMARKS, fsmentry);
-		}
-	}
-	else {
-		for (fsme = fsmentry, i = 0; fsme; fsme = fsme->next, i++) {
-			if (i == new_index) {
-				fsme_pdst = fsme;
-				break;
-			}
-			else if (i == act_index - 1) {
-				fsme_psrc = fsme;
-			}
-		}
-
-		BLI_assert(fsme_pdst && (!fsme_psrc || fsme_psrc->next));
-
-		if (fsme_psrc) {
-			fsme = fsme_psrc->next;
-			fsme_psrc->next = fsme->next;
-		}
-		else {
-			/* source is first element of the list... */
-			fsme = fsmentry;
-			fsmentry = fsme->next;
-			fsmenu_set_category(fsmenu, FS_CATEGORY_BOOKMARKS, fsmentry);
-		}
-		fsme->next = fsme_pdst->next;
-		fsme_pdst->next = fsme;
-	}
-
-	/* Need to update active bookmark number. */
-	sfile->bookmarknr = new_index;
-
-	BLI_make_file_string("/", fname, BKE_appdir_folder_id_create(BLENDER_USER_CONFIG, NULL), BLENDER_BOOKMARK_FILE);
-	fsmenu_write_file(fsmenu, fname);
-
-	ED_area_tag_redraw(sa);
-	return OPERATOR_FINISHED;
-}
-
-void FILE_OT_bookmark_move(wmOperatorType *ot)
-{
-	static EnumPropertyItem slot_move[] = {
-	    {FILE_BOOKMARK_MOVE_TOP, "TOP", 0, "Top", "Top of the list"},
-		{FILE_BOOKMARK_MOVE_UP, "UP", 0, "Up", ""},
-		{FILE_BOOKMARK_MOVE_DOWN, "DOWN", 0, "Down", ""},
-		{FILE_BOOKMARK_MOVE_BOTTOM, "BOTTOM", 0, "Bottom", "Bottom of the list"},
-		{ 0, NULL, 0, NULL, NULL }
-	};
-
-	/* identifiers */
-	ot->name = "Move Bookmark";
-	ot->idname = "FILE_OT_bookmark_move";
-	ot->description = "Move the active bookmark up/down in the list";
-
-	/* api callbacks */
-	ot->poll = ED_operator_file_active;
-	ot->exec = bookmark_move_exec;
-
-	/* flags */
-	ot->flag = OPTYPE_REGISTER;  /* No undo! */
-
-	RNA_def_enum(ot->srna, "direction", slot_move, 0, "Direction", "Direction to move, UP or DOWN");
-}
-
 static int reset_recent_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	ScrArea *sa = CTX_wm_area(C);
 	char name[FILE_MAX];
 	struct FSMenu *fsmenu = fsmenu_get();
 	
-	while (fsmenu_get_entry_path(fsmenu, FS_CATEGORY_RECENT, 0) != NULL) {
+	while (fsmenu_get_entry(fsmenu, FS_CATEGORY_RECENT, 0) != NULL) {
 		fsmenu_remove_entry(fsmenu, FS_CATEGORY_RECENT, 0);
 	}
 	BLI_make_file_string("/", name, BKE_appdir_folder_id_create(BLENDER_USER_CONFIG, NULL), BLENDER_BOOKMARK_FILE);
 	fsmenu_write_file(fsmenu, name);
 	ED_area_tag_redraw(sa);
-
+		
 	return OPERATOR_FINISHED;
 }
 
@@ -994,7 +847,7 @@ int file_exec(bContext *C, wmOperator *exec_op)
 		file_sfile_to_operator(op, sfile, filepath);
 
 		if (BLI_exists(sfile->params->dir)) {
-			fsmenu_insert_entry(fsmenu_get(), FS_CATEGORY_RECENT, sfile->params->dir, NULL, FS_INSERT_SAVE | FS_INSERT_FIRST);
+			fsmenu_insert_entry(fsmenu_get(), FS_CATEGORY_RECENT, sfile->params->dir, FS_INSERT_SAVE | FS_INSERT_FIRST);
 		}
 
 		BLI_make_file_string(G.main->name, filepath, BKE_appdir_folder_id_create(BLENDER_USER_CONFIG, NULL), BLENDER_BOOKMARK_FILE);
@@ -1035,8 +888,8 @@ int file_parent_exec(bContext *C, wmOperator *UNUSED(unused))
 			BLI_cleanup_dir(G.main->name, sfile->params->dir);
 			/* if not browsing in .blend file, we still want to check whether the path is a directory */
 			if (sfile->params->type == FILE_LOADLIB) {
-				char tdir[FILE_MAX];
-				if (BLO_library_path_explode(sfile->params->dir, tdir, NULL, NULL)) {
+				char tdir[FILE_MAX], tgroup[FILE_MAX];
+				if (BLO_is_a_library(sfile->params->dir, tdir, tgroup)) {
 					file_change_dir(C, 0);
 				}
 				else {
@@ -1045,11 +898,6 @@ int file_parent_exec(bContext *C, wmOperator *UNUSED(unused))
 			}
 			else {
 				file_change_dir(C, 1);
-			}
-			if (sfile->params->recursion_level > 1) {
-				/* Disable 'dirtree' recursion when going up in tree! */
-				sfile->params->recursion_level = 1;
-				filelist_setrecursion(sfile->files, sfile->params->recursion_level);
 			}
 			WM_event_add_notifier(C, NC_SPACE | ND_SPACE_FILE_LIST, NULL);
 		}
@@ -1515,9 +1363,9 @@ void file_filename_enter_handle(bContext *C, void *UNUSED(arg_unused), void *arg
 				WM_event_add_notifier(C, NC_SPACE | ND_SPACE_FILE_PARAMS, NULL);
 			}
 			else if (sfile->params->type == FILE_LOADLIB) {
-				char tdir[FILE_MAX];
+				char tdir[FILE_MAX], tgroup[FILE_MAX];
 				BLI_add_slash(filepath);
-				if (BLO_library_path_explode(filepath, tdir, NULL, NULL)) {
+				if (BLO_is_a_library(filepath, tdir, tgroup)) {
 					BLI_cleanup_dir(G.main->name, filepath);
 					BLI_strncpy(sfile->params->dir, filepath, sizeof(sfile->params->dir));
 					sfile->params->file[0] = '\0';
@@ -1692,8 +1540,8 @@ static int file_rename_poll(bContext *C)
 			poll = 0;
 		}
 		else {
-			char dir[FILE_MAX];
-			if (filelist_islibrary(sfile->files, dir, NULL)) poll = 0;
+			char dir[FILE_MAX], group[FILE_MAX];
+			if (filelist_islibrary(sfile->files, dir, group)) poll = 0;
 		}
 	}
 	else
@@ -1720,12 +1568,12 @@ static int file_delete_poll(bContext *C)
 	SpaceFile *sfile = CTX_wm_space_file(C);
 
 	if (sfile && sfile->params) {
-		char dir[FILE_MAX];
+		char dir[FILE_MAX], group[FILE_MAX];
 		int numfiles = filelist_numfiles(sfile->files);
 		int i;
 		int num_selected = 0;
 
-		if (filelist_islibrary(sfile->files, dir, NULL)) poll = 0;
+		if (filelist_islibrary(sfile->files, dir, group)) poll = 0;
 		for (i = 0; i < numfiles; i++) {
 			if (filelist_is_selected(sfile->files, i, CHECK_FILES)) {
 				num_selected++;
