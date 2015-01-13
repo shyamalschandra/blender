@@ -228,7 +228,8 @@ bool BLI_uniquename_cb(bool (*unique_check)(void *arg, const char *name),
 		int number;
 		int len = BLI_split_name_num(left, &number, name, delim);
 		do {
-			const int numlen = BLI_snprintf(numstr, sizeof(numstr), "%c%03d", delim, ++number);
+			/* add 1 to account for \0 */
+			const int numlen = BLI_snprintf(numstr, sizeof(numstr), "%c%03d", delim, ++number) + 1;
 
 			/* highly unlikely the string only has enough room for the number
 			 * but support anyway */
@@ -238,9 +239,8 @@ bool BLI_uniquename_cb(bool (*unique_check)(void *arg, const char *name),
 			}
 			else {
 				char *tempname_buf;
-				tempname[0] = '\0';
-				tempname_buf = BLI_strncat_utf8(tempname, left, name_len - numlen);
-				memcpy(tempname_buf, numstr, numlen + 1);
+				tempname_buf = tempname + BLI_strncpy_utf8_rlen(tempname, left, name_len - numlen);
+				memcpy(tempname_buf, numstr, numlen);
 			}
 		} while (unique_check(arg, tempname));
 
@@ -1087,18 +1087,22 @@ void BLI_char_switch(char *string, char from, char to)
 }
 
 /**
- * Strips off nonexistent subdirectories from the end of *dir, leaving the path of
- * the lowest-level directory that does exist.
+ * Strips off nonexistent (or non-accessible) subdirectories from the end of *dir, leaving the path of
+ * the lowest-level directory that does exist and we can read.
  */
 void BLI_make_exist(char *dir)
 {
 	int a;
+	char par_path[PATH_MAX + 3];
 
 	BLI_char_switch(dir, ALTSEP, SEP);
 
 	a = strlen(dir);
 
-	while (!BLI_is_dir(dir)) {
+	for (BLI_join_dirfile(par_path, sizeof(par_path), dir, "..");
+	     !(BLI_is_dir(dir) && BLI_exists(par_path));
+	     BLI_join_dirfile(par_path, sizeof(par_path), dir, ".."))
+	{
 		a--;
 		while (dir[a] != SEP) {
 			a--;

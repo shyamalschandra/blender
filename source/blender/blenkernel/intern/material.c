@@ -252,6 +252,10 @@ Material *BKE_material_copy(Material *ma)
 
 	BLI_listbase_clear(&man->gpumaterial);
 	
+	if (ma->id.lib) {
+		BKE_id_lib_local_paths(G.main, ma->id.lib, &man->id);
+	}
+
 	return man;
 }
 
@@ -681,16 +685,16 @@ Material *give_current_material(Object *ob, short act)
 	/* if object cannot have material, (totcolp == NULL) */
 	totcolp = give_totcolp(ob);
 	if (totcolp == NULL || ob->totcol == 0) return NULL;
-	
-	if (act < 0) {
-		printf("Negative material index!\n");
-	}
-	
+
 	/* return NULL for invalid 'act', can happen for mesh face indices */
 	if (act > ob->totcol)
 		return NULL;
-	else if (act <= 0)
+	else if (act <= 0) {
+		if (act < 0) {
+			printf("Negative material index!\n");
+		}
 		return NULL;
+	}
 
 	if (ob->matbits && ob->matbits[act - 1]) {    /* in object */
 		ma = ob->mat[act - 1];

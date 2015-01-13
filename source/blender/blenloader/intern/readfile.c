@@ -105,6 +105,7 @@
 
 #include "BLI_endian_switch.h"
 #include "BLI_blenlib.h"
+#include "BLI_callbacks.h"
 #include "BLI_math.h"
 #include "BLI_threads.h"
 #include "BLI_mempool.h"
@@ -3123,14 +3124,14 @@ static void lib_link_key(FileData *fd, Main *main)
 static void switch_endian_keyblock(Key *key, KeyBlock *kb)
 {
 	int elemsize, a, b;
-	const char *data, *poin, *cp;
+	char *data;
 	
 	elemsize = key->elemsize;
 	data = kb->data;
 	
 	for (a = 0; a < kb->totelem; a++) {
-		cp = key->elemstr;
-		poin = data;
+		const char *cp = key->elemstr;
+		char *poin = data;
 		
 		while (cp[0]) {  /* cp[0] == amount */
 			switch (cp[1]) {  /* cp[1] = type */
@@ -4910,9 +4911,14 @@ static void direct_link_object(FileData *fd, Object *ob)
 	/* loading saved files with editmode enabled works, but for undo we like
 	 * to stay in object mode during undo presses so keep editmode disabled.
 	 *
-	 * Also when linking in a file don't allow editmode: [#34776] */
+	 * Also when linking in a file don't allow edit and pose modes.
+	 * See [#34776, #42780] for more information.
+	 */
 	if (fd->memfile || (ob->id.flag & (LIB_EXTERN | LIB_INDIRECT))) {
 		ob->mode &= ~(OB_MODE_EDIT | OB_MODE_PARTICLE_EDIT);
+		if (!fd->memfile) {
+			ob->mode &= ~OB_MODE_POSE;
+		}
 	}
 	
 	ob->adt = newdataadr(fd, ob->adt);
@@ -7884,8 +7890,12 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
 	}
 	
 	/* do before read_libraries, but skip undo case */
-	if (fd->memfile==NULL)
+	if (fd->memfile==NULL) {
 		do_versions(fd, NULL, bfd->main);
+		if (BLI_thread_is_main()) {
+			BLI_callback_exec(bfd->main, NULL, BLI_CB_EVT_VERSION_UPDATE);
+		}
+	}
 	
 	do_versions_userdef(fd, bfd);
 	
@@ -9522,6 +9532,9 @@ static void read_libraries(FileData *basefd, ListBase *mainlist)
 				do_versions(mainptr->curlib->filedata, mainptr->curlib, mainptr);
 			else
 				do_versions(basefd, NULL, mainptr);
+			if (BLI_thread_is_main()) {
+				BLI_callback_exec(mainptr, NULL, BLI_CB_EVT_VERSION_UPDATE);
+			}
 		}
 		
 		if (mainptr->curlib->filedata)
