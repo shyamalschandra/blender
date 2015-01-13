@@ -588,6 +588,33 @@ void IDP_WriteProperty(IDProperty *prop, void *wd)
 	IDP_WriteProperty_OnlyData(prop, wd);
 }
 
+static void write_previews(WriteData *wd, PreviewImage *prv)
+{
+	/* Never write previews when doing memsave (i.e. undo/redo)! */
+	if (prv && !wd->current) {
+		short w = prv->w[1];
+		short h = prv->h[1];
+		unsigned int *rect = prv->rect[1];
+
+		/* don't write out large previews if not requested */
+		if (!(U.flag & USER_SAVE_PREVIEWS)) {
+			prv->w[1] = 0;
+			prv->h[1] = 0;
+			prv->rect[1] = NULL;
+		}
+		writestruct(wd, DATA, "PreviewImage", 1, prv);
+		if (prv->rect[0]) writedata(wd, DATA, prv->w[0]*prv->h[0]*sizeof(unsigned int), prv->rect[0]);
+		if (prv->rect[1]) writedata(wd, DATA, prv->w[1]*prv->h[1]*sizeof(unsigned int), prv->rect[1]);
+
+		/* restore preview, we still want to keep it in memory even if not saved to file */
+		if (!(U.flag & USER_SAVE_PREVIEWS) ) {
+			prv->w[1] = w;
+			prv->h[1] = h;
+			prv->rect[1] = rect;
+		}
+	}
+}
+
 static void write_fmodifiers(WriteData *wd, ListBase *fmodifiers)
 {
 	FModifier *fcm;
@@ -1654,6 +1681,9 @@ static void write_objects(WriteData *wd, ListBase *idbase)
 			writelist(wd, DATA, "LinkData", &ob->pc_ids);
 			writelist(wd, DATA, "LodLevel", &ob->lodlevels);
 		}
+
+		write_previews(wd, ob->preview);
+
 		ob= ob->id.next;
 	}
 
@@ -2052,32 +2082,6 @@ static void write_lattices(WriteData *wd, ListBase *idbase)
 			
 		}
 		lt= lt->id.next;
-	}
-}
-
-static void write_previews(WriteData *wd, PreviewImage *prv)
-{
-	/* Never write previews in undo steps! */
-	if (prv && !wd->current) {
-		short w = prv->w[1];
-		short h = prv->h[1];
-		unsigned int *rect = prv->rect[1];
-		/* don't write out large previews if not requested */
-		if (!(U.flag & USER_SAVE_PREVIEWS)) {
-			prv->w[1] = 0;
-			prv->h[1] = 0;
-			prv->rect[1] = NULL;
-		}
-		writestruct(wd, DATA, "PreviewImage", 1, prv);
-		if (prv->rect[0]) writedata(wd, DATA, prv->w[0]*prv->h[0]*sizeof(unsigned int), prv->rect[0]);
-		if (prv->rect[1]) writedata(wd, DATA, prv->w[1]*prv->h[1]*sizeof(unsigned int), prv->rect[1]);
-
-		/* restore preview, we still want to keep it in memory even if not saved to file */
-		if (!(U.flag & USER_SAVE_PREVIEWS) ) {
-			prv->w[1] = w;
-			prv->h[1] = h;
-			prv->rect[1] = rect;
-		}
 	}
 }
 
@@ -2934,6 +2938,8 @@ static void write_groups(WriteData *wd, ListBase *idbase)
 			writestruct(wd, ID_GR, "Group", 1, group);
 			if (group->id.properties) IDP_WriteProperty(group->id.properties, wd);
 
+			write_previews(wd, group->preview);
+
 			go= group->gobject.first;
 			while (go) {
 				writestruct(wd, DATA, "GroupObject", 1, go);
@@ -3039,6 +3045,8 @@ static void write_brushes(WriteData *wd, ListBase *idbase)
 				write_curvemapping(wd, brush->curve);
 			if (brush->curve)
 				writestruct(wd, DATA, "ColorBand", 1, brush->gradient);
+
+			write_previews(wd, brush->preview);
 		}
 	}
 }

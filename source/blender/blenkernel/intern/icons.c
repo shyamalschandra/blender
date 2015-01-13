@@ -37,11 +37,13 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_brush_types.h"
+#include "DNA_group_types.h"
 #include "DNA_lamp_types.h"
 #include "DNA_material_types.h"
+#include "DNA_object_types.h"
 #include "DNA_texture_types.h"
 #include "DNA_world_types.h"
-#include "DNA_brush_types.h"
 
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
@@ -156,6 +158,20 @@ void BKE_previewimg_free(PreviewImage **prv)
 	}
 }
 
+void BKE_previewimg_clear(struct PreviewImage *prv, enum eIconSizes size)
+{
+	if (prv->rect[size]) {
+		MEM_freeN(prv->rect[size]);
+		prv->rect[size] = NULL;
+	}
+	if (prv->gputexture[size]) {
+		GPU_texture_free(prv->gputexture[size]);
+	}
+	prv->h[size] = prv->w[size] = 0;
+	prv->changed[size] = true;
+	prv->changed_timestamp[size] = 0;
+}
+
 PreviewImage *BKE_previewimg_copy(PreviewImage *prv)
 {
 	PreviewImage *prv_img = NULL;
@@ -202,6 +218,14 @@ void BKE_previewimg_free_id(ID *id)
 		Brush *br  = (Brush *)id;
 		BKE_previewimg_free(&br->preview);
 	}
+	else if (GS(id->name) == ID_OB) {
+		Object *ob  = (Object *)id;
+		BKE_previewimg_free(&ob->preview);
+	}
+	else if (GS(id->name) == ID_GR) {
+		Group *group  = (Group *)id;
+		BKE_previewimg_free(&group->preview);
+	}
 }
 
 PreviewImage *BKE_previewimg_get(ID *id)
@@ -237,6 +261,16 @@ PreviewImage *BKE_previewimg_get(ID *id)
 		Brush *br  = (Brush *)id;
 		if (!br->preview) br->preview = BKE_previewimg_create();
 		prv_img = br->preview;
+	}
+	else if (GS(id->name) == ID_OB) {
+		Object *ob  = (Object *)id;
+		if (!ob->preview) ob->preview = BKE_previewimg_create();
+		prv_img = ob->preview;
+	}
+	else if (GS(id->name) == ID_GR) {
+		Group *group  = (Group *)id;
+		if (!group->preview) group->preview = BKE_previewimg_create();
+		prv_img = group->preview;
 	}
 
 	return prv_img;

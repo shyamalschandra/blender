@@ -586,6 +586,7 @@ typedef struct FileSelectParams {
 	char filter_glob[64]; /* list of filetypes to filter */
 
 	char filter_search[64];  /* text items' name must match to be shown. */
+	int filter_id;  /* same as filter, but for ID types (aka library groups). */
 
 	int active_file;
 	int sel_first;
@@ -596,7 +597,9 @@ typedef struct FileSelectParams {
 	short flag; /* settings for filter, hiding dots files,...  */
 	short sort; /* sort order */
 	short display; /* display mode flag */
-	short filter; /* filter when (flags & FILE_FILTER) is true */
+	int filter; /* filter when (flags & FILE_FILTER) is true */
+
+	short recursion_level;  /* max number of levels in dirtree to show at once, 0 to disable recursion. */
 
 	/* XXX --- still unused -- */
 	short f_fp; /* show font preview */
@@ -632,9 +635,18 @@ typedef struct SpaceFile {
 	struct FileLayout *layout;
 	
 	short recentnr, bookmarknr;
-	short systemnr, pad2;
+	short systemnr, system_bookmarknr;
 } SpaceFile;
 
+/* FSMenuEntry's without paths indicate seperators */
+typedef struct FSMenuEntry {
+	struct FSMenuEntry *next;
+
+	char *path;
+	char name[256];  /* FILE_MAXFILE */
+	short save;
+	short pad[3];
+} FSMenuEntry;
 
 /* FileSelectParams.display */
 enum FileDisplayTypeE {
@@ -708,6 +720,8 @@ typedef enum eFileSel_File_Types {
 	FILE_TYPE_COLLADA           = (1 << 13),
 	FILE_TYPE_OPERATOR          = (1 << 14), /* from filter_glob operator property */
 	FILE_TYPE_APPLICATIONBUNDLE = (1 << 15),
+
+	FILE_TYPE_BLENDERLIB        = (1 << 31),
 } eFileSel_File_Types;
 
 /* Selection Flags in filesel: struct direntry, unsigned char selflag */
@@ -717,6 +731,8 @@ typedef enum eDirEntry_SelectFlag {
 	FILE_SEL_SELECTED       = (1 << 3),
 	FILE_SEL_EDITING        = (1 << 4),
 } eDirEntry_SelectFlag;
+
+#define FILE_LIST_MAX_RECURSION 4
 
 /* Image/UV Editor ======================================== */
 
