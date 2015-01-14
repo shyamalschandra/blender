@@ -1046,6 +1046,8 @@ void BKE_mesh_remap_calc_loops_from_dm(
 				}
 			}
 			if (need_lnors_dst) {
+				short (*custom_nors_dst)[2] = CustomData_get_layer(ldata_dst, CD_CUSTOMLOOPNORMAL);
+
 				/* Cache poly nors into a temp CDLayer. */
 				loop_nors_dst = CustomData_get_layer(ldata_dst, CD_NORMAL);
 				if (!loop_nors_dst) {
@@ -1056,7 +1058,7 @@ void BKE_mesh_remap_calc_loops_from_dm(
 					BKE_mesh_normals_loop_split(verts_dst, numverts_dst, edges_dst, numedges_dst,
 					                            loops_dst, loop_nors_dst, numloops_dst,
 					                            polys_dst, (const float (*)[3])poly_nors_dst, numpolys_dst,
-					                            split_angle_dst, NULL, NULL, NULL);
+					                            split_angle_dst, NULL, custom_nors_dst, NULL);
 				}
 			}
 			if (need_pnors_src || need_lnors_src) {
