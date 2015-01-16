@@ -1036,34 +1036,21 @@ class SEQUENCER_PT_modifiers(SequencerButtonsPanel, Panel):
                     col.prop(mod, "contrast")
 
 
-class SEQUENCER_PT_stereo_3d(SequencerButtonsPanel, Panel):
-    bl_label = "Stereoscopy"
-    bl_options = {'DEFAULT_CLOSED'}
+class SEQUENCER_PT_grease_pencil(GreasePencilDataPanel, SequencerButtonsPanel_Output, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'UI'
 
-    @classmethod
-    def poll(cls, context):
-        if not cls.has_sequencer(context):
-            return False
+    # NOTE: this is just a wrapper around the generic GP Panel
+    # But, it should only show up when there are images in the preview region
 
-        strip = act_strip(context)
-        if not strip:
-            return False
 
-        return (strip.type in {'IMAGE', 'MOVIE'} and
-                context.scene.render.use_multiview)
+class SEQUENCER_PT_grease_pencil_tools(GreasePencilToolsPanel, SequencerButtonsPanel_Output, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'UI'
 
-    def draw(self, context):
-        layout = self.layout
-
-        strip = act_strip(context)
-
-        col = layout
-        col.label(text="Views Format:")
-        col.row().prop(strip, "views_format", expand=True)
-
-        box = col.box()
-        box.active = strip.views_format == 'STEREO_3D'
-        box.template_image_stereo_3d(strip.stereo_3d_format)
+    # NOTE: this is just a wrapper around the generic GP tools panel
+	# It contains access to some essential tools usually found only in
+	# toolbar, which doesn't exist here...
 
 
 if __name__ == "__main__":  # only for live edit.

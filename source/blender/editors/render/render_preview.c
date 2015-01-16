@@ -548,9 +548,7 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 
 	/* test if something rendered ok */
 	re = RE_GetRender(name);
-
-	/* material preview only needs monoscopy (view 0) */
-	RE_AcquireResultImage(re, &rres, 0);
+	RE_AcquireResultImage(re, &rres);
 
 	if (rres.rectf) {
 		
@@ -563,11 +561,9 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 				unsigned char *rect_byte = MEM_mallocN(rres.rectx * rres.recty * sizeof(int), "ed_preview_draw_rect");
 				float fx = rect->xmin + offx;
 				float fy = rect->ymin;
-
-				/* material preview only needs monoscopy (view 0) */
 				if (re)
-					RE_AcquiredResultGet32(re, &rres, (unsigned int *)rect_byte, 0);
-
+					RE_AcquiredResultGet32(re, &rres, (unsigned int *)rect_byte);
+				
 				glaDrawPixelsSafe(fx, fy, rres.rectx, rres.recty, rres.rectx, GL_RGBA, GL_UNSIGNED_BYTE, rect_byte);
 				
 				MEM_freeN(rect_byte);

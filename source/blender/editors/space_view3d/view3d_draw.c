@@ -49,7 +49,6 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 #include "BLI_endian_switch.h"
-#include "BLI_threads.h"
 
 #include "BKE_anim.h"
 #include "BKE_camera.h"
@@ -97,11 +96,6 @@
 #include "GPU_extensions.h"
 
 #include "view3d_intern.h"  /* own include */
-
-/* prototypes */
-static void view3d_stereo3d_setup(Scene *scene, View3D *v3d, ARegion *ar);
-static void view3d_stereo3d_setup_offscreen(Scene *scene, View3D *v3d, ARegion *ar,
-                                            float winmat[4][4], const char *viewname);
 
 /* handy utility for drawing shapes in the viewport for arbitrary code.
  * could add lines and points too */
@@ -1595,24 +1589,6 @@ exit:
 
 /* ************************************************************* */
 
-static void view3d_stereo_bgpic_setup(Scene *scene, View3D *v3d, Image *ima, ImageUser *iuser)
-{
-	if ((ima->flag & IMA_IS_STEREO)) {
-		iuser->flag |= IMA_SHOW_STEREO;
-
-		if ((scene->r.scemode & R_MULTIVIEW) == 0)
-			iuser->multiview_eye = STEREO_LEFT_ID;
-
-		/* show only left or right camera */
-		else if (v3d->stereo3d_camera != STEREO_3D_ID)
-			iuser->multiview_eye = v3d->stereo3d_camera;
-
-		BKE_image_multiview_index(ima, iuser);
-	}
-	else
-		iuser->flag &= ~IMA_SHOW_STEREO;
-}
-
 static void view3d_draw_bgpic(Scene *scene, ARegion *ar, View3D *v3d,
                               const bool do_foreground, const bool do_camera_frame)
 {
@@ -1655,7 +1631,6 @@ static void view3d_draw_bgpic(Scene *scene, ARegion *ar, View3D *v3d,
 					ibuf = NULL; /* frame is out of range, dont show */
 				}
 				else {
-					view3d_stereo_bgpic_setup(scene, v3d, ima, &bgpic->iuser);
 					ibuf = BKE_image_acquire_ibuf(ima, &bgpic->iuser, &lock);
 					releaseibuf = ibuf;
 				}
@@ -2533,7 +2508,7 @@ static void gpu_update_lamps_shadows(Scene *scene, View3D *v3d)
 		invert_m4_m4(rv3d.persinv, rv3d.viewinv);
 
 		/* no need to call ED_view3d_draw_offscreen_init since shadow buffers were already updated */
-		ED_view3d_draw_offscreen(scene, v3d, &ar, winsize, winsize, viewmat, winmat, false, false, NULL);
+		ED_view3d_draw_offscreen(scene, v3d, &ar, winsize, winsize, viewmat, winmat, false, false);
 		GPU_lamp_shadow_buffer_unbind(shadow->lamp);
 		
 		v3d->drawtype = drawtype;
@@ -3035,7 +3010,7 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar, bool 
  */
 void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, int winy,
                               float viewmat[4][4], float winmat[4][4],
-                              bool do_bgpic, bool do_sky, const char *viewname)
+                              bool do_bgpic, bool do_sky)
 {
 	struct bThemeState theme_state;
 	int bwinx, bwiny;
@@ -3066,13 +3041,9 @@ void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, 
 		 * warning! can be slow so only free animated images - campbell */
 		GPU_free_images_anim();
 	}
-
 	/* setup view matrices */
-	if ((viewname != NULL) && (viewmat == NULL))
-		view3d_stereo3d_setup_offscreen(scene, v3d, ar, winmat, viewname);
-	else
-		view3d_main_area_setup_view(scene, v3d, ar, viewmat, winmat);
-
+	view3d_main_area_setup_view(scene, v3d, ar, viewmat, winmat);
+	
 	/* clear opengl buffers */
 	if (do_sky) {
 		view3d_main_area_clear(scene, v3d, ar, true);
@@ -3122,7 +3093,7 @@ void ED_view3d_offscreen_sky_color_get(Scene *scene, float sky_color[3])
 
 /* utility func for ED_view3d_draw_offscreen */
 ImBuf *ED_view3d_draw_offscreen_imbuf(Scene *scene, View3D *v3d, ARegion *ar, int sizex, int sizey, unsigned int flag,
-                                      bool draw_background, int alpha_mode, const char *viewname, char err_out[256])
+                                      bool draw_background, int alpha_mode, char err_out[256])
 {
 	RegionView3D *rv3d = ar->regiondata;
 	ImBuf *ibuf;
@@ -3146,21 +3117,19 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Scene *scene, View3D *v3d, ARegion *ar, in
 	/* render 3d view */
 	if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
 		CameraParams params;
-		Object *camera = BKE_camera_render(scene, v3d->camera, viewname);
 
 		BKE_camera_params_init(&params);
 		/* fallback for non camera objects */
 		params.clipsta = v3d->near;
 		params.clipend = v3d->far;
-		BKE_camera_params_from_object(&params, camera);
-		BKE_camera_params_stereo3d(&scene->r, &params, camera, viewname);
+		BKE_camera_params_from_object(&params, v3d->camera);
 		BKE_camera_params_compute_viewplane(&params, sizex, sizey, scene->r.xasp, scene->r.yasp);
 		BKE_camera_params_compute_matrix(&params);
 
-		ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, params.winmat, draw_background, draw_sky, viewname);
+		ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, params.winmat, draw_background, draw_sky);
 	}
 	else {
-		ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, NULL, draw_background, draw_sky, viewname);
+		ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, NULL, draw_background, draw_sky);
 	}
 
 	/* read in pixels & stamp */
@@ -3185,8 +3154,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Scene *scene, View3D *v3d, ARegion *ar, in
 
 /* creates own 3d views, used by the sequencer */
 ImBuf *ED_view3d_draw_offscreen_imbuf_simple(Scene *scene, Object *camera, int width, int height, unsigned int flag, int drawtype,
-                                             bool use_solid_tex, bool use_gpencil, bool draw_background, int alpha_mode,
-                                             const char *viewname, char err_out[256])
+                                             bool use_solid_tex, bool use_gpencil, bool draw_background, int alpha_mode, char err_out[256])
 {
 	View3D v3d = {NULL};
 	ARegion ar = {NULL};
@@ -3216,11 +3184,9 @@ ImBuf *ED_view3d_draw_offscreen_imbuf_simple(Scene *scene, Object *camera, int w
 
 	{
 		CameraParams params;
-		Object *camera = BKE_camera_render(scene, v3d.camera, viewname);
 
 		BKE_camera_params_init(&params);
-		BKE_camera_params_from_object(&params, camera);
-		BKE_camera_params_stereo3d(&scene->r, &params, camera, viewname);
+		BKE_camera_params_from_object(&params, v3d.camera);
 		BKE_camera_params_compute_viewplane(&params, width, height, scene->r.xasp, scene->r.yasp);
 		BKE_camera_params_compute_matrix(&params);
 
@@ -3234,7 +3200,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf_simple(Scene *scene, Object *camera, int w
 	invert_m4_m4(rv3d.persinv, rv3d.viewinv);
 
 	return ED_view3d_draw_offscreen_imbuf(scene, &v3d, &ar, width, height, flag,
-	                                      draw_background, alpha_mode, viewname, err_out);
+	                                      draw_background, alpha_mode, err_out);
 
 	// seq_view3d_cb(scene, cfra, render_size, seqrectx, seqrecty);
 }
@@ -3439,104 +3405,6 @@ static void view3d_main_area_draw_engine_info(View3D *v3d, RegionView3D *rv3d, A
 	ED_region_info_draw(ar, rv3d->render_engine->text, 1, fill_color);
 }
 
-static bool view3d_stereo3d_active(const bContext *C, Scene *scene, View3D *v3d, RegionView3D *rv3d)
-{
-	wmWindow *win = CTX_wm_window(C);
-
-	if ((scene->r.scemode & R_MULTIVIEW) == 0)
-		return false;
-
-	if (WM_stereo_enabled(C, win, true) == false)
-		return false;
-	
-	if ((v3d->camera == NULL) || rv3d->persp != RV3D_CAMOB)
-		return false;
-
-	if (scene->r.views_format & SCE_VIEWS_FORMAT_MULTIVIEW) {
-		if (v3d->stereo3d_camera == STEREO_MONO_ID)
-			return false;
-
-		return BKE_scene_is_stereo3d(&scene->r);
-	}
-
-	return true;
-}
-
-/* setup the view and win matrices for the multiview cameras
- *
- * unlike view3d_stereo3d_setup_offscreen, when view3d_stereo3d_setup is called
- * we have no winmatrix (i.e., projection matrix) defined at that time.
- * Since the camera and the camera shift are needed for the winmat calculation
- * we do a small hack to replace it temporarily so we don't need to change the
- * view3d)main_area_setup_view() code to account for that.
- */
-static void view3d_stereo3d_setup(Scene *scene, View3D *v3d, ARegion *ar)
-{
-	bool is_left;
-	const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
-	const char *viewname;
-
-	/* show only left or right camera */
-	if (v3d->stereo3d_camera != STEREO_3D_ID)
-		v3d->multiview_eye = v3d->stereo3d_camera;
-
-	is_left = v3d->multiview_eye == STEREO_LEFT_ID;
-	viewname = names[is_left ? STEREO_LEFT_ID : STEREO_RIGHT_ID];
-
-	/* update the viewport matrices with the new camera */
-	if (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D) {
-		Camera *data;
-		float viewmat[4][4];
-		float shiftx;
-
-		data = (Camera *)v3d->camera->data;
-		shiftx = data->shiftx;
-
-		BLI_lock_thread(LOCK_VIEW3D);
-		data->shiftx = BKE_camera_shift_x(&scene->r, v3d->camera, viewname);
-
-		BKE_camera_view_matrix(&scene->r, v3d->camera, is_left, viewmat);
-		view3d_main_area_setup_view(scene, v3d, ar, viewmat, NULL);
-
-		data->shiftx = shiftx;
-		BLI_unlock_thread(LOCK_VIEW3D);
-	}
-	else { /* SCE_VIEWS_FORMAT_MULTIVIEW */
-		float viewmat[4][4];
-		Object *view_ob = v3d->camera;
-		Object *camera = BKE_camera_render(scene, v3d->camera, viewname);
-
-		BLI_lock_thread(LOCK_VIEW3D);
-		v3d->camera = camera;
-
-		BKE_camera_view_matrix(&scene->r, camera, false, viewmat);
-		view3d_main_area_setup_view(scene, v3d, ar, viewmat, NULL);
-
-		v3d->camera = view_ob;
-		BLI_unlock_thread(LOCK_VIEW3D);
-	}
-}
-
-static void view3d_stereo3d_setup_offscreen(Scene *scene, View3D *v3d, ARegion *ar,
-                                            float winmat[4][4], const char *viewname)
-{
-	/* update the viewport matrices with the new camera */
-	if (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D) {
-		float viewmat[4][4];
-		const bool is_left = STREQ(viewname, STEREO_LEFT_NAME);
-
-		BKE_camera_view_matrix(&scene->r, v3d->camera, is_left, viewmat);
-		view3d_main_area_setup_view(scene, v3d, ar, viewmat, winmat);
-	}
-	else { /* SCE_VIEWS_FORMAT_MULTIVIEW */
-		float viewmat[4][4];
-		Object *camera = BKE_camera_render(scene, v3d->camera, viewname);
-
-		BKE_camera_view_matrix(&scene->r, camera, false, viewmat);
-		view3d_main_area_setup_view(scene, v3d, ar, viewmat, winmat);
-	}
-}
-
 #ifdef WITH_GAMEENGINE
 static void update_lods(Scene *scene, float camera_pos[3])
 {
@@ -3550,6 +3418,7 @@ static void update_lods(Scene *scene, float camera_pos[3])
 	}
 }
 #endif
+
 
 static void view3d_main_area_draw_objects(const bContext *C, Scene *scene, View3D *v3d,
                                           ARegion *ar, const char **grid_unit)
@@ -3567,11 +3436,8 @@ static void view3d_main_area_draw_objects(const bContext *C, Scene *scene, View3
 		GPU_default_lights();
 	}
 
-	/* setup the view matrix */
-	if (view3d_stereo3d_active(C, scene, v3d, rv3d))
-		view3d_stereo3d_setup(scene, v3d, ar);
-	else
-		view3d_main_area_setup_view(scene, v3d, ar, NULL, NULL);
+	/* setup view matrices */
+	view3d_main_area_setup_view(scene, v3d, ar, NULL, NULL);
 
 	rv3d->rflag &= ~RV3D_IS_GAME_ENGINE;
 #ifdef WITH_GAMEENGINE

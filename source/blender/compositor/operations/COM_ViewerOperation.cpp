@@ -23,7 +23,6 @@
 #include "COM_ViewerOperation.h"
 #include "BLI_listbase.h"
 #include "BKE_image.h"
-#include "BKE_scene.h"
 #include "WM_api.h"
 #include "WM_types.h"
 #include "PIL_time.h"
@@ -58,8 +57,6 @@ ViewerOperation::ViewerOperation() : NodeOperation()
 	this->m_imageInput = NULL;
 	this->m_alphaInput = NULL;
 	this->m_depthInput = NULL;
-	this->m_rd = NULL;
-	this->m_viewName = NULL;
 }
 
 void ViewerOperation::initExecution()
@@ -126,13 +123,8 @@ void ViewerOperation::executeRegion(rcti *rect, unsigned int tileNumber)
 void ViewerOperation::initImage()
 {
 	Image *ima = this->m_image;
-	ImageUser iuser = *this->m_imageUser;
 	void *lock;
-	ImBuf *ibuf;
-
-	/* local changes to the original ImageUser */
-	iuser.multi_index = BKE_scene_view_id_get(this->m_rd, this->m_viewName);
-	ibuf = BKE_image_acquire_ibuf(ima, &iuser, &lock);
+	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, this->m_imageUser, &lock);
 
 	if (!ibuf) return;
 	BLI_lock_thread(LOCK_DRAW_IMAGE);
