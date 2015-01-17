@@ -48,6 +48,8 @@ typedef struct Icon Icon;
 struct PreviewImage;
 struct ID;
 
+enum eIconSizes;
+
 void BKE_icons_init(int first_dyn_id);
 
 /* return icon id for library object or create new icon if not found */
@@ -74,6 +76,9 @@ void BKE_previewimg_freefunc(void *link);
 
 /* free the preview image */
 void BKE_previewimg_free(struct PreviewImage **prv);
+
+/* clear the preview image or icon, but does not free it */
+void BKE_previewimg_clear(struct PreviewImage *prv, enum eIconSizes size);
 
 /* free the preview image belonging to the id */
 void BKE_previewimg_free_id(struct ID *id);

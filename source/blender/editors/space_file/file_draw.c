@@ -47,6 +47,8 @@
 #include "BKE_global.h"
 #include "BKE_main.h"
 
+#include "BLO_readfile.h"
+
 #include "BLF_translation.h"
 
 #include "IMB_imbuf_types.h"
@@ -235,44 +237,6 @@ static void draw_tile(int sx, int sy, int width, int height, int colorid, int sh
 }
 
 
-static int get_file_icon(struct direntry *file)
-{
-	if (file->type & S_IFDIR) {
-		if (strcmp(file->relname, "..") == 0) {
-			return ICON_FILE_PARENT;
-		}
-		if (file->flags & FILE_TYPE_APPLICATIONBUNDLE) {
-			return ICON_UGLYPACKAGE;
-		}
-		if (file->flags & FILE_TYPE_BLENDER) {
-			return ICON_FILE_BLEND;
-		}
-		return ICON_FILE_FOLDER;
-	}
-	else if (file->flags & FILE_TYPE_BLENDER)
-		return ICON_FILE_BLEND;
-	else if (file->flags & FILE_TYPE_BLENDER_BACKUP)
-		return ICON_FILE_BACKUP;
-	else if (file->flags & FILE_TYPE_IMAGE)
-		return ICON_FILE_IMAGE;
-	else if (file->flags & FILE_TYPE_MOVIE)
-		return ICON_FILE_MOVIE;
-	else if (file->flags & FILE_TYPE_PYSCRIPT)
-		return ICON_FILE_SCRIPT;
-	else if (file->flags & FILE_TYPE_SOUND)
-		return ICON_FILE_SOUND;
-	else if (file->flags & FILE_TYPE_FTFONT)
-		return ICON_FILE_FONT;
-	else if (file->flags & FILE_TYPE_BTX)
-		return ICON_FILE_BLANK;
-	else if (file->flags & FILE_TYPE_COLLADA)
-		return ICON_FILE_BLANK;
-	else if (file->flags & FILE_TYPE_TEXT)
-		return ICON_FILE_TEXT;
-	else
-		return ICON_FILE_BLANK;
-}
-
 static void file_draw_icon(uiBlock *block, char *path, int sx, int sy, int icon, int width, int height, bool drag)
 {
 	uiBut *but;
@@ -321,7 +285,8 @@ void file_calc_previews(const bContext *C, ARegion *ar)
 	UI_view2d_totRect_set(v2d, sfile->layout->width, sfile->layout->height);
 }
 
-static void file_draw_preview(uiBlock *block, struct direntry *file, int sx, int sy, ImBuf *imb, FileLayout *layout, bool dropshadow, bool drag)
+static void file_draw_preview(uiBlock *block, struct FileList *files, const int index,
+                              int sx, int sy, ImBuf *imb, FileLayout *layout, bool dropshadow, bool drag)
 {
 	if (imb) {
 		uiBut *but;
@@ -381,8 +346,9 @@ static void file_draw_preview(uiBlock *block, struct direntry *file, int sx, int
 		
 		/* dragregion */
 		if (drag) {
+			struct direntry *file = filelist_file(files, index);
 			but = uiDefBut(block, UI_BTYPE_LABEL, 0, "", xco, yco, ex, ey, NULL, 0.0, 0.0, 0, 0, "");
-			UI_but_drag_set_image(but, file->path, get_file_icon(file), imb, scale);
+			UI_but_drag_set_image(but, file->path, filelist_geticon(files, index), imb, scale);
 		}
 		
 		glDisable(GL_BLEND);
@@ -513,12 +479,16 @@ void file_draw_list(const bContext *C, ARegion *ar)
 	align = (FILE_IMGDISPLAY == params->display) ? UI_STYLE_TEXT_CENTER : UI_STYLE_TEXT_LEFT;
 
 	for (i = offset; (i < numfiles) && (i < offset + numfiles_layout); i++) {
+		char path[FILE_MAX_LIBEXTRA], dir[FILE_MAXDIR], *name;
 		ED_fileselect_layout_tilepos(layout, i, &sx, &sy);
 		sx += (int)(v2d->tot.xmin + 0.1f * UI_UNIT_X);
 		sy = (int)(v2d->tot.ymax - sy);
 
 		file = filelist_file(files, i);
-		
+
+		BLI_join_dirfile(path, sizeof(path), filelist_dir(files), file->relname);
+		name = fileentry_uiname(file, dir);
+
 		UI_ThemeColor4(TH_TEXT);
 
 
@@ -543,14 +513,15 @@ void file_draw_list(const bContext *C, ARegion *ar)
 			is_icon = 0;
 			imb = filelist_getimage(files, i);
 			if (!imb) {
-				imb = filelist_geticon(files, i);
+				imb = filelist_geticon_image(files, i);
 				is_icon = 1;
 			}
 			
-			file_draw_preview(block, file, sx, sy, imb, layout, !is_icon && (file->flags & FILE_TYPE_IMAGE), do_drag);
+			file_draw_preview(block, files, i, sx, sy, imb, layout, !is_icon && (file->flags & FILE_TYPE_IMAGE), do_drag);
 		}
 		else {
-			file_draw_icon(block, file->path, sx, sy - (UI_UNIT_Y / 6), get_file_icon(file), ICON_DEFAULT_WIDTH_SCALE, ICON_DEFAULT_HEIGHT_SCALE, do_drag);
+			file_draw_icon(block, file->path, sx, sy - (UI_UNIT_Y / 6), filelist_geticon(files, i),
+			               ICON_DEFAULT_WIDTH_SCALE, ICON_DEFAULT_HEIGHT_SCALE, do_drag);
 			sx += ICON_DEFAULT_WIDTH_SCALE + 0.2f * UI_UNIT_X;
 		}
 
@@ -585,7 +556,7 @@ void file_draw_list(const bContext *C, ARegion *ar)
 
 		if (!(file->selflag & FILE_SEL_EDITING)) {
 			int tpos = (FILE_IMGDISPLAY == params->display) ? sy - layout->tile_h + layout->textheight : sy;
-			file_draw_string(sx + 1, tpos, file->relname, (float)textwidth, textheight, align);
+			file_draw_string(sx + 1, tpos, name, (float)textwidth, textheight, align);
 		}
 
 		if (params->display == FILE_SHORTDISPLAY) {
