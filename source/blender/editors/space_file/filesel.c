@@ -159,8 +159,6 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 		params->filter = 0;
 		if ((prop = RNA_struct_find_property(op->ptr, "filter_blender")))
 			params->filter |= RNA_property_boolean_get(op->ptr, prop) ? FILE_TYPE_BLENDER : 0;
-		if ((prop = RNA_struct_find_property(op->ptr, "filter_blenlib")))
-			params->filter |= RNA_property_boolean_get(op->ptr, prop) ? FILE_TYPE_BLENDERLIB : 0;
 		if ((prop = RNA_struct_find_property(op->ptr, "filter_backup")))
 			params->filter |= RNA_property_boolean_get(op->ptr, prop) ? FILE_TYPE_BLENDER_BACKUP : 0;
 		if ((prop = RNA_struct_find_property(op->ptr, "filter_image")))
@@ -197,13 +195,6 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 				params->flag &= ~FILE_FILTER;
 			}
 		}
-
-		/* For now, always init filterid to 'all true' */
-		params->filter_id = FILTER_ID_AC | FILTER_ID_AR | FILTER_ID_BR | FILTER_ID_CA | FILTER_ID_CU | FILTER_ID_GD |
-		                    FILTER_ID_GR | FILTER_ID_IM | FILTER_ID_LA | FILTER_ID_LS | FILTER_ID_LT | FILTER_ID_MA |
-		                    FILTER_ID_MB | FILTER_ID_MC | FILTER_ID_ME | FILTER_ID_MSK | FILTER_ID_NT | FILTER_ID_OB |
-		                    FILTER_ID_PAL | FILTER_ID_PC | FILTER_ID_SCE | FILTER_ID_SPK | FILTER_ID_SO | FILTER_ID_TE |
-		                    FILTER_ID_TXT | FILTER_ID_VF | FILTER_ID_WO;
 
 		if (U.uiflag & USER_HIDE_DOT) {
 			params->flag |= FILE_HIDE_DOT;
@@ -738,7 +729,6 @@ void ED_fileselect_clear(struct wmWindowManager *wm, struct SpaceFile *sfile)
 {
 	/* only NULL in rare cases - [#29734] */
 	if (sfile->files) {
-		filelist_readjob_stop(wm, sfile->files);
 		thumbnails_stop(wm, sfile->files);
 		filelist_freelib(sfile->files);
 		filelist_free(sfile->files);

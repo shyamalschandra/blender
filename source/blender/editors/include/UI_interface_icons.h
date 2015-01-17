@@ -51,13 +51,11 @@ typedef struct IconFile {
 
 #define ICON_DEFAULT_HEIGHT 16
 #define ICON_DEFAULT_WIDTH  16
-#define PREVIEW_DEFAULT_HEIGHT 128
 
 #define ICON_DEFAULT_HEIGHT_SCALE ((int)(UI_UNIT_Y * 0.8f))
 #define ICON_DEFAULT_WIDTH_SCALE  ((int)(UI_UNIT_X * 0.8f))
 
-#define ICON_RENDER_DEFAULT_HEIGHT 32
-#define PREVIEW_RENDER_DEFAULT_HEIGHT 128
+#define PREVIEW_DEFAULT_HEIGHT 96
 
 /*
  * Resizable Icons for Blender
@@ -84,8 +82,6 @@ struct ListBase *UI_iconfile_list(void);
 int UI_iconfile_get_index(const char *filename);
 
 struct PreviewImage *UI_icon_to_preview(int icon_id);
-
-struct ImBuf *UI_icon_to_imbuf(int icon_id);
 
 int UI_rnaptr_icon_get(struct bContext *C, struct PointerRNA *ptr, int rnaicon, const bool big);
 
