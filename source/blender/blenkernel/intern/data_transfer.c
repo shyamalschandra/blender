@@ -148,6 +148,7 @@ bool BKE_object_data_transfer_get_dttypes_capacity(
 				ret = true;
 				break;
 			case DT_TYPE_LNOR:
+				*r_advanced_mixing = true;
 				ret = true;
 				break;
 			case DT_TYPE_SHARP_FACE:

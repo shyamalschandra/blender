@@ -300,6 +300,49 @@ static void layerInterp_mdeformvert(void **sources, const float *weights,
 	}
 }
 
+static void layerInterp_normal(void **sources, const float *weights,
+                               const float *UNUSED(sub_weights), int count, void *dest)
+{
+	float no[3] = {0.0f};
+
+	while (count--) {
+		madd_v3_v3fl(no, (float *)sources[count], weights[count]);
+	}
+
+	copy_v3_v3((float *)dest, no);
+}
+
+static void layerCopyValue_normal(const void *source, void *dest, const int mixmode, const float mixfactor)
+{
+	const float *no_src = source;
+	float *no_dst = dest;
+	float no_tmp[3];
+
+	if (ELEM(mixmode, CDT_MIX_NOMIX, CDT_MIX_REPLACE_ABOVE_THRESHOLD, CDT_MIX_REPLACE_BELOW_THRESHOLD)) {
+		/* Above/below threshold modes are not supported here, fallback to nomix (just in case). */
+		copy_v3_v3(no_dst, no_src);
+	}
+	else {  /* Modes that support 'real' mix factor. */
+		/* Since we normalize in the end, MIX and ADD are the same op here. */
+		if (ELEM(mixmode, CDT_MIX_MIX, CDT_MIX_ADD)) {
+			add_v3_v3v3(no_tmp, no_dst, no_src);
+			normalize_v3(no_tmp);
+		}
+		else if (mixmode == CDT_MIX_SUB) {
+			sub_v3_v3v3(no_tmp, no_dst, no_src);
+			normalize_v3(no_tmp);
+		}
+		else if (mixmode == CDT_MIX_MUL) {
+			mul_v3_v3v3(no_tmp, no_dst, no_src);
+			normalize_v3(no_tmp);
+		}
+		else {
+			copy_v3_v3(no_tmp, no_src);
+		}
+		interp_v3_v3v3_slerp_safe(no_dst, no_dst, no_tmp, mixfactor);
+	}
+}
+
 static void layerCopy_tface(const void *source, void *dest, int count)
 {
 	const MTFace *source_tf = (const MTFace *)source;
@@ -1141,21 +1184,6 @@ static void layerSwap_flnor(void *data, const int *corner_indices)
 	memcpy(flnors, nors, sizeof(nors));
 }
 
-static void layerInterp_clnor(void **UNUSED(sources), const float *UNUSED(weights), const float *UNUSED(sub_weights),
-                              int UNUSED(count), void *dest)
-{
-	/* For now, we simply restore interpolated custom normals to NOP ones, since real interpolation
-	 * would also imply we check all new custom normals are coherent (all loops of a same vert/same smooth fan
-	 * *must* have the same custom normal!!!).
-	 */
-	fill_vn_short((short *)dest, 2, 0);
-}
-
-static void layerDefault_clnor(void *data, int count)
-{
-	fill_vn_short((short *)data, count * 2, 0);
-}
-
 static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	/* 0: CD_MVERT */
 	{sizeof(MVert), "MVert", 1, NULL, NULL, NULL, NULL, NULL, NULL},
@@ -1180,7 +1208,8 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	{sizeof(int), "", 0, NULL, NULL, NULL, NULL, NULL, layerDefault_origindex},
 	/* 8: CD_NORMAL */
 	/* 3 floats per normal vector */
-	{sizeof(float) * 3, "vec3f", 1, NULL, NULL, NULL, NULL, NULL, NULL},
+	{sizeof(float) * 3, "vec3f", 1, NULL, NULL, NULL, layerInterp_normal, NULL, NULL,
+     NULL, NULL, NULL, NULL, NULL, layerCopyValue_normal},
 	/* 9: CD_POLYINDEX (deprecated) */
 	{sizeof(int), "", 0, NULL, NULL, NULL, NULL, NULL, NULL},
 	/* 10: CD_PROP_FLT */
@@ -1271,7 +1300,7 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	/* 40: CD_TESSLOOPNORMAL */
 	{sizeof(short[4][3]), "", 0, NULL, NULL, NULL, NULL, layerSwap_flnor, NULL},
 	/* 41: CD_CUSTOMLOOPNORMAL */
-	{sizeof(short[2]), "vec2s", 1, NULL, NULL, NULL, layerInterp_clnor, NULL, layerDefault_clnor},
+	{sizeof(short[2]), "vec2s", 1, NULL, NULL, NULL, NULL, NULL, NULL},
 };
 
 /* note, numbers are from trunk and need updating for bmesh */
