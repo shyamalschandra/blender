@@ -306,6 +306,5 @@ void modifier_type_init(ModifierTypeInfo *types[])
 	INIT_TYPE(Wireframe);
 	INIT_TYPE(DataTransfer);
 	INIT_TYPE(SetSplitNormal);
-	INIT_TYPE(CopySplitNormal);
 #undef INIT_TYPE
 }

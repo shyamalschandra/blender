@@ -64,14 +64,13 @@ EnumPropertyItem modifier_type_items[] = {
 	{0, "", 0, N_("Modify"), ""},
     {eModifierType_DataTransfer, "DATA_TRANSFER", ICON_MOD_DATA_TRANSFER, "Data Transfer", ""},
 	{eModifierType_MeshCache, "MESH_CACHE", ICON_MOD_MESHDEFORM, "Mesh Cache", ""},
+    {eModifierType_SetSplitNormal, "SET_SPLIT_NORMAL", ICON_MOD_SETSPLITNORMAL, "Set Split Normals", ""},
 	{eModifierType_UVProject, "UV_PROJECT", ICON_MOD_UVPROJECT, "UV Project", ""},
 	{eModifierType_UVWarp, "UV_WARP", ICON_MOD_UVPROJECT, "UV Warp", ""},
 	{eModifierType_WeightVGEdit, "VERTEX_WEIGHT_EDIT", ICON_MOD_VERTEX_WEIGHT, "Vertex Weight Edit", ""},
 	{eModifierType_WeightVGMix, "VERTEX_WEIGHT_MIX", ICON_MOD_VERTEX_WEIGHT, "Vertex Weight Mix", ""},
 	{eModifierType_WeightVGProximity, "VERTEX_WEIGHT_PROXIMITY", ICON_MOD_VERTEX_WEIGHT,
 	                                  "Vertex Weight Proximity", ""},
-	{eModifierType_SetSplitNormal, "SET_SPLIT_NORMAL", ICON_MOD_SETSPLITNORMAL, "Set Split Normals", ""},
-	{eModifierType_CopySplitNormal, "COPY_SPLIT_NORMAL", ICON_MOD_SETSPLITNORMAL, "Copy Split Normals", ""},
 	{0, "", 0, N_("Generate"), ""},
 	{eModifierType_Array, "ARRAY", ICON_MOD_ARRAY, "Array", ""},
 	{eModifierType_Bevel, "BEVEL", ICON_MOD_BEVEL, "Bevel", ""},
@@ -361,8 +360,6 @@ static StructRNA *rna_Modifier_refine(struct PointerRNA *ptr)
 			return &RNA_DataTransferModifier;
 		case eModifierType_SetSplitNormal:
 			return &RNA_SetSplitNormalModifier;
-		case eModifierType_CopySplitNormal:
-			return &RNA_CopySplitNormalModifier;
 		/* Default */
 		case eModifierType_None:
 		case eModifierType_ShapeKey:
@@ -427,7 +424,6 @@ static void rna_##_type##Modifier_##_prop##_set(PointerRNA *ptr, const char *val
 RNA_MOD_VGROUP_NAME_SET(Armature, defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(Bevel, defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(Cast, defgrp_name);
-RNA_MOD_VGROUP_NAME_SET(CopySplitNormal, defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(Curve, name);
 RNA_MOD_VGROUP_NAME_SET(DataTransfer, defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(Decimate, defgrp_name);
@@ -520,7 +516,6 @@ RNA_MOD_OBJECT_SET(Array, end_cap, OB_MESH);
 RNA_MOD_OBJECT_SET(Array, curve_ob, OB_CURVE);
 RNA_MOD_OBJECT_SET(Boolean, object, OB_MESH);
 RNA_MOD_OBJECT_SET(Cast, object, OB_EMPTY);
-RNA_MOD_OBJECT_SET(CopySplitNormal, target, OB_MESH);
 RNA_MOD_OBJECT_SET(Curve, object, OB_CURVE);
 RNA_MOD_OBJECT_SET(DataTransfer, ob_source, OB_MESH);
 RNA_MOD_OBJECT_SET(Lattice, object, OB_LATTICE);
@@ -4390,52 +4385,6 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 }
 
-static void rna_def_modifier_copysplitnormal(BlenderRNA *brna)
-{
-	StructRNA *srna;
-	PropertyRNA *prop;
-
-	static EnumPropertyItem prop_mode_items[] = {
-		{MOD_COPYSPLITNORMAL_MODE_GEOM_FACENOR, "FACE_NORMALS", 0, "Face Normals", "From a mesh's face normals"},
-		{MOD_COPYSPLITNORMAL_MODE_GEOM_LOOPNOR, "SPLIT_NORMALS", 0, "Split Normals", "From a mesh's split normals"},
-		{0, NULL, 0, NULL, NULL}
-	};
-
-	srna = RNA_def_struct(brna, "CopySplitNormalModifier", "Modifier");
-	RNA_def_struct_ui_text(srna, "Set Split Normal Modifier", "Modifier copying split normals from a target geometry");
-	RNA_def_struct_sdna(srna, "CopySplitNormalModifierData");
-	RNA_def_struct_ui_icon(srna, ICON_MOD_SETSPLITNORMAL);
-
-	prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, prop_mode_items);
-	RNA_def_property_ui_text(prop, "Mode", "How to copy normals");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-	prop = RNA_def_property(srna, "vertex_group", PROP_STRING, PROP_NONE);
-	RNA_def_property_string_sdna(prop, NULL, "defgrp_name");
-	RNA_def_property_ui_text(prop, "Vertex Group", "Vertex group name for selecting/weighting the affected areas");
-	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_CopySplitNormalModifier_defgrp_name_set");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-	prop = RNA_def_property(srna, "use_invert_vertex_group", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_COPYSPLITNORMAL_INVERT_VGROUP);
-	RNA_def_property_ui_text(prop, "Invert", "Invert vertex group influence");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-	prop = RNA_def_property(srna, "target", PROP_POINTER, PROP_NONE);
-	RNA_def_property_ui_text(prop, "Target", "Target object used to copy normals from");
-	RNA_def_property_pointer_funcs(prop, NULL, "rna_CopySplitNormalModifier_target_set", NULL, NULL);
-	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
-	RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
-
-	prop = RNA_def_property(srna, "use_current_custom_split_normals", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_COPYSPLITNORMAL_USE_CURCLNORS);
-	RNA_def_property_boolean_default(prop, true);
-	RNA_def_property_ui_text(prop, "Use Custom Split Normals",
-	                         "Use current custom split normals as basis, instead of auto-computed ones, if available");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
-}
-
 void RNA_def_modifier(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -4551,7 +4500,6 @@ void RNA_def_modifier(BlenderRNA *brna)
 	rna_def_modifier_wireframe(brna);
 	rna_def_modifier_datatransfer(brna);
 	rna_def_modifier_setsplitnormal(brna);
-	rna_def_modifier_copysplitnormal(brna);
 }
 
 #endif
