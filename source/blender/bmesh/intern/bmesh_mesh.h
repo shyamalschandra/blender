@@ -41,7 +41,7 @@ void   BM_mesh_clear(BMesh *bm);
 void BM_mesh_normals_update(BMesh *bm);
 void BM_verts_calc_normal_vcos(BMesh *bm, const float (*fnos)[3], const float (*vcos)[3], float (*vnos)[3]);
 void BM_loops_calc_normal_vcos(BMesh *bm, const float (*vcos)[3], const float (*vnos)[3], const float (*pnos)[3],
-                               const float split_angle, float (*r_lnos)[3],
+                               const bool use_split_normals, const float split_angle, float (*r_lnos)[3],
                                struct MLoopsNorSpaces *r_lnors_spaces,
                                short (*clnors_data)[2], const int cd_loop_clnors_offset);
 

@@ -2209,14 +2209,15 @@ void CDDM_calc_normals(DerivedMesh *dm)
 
 #endif
 
-void CDDM_calc_loop_normals(DerivedMesh *dm, const float split_angle)
+void CDDM_calc_loop_normals(DerivedMesh *dm, const bool use_split_normals, const float split_angle)
 {
-	CDDM_calc_loop_normals_spaces(dm, split_angle, NULL);
+	CDDM_calc_loop_normals_spaces(dm, use_split_normals, split_angle, NULL);
 }
 
 //#define DEBUG_CLNORS
 
-void CDDM_calc_loop_normals_spaces(DerivedMesh *dm, const float split_angle, MLoopsNorSpaces *r_lnors_spaces)
+void CDDM_calc_loop_normals_spaces(
+        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopsNorSpaces *r_lnors_spaces)
 {
 	MVert *mverts = dm->getVertArray(dm);
 	MEdge *medges = dm->getEdgeArray(dm);
@@ -2257,7 +2258,8 @@ void CDDM_calc_loop_normals_spaces(DerivedMesh *dm, const float split_angle, MLo
 		short (*clnor_data)[2] = CustomData_get_layer(ldata, CD_CUSTOMLOOPNORMAL);
 
 		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
-		                            mpolys, (const float (*)[3])pnors, numPolys, split_angle,
+		                            mpolys, (const float (*)[3])pnors, numPolys,
+		                            use_split_normals, split_angle,
 		                            r_lnors_spaces, clnor_data, NULL);
 #ifdef DEBUG_CLNORS
 		if (r_lnors_spaces) {

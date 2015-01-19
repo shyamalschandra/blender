@@ -210,10 +210,10 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 
 bool BKE_mesh_has_custom_loop_normals(struct Mesh *me);
 
-void BKE_mesh_normals_loop_split(
-        struct MVert *mverts, const int numVerts, struct MEdge *medges, const int numEdges,
+void BKE_mesh_normals_loop_split(struct MVert *mverts, const int numVerts, struct MEdge *medges, const int numEdges,
         struct MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
-        struct MPoly *mpolys, const float (*polynors)[3], const int numPolys, float split_angle,
+        struct MPoly *mpolys, const float (*polynors)[3], const int numPolys,
+        const bool use_split_normals, float split_angle,
         MLoopsNorSpaces *r_lnors_spaces, short (*clnors_data)[2], int *r_loop_to_poly);
 
 void BKE_mesh_normals_loop_custom_set(

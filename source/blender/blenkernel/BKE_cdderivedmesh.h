@@ -107,8 +107,8 @@ void CDDM_calc_normals_mapping(struct DerivedMesh *dm);
 void CDDM_calc_normals(struct DerivedMesh *dm);
 void CDDM_calc_normals_tessface(struct DerivedMesh *dm);
 
-void CDDM_calc_loop_normals(struct DerivedMesh *dm, const float split_angle);
-void CDDM_calc_loop_normals_spaces(struct DerivedMesh *dm, const float split_angle,
+void CDDM_calc_loop_normals(struct DerivedMesh *dm, const bool use_split_normals, const float split_angle);
+void CDDM_calc_loop_normals_spaces(struct DerivedMesh *dm, const bool use_split_normals, const float split_angle,
                                    struct MLoopsNorSpaces *r_lnors_spaces);
 
 /* calculates edges for a CDDerivedMesh (from face data)

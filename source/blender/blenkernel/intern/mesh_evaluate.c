@@ -59,7 +59,7 @@
 
 #include "mikktspace.h"
 
-//#define DEBUG_TIME
+// #define DEBUG_TIME
 
 #include "PIL_time.h"
 #ifdef DEBUG_TIME
@@ -1035,10 +1035,30 @@ static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int UNU
  */
 void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
                                  MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
-                                 MPoly *mpolys, const float (*polynors)[3], const int numPolys, float split_angle,
-                                 MLoopsNorSpaces *r_lnors_spaces, short (*clnors_data)[2],
-                                 int *r_loop_to_poly)
+                                 MPoly *mpolys, const float (*polynors)[3], const int numPolys,
+                                 const bool use_split_normals, float split_angle,
+                                 MLoopsNorSpaces *r_lnors_spaces, short (*clnors_data)[2], int *r_loop_to_poly)
 {
+
+	/* For now this is not supported. if we do not use split normals, we do not generate anything fancy! */
+	BLI_assert(use_split_normals || !(r_lnors_spaces || r_loop_to_poly));
+
+	if (!use_split_normals) {
+		/* In this case, we simply fill lnors with vnors, quite simple!
+		 * Note this is done here to keep some logic and consistancy in this quite complex code,
+		 * since we may want to use lnors even when mesh's 'autosmooth' is disabled (see e.g. mesh mapping code).
+		 * As usual, we could handle that on case-by-case basis, but simpler to keep it well confined here.
+		 */
+		int i;
+
+		for (i = 0; i < numLoops; i++) {
+			normal_short_to_float_v3(r_loopnors[i], mverts[mloops[i].v].no);
+		}
+		return;
+	}
+
+	{
+
 	/* Mapping edge -> loops.
 	 * If that edge is used by more than two loops (polys), it is always sharp (and tagged as such, see below).
 	 * We also use the second loop index as a kind of flag: smooth edge: > 0,
@@ -1203,6 +1223,8 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 #ifdef DEBUG_TIME
 	TIMEIT_END(BKE_mesh_normals_loop_split);
 #endif
+
+	}
 }
 
 #undef INDEX_UNSET
@@ -1234,14 +1256,16 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 	BLI_bitmap *done_loops = BLI_BITMAP_NEW((size_t)numLoops, __func__);
 	float (*lnors)[3] = MEM_callocN(sizeof(*lnors) * (size_t)numLoops, __func__);
 	int *loop_to_poly = MEM_mallocN(sizeof(int) * (size_t)numLoops, __func__);
-	const float split_angle = (float)M_PI;  /* In this case we do not want to use angle to define smooth fans! */
+	/* In this case we always consider split nors as ON, and do not want to use angle to define smooth fans! */
+	const bool use_split_normals = true;
+	const float split_angle = (float)M_PI;
 	int i;
 
 	BLI_SMALLSTACK_DECLARE(clnors_data, short *);
 
 	/* Compute current lnor spaces. */
 	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
-	                            mpolys, polynors, numPolys, split_angle,
+	                            mpolys, polynors, numPolys, use_split_normals, split_angle,
 	                            &lnors_spaces, use_clnors_data ? r_clnors_data : NULL, loop_to_poly);
 
 	/* Now, check each current smooth fan (one lnor space per smooth fan!), and if all its matching custom lnors
@@ -1316,7 +1340,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 		/* And now, recompute our new auto lnors and lnor spaces! */
 		BKE_lnor_spaces_free(&lnors_spaces);
 		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
-		                            mpolys, polynors, numPolys, split_angle,
+		                            mpolys, polynors, numPolys, use_split_normals, split_angle,
 		                            &lnors_spaces, use_clnors_data ? r_clnors_data : NULL, loop_to_poly);
 	}
 	else {

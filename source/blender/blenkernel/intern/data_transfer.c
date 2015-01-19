@@ -254,15 +254,14 @@ int BKE_object_data_transfer_dttype_to_srcdst_index(const int dtdata_type)
 /* Generic pre/post processing, only used by custom loop normals currently. */
 
 static void data_transfer_dtdata_type_preprocess(
-        Object *ob_src, Object *UNUSED(ob_dst), DerivedMesh *dm_src, DerivedMesh *dm_dst, Mesh *me_dst,
-        const int dtdata_type, const bool dirty_nors_dst, void **r_prepost_data)
+        Object *UNUSED(ob_src), Object *UNUSED(ob_dst), DerivedMesh *dm_src, DerivedMesh *dm_dst, Mesh *me_dst,
+        const int dtdata_type, const bool dirty_nors_dst, const bool use_split_nors_src, const float split_angle_src,
+        void **r_prepost_data)
 {
 	*r_prepost_data = NULL;
 
 	if (dtdata_type == DT_TYPE_LNOR) {
 		/* Compute custom normals into regular loop normals, which will be used for the transfer. */
-		Mesh *me_src = ob_src->data;
-
 		MVert *verts_dst = dm_dst ? dm_dst->getVertArray(dm_dst) : me_dst->mvert;
 		const int num_verts_dst = dm_dst ? dm_dst->getNumVerts(dm_dst) : me_dst->totvert;
 		MEdge *edges_dst = dm_dst ? dm_dst->getEdgeArray(dm_dst) : me_dst->medge;
@@ -274,42 +273,40 @@ static void data_transfer_dtdata_type_preprocess(
 		CustomData *pdata_dst = dm_dst ? dm_dst->getPolyDataLayout(dm_dst) : &me_dst->pdata;
 		CustomData *ldata_dst = dm_dst ? dm_dst->getLoopDataLayout(dm_dst) : &me_dst->ldata;
 
-		const bool use_mesh_src_autosmooth = (me_src->flag & ME_AUTOSMOOTH) != 0;
-		const bool use_mesh_dst_autosmooth = (me_dst->flag & ME_AUTOSMOOTH) != 0;
-		const float split_angle_src = use_mesh_src_autosmooth ? me_src->smoothresh : M_PI;
-		const float split_angle_dst = use_mesh_dst_autosmooth ? me_dst->smoothresh : M_PI;
+		const bool use_split_nors_dst = (me_dst->flag & ME_AUTOSMOOTH) != 0;
+		const float split_angle_dst = me_dst->smoothresh;
 
-		dm_src->calcLoopNormals(dm_src, split_angle_src);
+		dm_src->calcLoopNormals(dm_src, use_split_nors_src, split_angle_src);
 
 		if (dm_dst) {
-			dm_dst->calcLoopNormals(dm_dst, split_angle_dst);
+			dm_dst->calcLoopNormals(dm_dst, use_split_nors_dst, split_angle_dst);
 		}
 		else {
 			float (*poly_nors_dst)[3];
 			float (*loop_nors_dst)[3];
-			short (*custom_nors_dst)[2] = use_mesh_dst_autosmooth ? CustomData_get_layer(ldata_dst, CD_CUSTOMLOOPNORMAL) : NULL;
+			short (*custom_nors_dst)[2] = CustomData_get_layer(ldata_dst, CD_CUSTOMLOOPNORMAL);
 
 			/* Cache poly nors into a temp CDLayer. */
 			poly_nors_dst = CustomData_get_layer(pdata_dst, CD_NORMAL);
-			if (!poly_nors_dst) {
-				poly_nors_dst = CustomData_add_layer(pdata_dst, CD_NORMAL, CD_CALLOC, NULL, num_polys_dst);
-				CustomData_set_layer_flag(pdata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
-			}
-			if (dirty_nors_dst) {
+			if (dirty_nors_dst || !poly_nors_dst) {
+				if (!poly_nors_dst) {
+					poly_nors_dst = CustomData_add_layer(pdata_dst, CD_NORMAL, CD_CALLOC, NULL, num_polys_dst);
+					CustomData_set_layer_flag(pdata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
+				}
 				BKE_mesh_calc_normals_poly(verts_dst, num_verts_dst, loops_dst, polys_dst,
 										   num_loops_dst, num_polys_dst, poly_nors_dst, true);
 			}
 			/* Cache loop nors into a temp CDLayer. */
 			loop_nors_dst = CustomData_get_layer(ldata_dst, CD_NORMAL);
-			if (!loop_nors_dst) {
-				loop_nors_dst = CustomData_add_layer(ldata_dst, CD_NORMAL, CD_CALLOC, NULL, num_loops_dst);
-				CustomData_set_layer_flag(ldata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
-			}
-			if (dirty_nors_dst) {
+			if (dirty_nors_dst || loop_nors_dst) {
+				if (!loop_nors_dst) {
+					loop_nors_dst = CustomData_add_layer(ldata_dst, CD_NORMAL, CD_CALLOC, NULL, num_loops_dst);
+					CustomData_set_layer_flag(ldata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
+				}
 				BKE_mesh_normals_loop_split(verts_dst, num_verts_dst, edges_dst, num_edges_dst,
 											loops_dst, loop_nors_dst, num_loops_dst,
 											polys_dst, (const float (*)[3])poly_nors_dst, num_polys_dst,
-											split_angle_dst, NULL, custom_nors_dst, NULL);
+											use_split_nors_dst, split_angle_dst, NULL, custom_nors_dst, NULL);
 			}
 		}
 	}
@@ -803,13 +800,19 @@ static bool data_transfer_layersmapping_generate(
 			return true;
 		}
 		else if (cddata_type == CD_FAKE_MDEFORMVERT) {
+			bool ret;
+
 			cd_src = dm_src->getVertDataLayout(dm_src);
 			cd_dst = dm_dst ? dm_dst->getVertDataLayout(dm_dst) : &me_dst->vdata;
 
-			return data_transfer_layersmapping_vgroups(r_map, mix_mode, mix_factor, mix_weights,
-			                                           num_elem_dst, use_create, use_delete,
-			                                           ob_src, ob_dst, cd_src, cd_dst, dm_dst != NULL,
-			                                           fromlayers, tolayers);
+			ret = data_transfer_layersmapping_vgroups(r_map, mix_mode, mix_factor, mix_weights,
+			                                          num_elem_dst, use_create, use_delete,
+			                                          ob_src, ob_dst, cd_src, cd_dst, dm_dst != NULL,
+			                                          fromlayers, tolayers);
+
+			/* Mesh stores its dvert in a specific pointer too. :( */
+			me_dst->dvert = CustomData_get_layer(&me_dst->vdata, CD_MDEFORMVERT);
+			return ret;
 		}
 		else if (cddata_type == CD_FAKE_SHAPEKEY) {
 			/* TODO: leaving shapekeys asside for now, quite specific case, since we can't access them from MVert :/ */
@@ -1074,7 +1077,7 @@ bool BKE_object_data_transfer_dm(
 #define DATAMAX 4
 
 	DerivedMesh *dm_src;
-	Mesh *me_dst;
+	Mesh *me_dst, *me_src;
 	bool dirty_nors_dst = true;  /* Assumed always true if not using a dm as destination. */
 	int i;
 
@@ -1094,6 +1097,7 @@ bool BKE_object_data_transfer_dm(
 	BLI_assert((ob_src != ob_dst) && (ob_src->type == OB_MESH) && (ob_dst->type == OB_MESH));
 
 	me_dst = ob_dst->data;
+	me_src = ob_src->data;
 	if (dm_dst) {
 		dirty_nors_dst = (dm_dst->dirty & DM_DIRTY_NORMALS) != 0;
 		use_create = false;  /* Never create needed custom layers on DM (modifier case). */
@@ -1135,7 +1139,9 @@ bool BKE_object_data_transfer_dm(
 		}
 
 		data_transfer_dtdata_type_preprocess(ob_src, ob_dst, dm_src, dm_dst, me_dst,
-		                                     dtdata_type, dirty_nors_dst, &prepost_data);
+		                                     dtdata_type, dirty_nors_dst,
+		                                     (me_src->flag & ME_AUTOSMOOTH) != 0, me_src->smoothresh,
+		                                     &prepost_data);
 
 		cddata_type = BKE_object_data_transfer_dttype_to_cdtype(dtdata_type);
 
@@ -1254,8 +1260,10 @@ bool BKE_object_data_transfer_dm(
 				        map_loop_mode, space_transform, max_distance, ray_radius,
 				        verts_dst, num_verts_dst, edges_dst, num_edges_dst,
 				        loops_dst, num_loops_dst, polys_dst, num_polys_dst,
-				        ldata_dst, pdata_dst, me_dst->smoothresh, dirty_nors_dst,
-				        dm_src, island_callback, islands_handling_precision, &geom_map[LDATA]);
+				        ldata_dst, pdata_dst,
+				        (me_dst->flag & ME_AUTOSMOOTH) != 0, me_dst->smoothresh, dirty_nors_dst,
+				        dm_src, (me_src->flag & ME_AUTOSMOOTH) != 0, me_src->smoothresh,
+				        island_callback, islands_handling_precision, &geom_map[LDATA]);
 				geom_map_init[LDATA] = true;
 			}
 

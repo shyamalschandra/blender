@@ -201,6 +201,7 @@ static void copySplitNormalModifier_do_loopnormal(
         MVert *mvert, const int num_verts, MEdge *medge, const int num_edges,
         MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
 {
+#if 0
 	Object *target_ob = smd->target;
 	DerivedMesh *target_dm;
 	const bool free_target_dm = ensure_target_dm(target_ob, &target_dm);
@@ -378,6 +379,7 @@ static void copySplitNormalModifier_do_loopnormal(
 	if (target_dm && free_target_dm) {
 		target_dm->release(target_dm);
 	}
+#endif
 }
 
 static bool is_valid_target(CopySplitNormalModifierData *smd)

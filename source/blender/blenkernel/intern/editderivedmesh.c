@@ -169,16 +169,18 @@ static void emDM_calcNormals(DerivedMesh *dm)
 	dm->dirty &= ~DM_DIRTY_NORMALS;
 }
 
-static void emDM_calcLoopNormalsSpaces(DerivedMesh *dm, const float split_angle, MLoopsNorSpaces *r_lnors_spaces);
+static void emDM_calcLoopNormalsSpaces(
+        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopsNorSpaces *r_lnors_spaces);
 
-static void emDM_calcLoopNormals(DerivedMesh *dm, const float split_angle)
+static void emDM_calcLoopNormals(DerivedMesh *dm, const bool use_split_normals, const float split_angle)
 {
-	emDM_calcLoopNormalsSpaces(dm, split_angle, NULL);
+	emDM_calcLoopNormalsSpaces(dm, use_split_normals, split_angle, NULL);
 }
 
 //#define DEBUG_CLNORS
 
-static void emDM_calcLoopNormalsSpaces(DerivedMesh *dm, const float split_angle, MLoopsNorSpaces *r_lnors_spaces)
+static void emDM_calcLoopNormalsSpaces(
+        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopsNorSpaces *r_lnors_spaces)
 {
 	EditDerivedBMesh *bmdm = (EditDerivedBMesh *)dm;
 	BMesh *bm = bmdm->em->bm;
@@ -205,7 +207,7 @@ static void emDM_calcLoopNormalsSpaces(DerivedMesh *dm, const float split_angle,
 		short (*clnors_data)[2] = dm->getLoopDataArray(dm, CD_CUSTOMLOOPNORMAL);
 		const int cd_loop_clnors_offset = clnors_data ? -1 : CustomData_get_offset(&bm->ldata, CD_CUSTOMLOOPNORMAL);
 
-		BM_loops_calc_normal_vcos(bm, vertexCos, vertexNos, polyNos, split_angle, loopNos,
+		BM_loops_calc_normal_vcos(bm, vertexCos, vertexNos, polyNos, use_split_normals, split_angle, loopNos,
 		                          r_lnors_spaces, clnors_data, cd_loop_clnors_offset);
 #ifdef DEBUG_CLNORS
 		if (r_lnors_spaces) {

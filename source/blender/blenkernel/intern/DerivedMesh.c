@@ -392,9 +392,9 @@ void DM_ensure_normals(DerivedMesh *dm)
 	BLI_assert((dm->dirty & DM_DIRTY_NORMALS) == 0);
 }
 
-static void DM_calc_loop_normals(DerivedMesh *dm, float split_angle)
+static void DM_calc_loop_normals(DerivedMesh *dm, const bool use_split_normals, float split_angle)
 {
-	dm->calcLoopNormals(dm, split_angle);
+	dm->calcLoopNormals(dm, use_split_normals, split_angle);
 	dm->dirty |= DM_DIRTY_TESS_CDLAYERS;
 }
 
@@ -1500,7 +1500,7 @@ static void mesh_calc_modifiers(Scene *scene, Object *ob, float (*inputVertexCos
 	/* XXX Same as above... For now, only weights preview in WPaint mode. */
 	const bool do_mod_wmcol = do_init_wmcol;
 
-	bool do_loop_normals = (me->flag & ME_AUTOSMOOTH) != 0;
+	const bool do_loop_normals = (me->flag & ME_AUTOSMOOTH) != 0;
 	const float loop_normals_split_angle = me->smoothresh;
 
 	VirtualModifierData virtualModifierData;
@@ -1904,11 +1904,9 @@ static void mesh_calc_modifiers(Scene *scene, Object *ob, float (*inputVertexCos
 			add_orco_dm(ob, NULL, *deform_r, NULL, CD_ORCO);
 	}
 
-	do_loop_normals = (do_loop_normals || DM_get_loop_data_layer(finaldm, CD_CUSTOMLOOPNORMAL));
-
 	if (do_loop_normals) {
 		/* Compute loop normals (note: will compute poly and vert normals as well, if needed!) */
-		DM_calc_loop_normals(finaldm, loop_normals_split_angle);
+		DM_calc_loop_normals(finaldm, do_loop_normals, loop_normals_split_angle);
 	}
 
 	{
@@ -2008,7 +2006,7 @@ static void editbmesh_calc_modifiers(Scene *scene, Object *ob, BMEditMesh *em, D
 	const bool do_mod_wmcol = do_init_wmcol;
 	VirtualModifierData virtualModifierData;
 
-	bool do_loop_normals = (((Mesh *)(ob->data))->flag & ME_AUTOSMOOTH) != 0;
+	const bool do_loop_normals = (((Mesh *)(ob->data))->flag & ME_AUTOSMOOTH) != 0;
 	const float loop_normals_split_angle = ((Mesh *)(ob->data))->smoothresh;
 
 	modifiers_clearErrors(ob);
@@ -2222,13 +2220,11 @@ static void editbmesh_calc_modifiers(Scene *scene, Object *ob, BMEditMesh *em, D
 			DM_update_statvis_color(scene, ob, *final_r);
 	}
 
-	do_loop_normals = (do_loop_normals || DM_get_loop_data_layer(*final_r, CD_CUSTOMLOOPNORMAL));
-
 	if (do_loop_normals) {
 		/* Compute loop normals */
-		DM_calc_loop_normals(*final_r, loop_normals_split_angle);
+		DM_calc_loop_normals(*final_r, do_loop_normals, loop_normals_split_angle);
 		if (cage_r && *cage_r && (*cage_r != *final_r)) {
-			DM_calc_loop_normals(*cage_r, loop_normals_split_angle);
+			DM_calc_loop_normals(*cage_r, do_loop_normals, loop_normals_split_angle);
 		}
 	}
 
