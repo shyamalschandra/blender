@@ -176,6 +176,8 @@ static void seq_proxy_build_job(const bContext *C)
 	Scene *scene = CTX_data_scene(C);
 	Editing *ed = BKE_sequencer_editing_get(scene, false);
 	ScrArea *sa = CTX_wm_area(C);
+	struct SeqIndexBuildContext *context;
+	LinkData *link;
 	Sequence *seq;
 
 	if (ed == NULL) {
@@ -201,7 +203,9 @@ static void seq_proxy_build_job(const bContext *C)
 	SEQP_BEGIN (ed, seq)
 	{
 		if ((seq->flag & SELECT)) {
-			BKE_sequencer_proxy_rebuild_context(pj->main, pj->scene, seq, &pj->queue);
+			context = BKE_sequencer_proxy_rebuild_context(pj->main, pj->scene, seq);
+			link = BLI_genericNodeN(context);
+			BLI_addtail(&pj->queue, link);
 		}
 	}
 	SEQ_END
@@ -3364,18 +3368,12 @@ static int sequencer_rebuild_proxy_exec(bContext *C, wmOperator *UNUSED(op))
 	SEQP_BEGIN(ed, seq)
 	{
 		if ((seq->flag & SELECT)) {
-			ListBase queue = {NULL, NULL};
-			LinkData *link;
+			struct SeqIndexBuildContext *context;
 			short stop = 0, do_update;
 			float progress;
-
-			BKE_sequencer_proxy_rebuild_context(bmain, scene, seq, &queue);
-
-			for (link = queue.first; link; link = link->next) {
-				struct SeqIndexBuildContext *context = link->data;
-				BKE_sequencer_proxy_rebuild(context, &stop, &do_update, &progress);
-				BKE_sequencer_proxy_rebuild_finish(context, 0);
-			}
+			context = BKE_sequencer_proxy_rebuild_context(bmain, scene, seq);
+			BKE_sequencer_proxy_rebuild(context, &stop, &do_update, &progress);
+			BKE_sequencer_proxy_rebuild_finish(context, 0);
 			BKE_sequencer_free_imbuf(scene, &ed->seqbase, false);
 		}
 	}

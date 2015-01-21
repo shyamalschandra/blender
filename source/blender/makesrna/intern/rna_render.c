@@ -27,7 +27,6 @@
 #include <stdlib.h>
 
 #include "DNA_scene_types.h"
-#include "DNA_object_types.h"
 
 #include "BLI_utildefines.h"
 #include "BLI_path_util.h"
@@ -323,25 +322,6 @@ static PointerRNA rna_RenderEngine_render_get(PointerRNA *ptr)
 	}
 }
 
-static PointerRNA rna_RenderEngine_camera_override_get(PointerRNA *ptr)
-{
-	RenderEngine *engine = (RenderEngine *)ptr->data;
-
-	if (engine->re) {
-		Object *cam = RE_GetCamera(engine->re);
-		return rna_pointer_inherit_refine(ptr, &RNA_Object, cam);
-	}
-	else {
-		return rna_pointer_inherit_refine(ptr, &RNA_Object, engine->camera_override);
-	}
-}
-
-static void rna_RenderResult_views_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
-{
-	RenderResult *rr = (RenderResult *)ptr->data;
-	rna_iterator_listbase_begin(iter, &rr->views, NULL);
-}
-
 static void rna_RenderResult_layers_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
 	RenderResult *rr = (RenderResult *)ptr->data;
@@ -354,7 +334,6 @@ static void rna_RenderLayer_passes_begin(CollectionPropertyIterator *iter, Point
 	rna_iterator_listbase_begin(iter, &rl->passes, NULL);
 }
 
-#if 0
 static int rna_RenderLayer_rect_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION])
 {
 	RenderLayer *rl = (RenderLayer *)ptr->data;
@@ -368,26 +347,13 @@ static int rna_RenderLayer_rect_get_length(PointerRNA *ptr, int length[RNA_MAX_A
 static void rna_RenderLayer_rect_get(PointerRNA *ptr, float *values)
 {
 	RenderLayer *rl = (RenderLayer *)ptr->data;
-
-	/* Sergey's suggestion:
-	 * so either check on ptr.id and see if it'll help you figuring Render out
-	 * or iterate via all Render and see which one contains given RenderLayer
-	 */
-
-	//XXX MV 0 = actview
-	float *rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, 0);
-	memcpy(values, rect, sizeof(float) * rl->rectx * rl->recty * 4);
+	memcpy(values, rl->rectf, sizeof(float) * rl->rectx * rl->recty * 4);
 }
-#endif
 
 void rna_RenderLayer_rect_set(PointerRNA *ptr, const float *values)
 {
 	RenderLayer *rl = (RenderLayer *)ptr->data;
-
-	//XXX MV 0 = actview
-	float *rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, 0);
-
-	memcpy(rect, values, sizeof(float) * rl->rectx * rl->recty * 4);
+	memcpy(rl->rectf, values, sizeof(float) * rl->rectx * rl->recty * 4);
 }
 
 static int rna_RenderPass_rect_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION])
@@ -501,7 +467,6 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	prop = RNA_def_int(func, "h", 0, 0, INT_MAX, "Height", "", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	RNA_def_string(func, "layer", NULL, 0, "Layer", "Single layer to get render result for");  /* NULL ok here */
-	RNA_def_string(func, "view", NULL, 0, "View", "Single view to get render result for");  /* NULL ok here */
 	prop = RNA_def_pointer(func, "result", "RenderResult", "Result", "");
 	RNA_def_function_return(func, prop);
 
@@ -521,22 +486,6 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_function_ui_description(func, "Test if the render operation should been canceled, this is a fast call that should be used regularly for responsiveness");
 	prop = RNA_def_boolean(func, "do_break", 0, "Break", "");
 	RNA_def_function_return(func, prop);
-
-	func = RNA_def_function(srna, "active_view_set", "RE_engine_actview_set");
-	RNA_def_string(func, "view", NULL, 0, "View", "Single view to set as active");  /* NULL ok here */
-	RNA_def_property_flag(prop, PROP_REQUIRED);
-
-	func = RNA_def_function(srna, "camera_shift_x", "RE_engine_get_camera_shift_x");
-	prop = RNA_def_pointer(func, "camera", "Object", "", "");
-	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = RNA_def_float(func, "shift_x", 0.0f, 0.0f, FLT_MAX, "Shift X", "", 0.0f, FLT_MAX);
-	RNA_def_function_return(func, prop);
-
-	func = RNA_def_function(srna, "camera_model_matrix", "RE_engine_get_camera_model_matrix");
-	prop = RNA_def_pointer(func, "camera", "Object", "", "");
-	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = RNA_def_float_matrix(func, "r_model_matrix", 4, 4, NULL, 0.0f, 0.0f, "", "Model Matrix", 0.0f, 0.0f);
-	RNA_def_property_flag(prop, PROP_REQUIRED);
 
 	func = RNA_def_function(srna, "update_stats", "RE_engine_update_stats");
 	RNA_def_function_ui_description(func, "Update and signal to redraw render status text");
@@ -599,7 +548,7 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", RE_ENGINE_PREVIEW);
 
 	prop = RNA_def_property(srna, "camera_override", PROP_POINTER, PROP_NONE);
-	RNA_def_property_pointer_funcs(prop, "rna_RenderEngine_camera_override_get", NULL, NULL, NULL);
+	RNA_def_property_pointer_sdna(prop, NULL, "camera_override");
 	RNA_def_property_struct_type(prop, "Object");
 
 	prop = RNA_def_property(srna, "layer_override", PROP_BOOLEAN, PROP_LAYER_MEMBER);
@@ -698,30 +647,6 @@ static void rna_def_render_result(BlenderRNA *brna)
 	                                  "rna_iterator_listbase_end", "rna_iterator_listbase_get",
 	                                  NULL, NULL, NULL, NULL);
 
-	parm = RNA_def_property(srna, "views", PROP_COLLECTION, PROP_NONE);
-	RNA_def_property_struct_type(parm, "RenderView");
-	RNA_def_property_collection_funcs(parm, "rna_RenderResult_views_begin", "rna_iterator_listbase_next",
-	                                  "rna_iterator_listbase_end", "rna_iterator_listbase_get",
-	                                  NULL, NULL, NULL, NULL);
-
-	RNA_define_verify_sdna(1);
-}
-
-static void rna_def_render_view(BlenderRNA *brna)
-{
-	StructRNA *srna;
-	PropertyRNA *prop;
-
-	srna = RNA_def_struct(brna, "RenderView", NULL);
-	RNA_def_struct_ui_text(srna, "Render View", "");
-
-	RNA_define_verify_sdna(0);
-
-	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
-	RNA_def_property_string_sdna(prop, NULL, "name");
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-	RNA_def_struct_name_property(srna, prop);
-
 	RNA_define_verify_sdna(1);
 }
 
@@ -755,17 +680,11 @@ static void rna_def_render_layer(BlenderRNA *brna)
 	                                  "rna_iterator_listbase_end", "rna_iterator_listbase_get",
 	                                  NULL, NULL, NULL, NULL);
 
-#if 0
-	/* XXX MV store active in RL or pass as argument
-	 * Actually, as suggested by Brecht we should use string and not the int in the API
-	 * (same as we do for renderlayer)
-	 * */
 	prop = RNA_def_property(srna, "rect", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_DYNAMIC);
 	RNA_def_property_multi_array(prop, 2, NULL);
 	RNA_def_property_dynamic_array_funcs(prop, "rna_RenderLayer_rect_get_length");
 	RNA_def_property_float_funcs(prop, "rna_RenderLayer_rect_get", "rna_RenderLayer_rect_set", NULL);
-#endif
 
 	RNA_define_verify_sdna(1);
 }
@@ -808,10 +727,6 @@ static void rna_def_render_pass(BlenderRNA *brna)
 	RNA_def_property_multi_array(prop, 2, NULL);
 	RNA_def_property_dynamic_array_funcs(prop, "rna_RenderPass_rect_get_length");
 	RNA_def_property_float_funcs(prop, "rna_RenderPass_rect_get", "rna_RenderPass_rect_set", NULL);
-
-	prop = RNA_def_property(srna, "view_id", PROP_INT, PROP_NONE);
-	RNA_def_property_int_sdna(prop, NULL, "view_id");
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	prop = RNA_def_property(srna, "debug_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "debug_type");
@@ -868,7 +783,6 @@ void RNA_def_render(BlenderRNA *brna)
 {
 	rna_def_render_engine(brna);
 	rna_def_render_result(brna);
-	rna_def_render_view(brna);
 	rna_def_render_layer(brna);
 	rna_def_render_pass(brna);
 	rna_def_render_bake_pixel(brna);
