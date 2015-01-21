@@ -135,6 +135,41 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
         col.prop(cam, "clip_end", text="End")
 
 
+class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
+    bl_label = "Stereoscopy"
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
+
+    @classmethod
+    def poll(cls, context):
+        render = context.scene.render
+        return (super().poll(context) and render.use_multiview)
+
+    def draw(self, context):
+        layout = self.layout
+        render = context.scene.render
+
+        layout.active = (render.views_format == 'STEREO_3D')
+
+        col = layout.column()
+
+        st = context.camera.stereo
+        row = col.row(align=True)
+        row.prop(st, "interocular_distance")
+
+        if st.convergence_mode == 'PARALLEL':
+            row.prop(st, "convergence_distance", text="Viewport Convergence")
+        else:
+            row.prop(st, "convergence_distance")
+
+        row = col.row()
+        row.prop(st, "convergence_mode", expand=True)
+
+        col.separator()
+        col.label(text="Pivot:")
+        row = col.row()
+        row.prop(st, "pivot", expand=True)
+
+
 class DATA_PT_camera(CameraButtonsPanel, Panel):
     bl_label = "Camera"
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
