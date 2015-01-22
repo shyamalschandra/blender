@@ -59,7 +59,7 @@
 
 #include "mikktspace.h"
 
-// #define DEBUG_TIME
+#define DEBUG_TIME
 
 #include "PIL_time.h"
 #ifdef DEBUG_TIME
@@ -339,6 +339,9 @@ MLoopNorSpace *BKE_lnor_space_create(MLoopsNorSpaces *lnors_spaces)
 	return BLI_memarena_calloc(lnors_spaces->mem, sizeof(MLoopNorSpace));
 }
 
+/* This threshold is a bit touchy (usual float precision issue), this value seems OK. */
+#define LNOR_SPACE_TRIGO_THRESHOLD (1.0f - 1e-6f)
+
 /* Should only be called once.
  * Beware, this modifies ref_vec and other_vec in place!
  * In case no valid space can be generated, ref_alpha and ref_beta are set to zero (which means 'use auto lnors').
@@ -351,10 +354,9 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
 	const float dtp_ref = dot_v3v3(vec_ref, lnor);
 	const float dtp_other = dot_v3v3(vec_other, lnor);
 
-	if (fabsf(dtp_ref) > (1.0f - 1e-8f) || fabsf(dtp_other) > (1.0f - 1e-8f)) {
+	if (fabsf(dtp_ref) >= LNOR_SPACE_TRIGO_THRESHOLD || fabsf(dtp_other) >= LNOR_SPACE_TRIGO_THRESHOLD) {
 		/* If vec_ref or vec_other are too much aligned with lnor, we can't build lnor space,
-		 * tag it as invalid and abort.
-		 */
+		 * tag it as invalid and abort. */
 		lnor_space->ref_alpha = lnor_space->ref_beta = 0.0f;
 		return;
 	}
@@ -385,18 +387,19 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
 	cross_v3_v3v3(tvec, lnor, lnor_space->vec_ref);
 	normalize_v3_v3(lnor_space->vec_ortho, tvec);
 
-	/* Project other_vec on lnor's ortho plane. */
+	/* Project vec_other on lnor's ortho plane. */
 	mul_v3_v3fl(tvec, lnor, dtp_other);
 	sub_v3_v3(vec_other, tvec);
 	normalize_v3(vec_other);
 
 	/* Beta is angle between ref_vec and other_vec, around lnor. */
-	lnor_space->ref_beta = pi2;
 	dtp = dot_v3v3(lnor_space->vec_ref, vec_other);
-	/* This threshold is a bit touchy (usual float precision issue), this value seems OK. */
-	if (dtp < (1.0f - 1e-6f)) {
+	if (dtp < LNOR_SPACE_TRIGO_THRESHOLD) {
 		const float beta = saacos(dtp);
 		lnor_space->ref_beta = (dot_v3v3(lnor_space->vec_ortho, vec_other) < 0.0f) ? pi2 - beta : beta;
+	}
+	else {
+		lnor_space->ref_beta = pi2;
 	}
 }
 
@@ -418,8 +421,9 @@ void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, const short
 	}
 
 	{
-		/* TODO Check whether using sincosf() gives any noticeable benefit! */
-		const float pi2 = (float)M_PI * 2.0f;
+		/* TODO Check whether using sincosf() gives any noticeable benefit
+		 *      (could not even get it working under linux though)! */
+		const float pi2 = (float)(M_PI * 2.0);
 		const float alphafac = (float)clnor_data[0] / (float)SHRT_MAX;
 		const float alpha = (alphafac > 0.0f ? lnor_space->ref_alpha : pi2 - lnor_space->ref_alpha) * alphafac;
 		const float betafac = (float)clnor_data[1] / (float)SHRT_MAX;
@@ -441,13 +445,13 @@ void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, const short
 void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float custom_lnor[3], short r_clnor_data[2])
 {
 	/* We use null vector as NOP custom normal (can be simpler than giving autocomputed lnor...). */
-	if (is_zero_v3(custom_lnor) || equals_v3v3(lnor_space->vec_lnor, custom_lnor)) {
+	if (is_zero_v3(custom_lnor) || compare_v3v3(lnor_space->vec_lnor, custom_lnor, 1e-4f)) {
 		r_clnor_data[0] = r_clnor_data[1] = 0;
 		return;
 	}
 
 	{
-		const float pi2 = (float)M_PI * 2.0f;
+		const float pi2 = (float)(M_PI * 2.0);
 		const float cos_alpha = dot_v3v3(lnor_space->vec_lnor, custom_lnor);
 		float vec[3], cos_beta;
 		float alpha;
@@ -455,10 +459,10 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 		alpha = saacosf(cos_alpha);
 		if (alpha > lnor_space->ref_alpha) {
 			/* Note we could stick to [0, pi] range here, but makes decoding more complex, not worth it. */
-			r_clnor_data[0] = (short)(-(pi2 - alpha) / (pi2 - lnor_space->ref_alpha) * (float)SHRT_MAX);
+			r_clnor_data[0] = (short)floorf(-(pi2 - alpha) / (pi2 - lnor_space->ref_alpha) * (float)SHRT_MAX + 0.5f);
 		}
 		else {
-			r_clnor_data[0] = (short)(alpha / lnor_space->ref_alpha * (float)SHRT_MAX);
+			r_clnor_data[0] = (short)floorf(alpha / lnor_space->ref_alpha * (float)SHRT_MAX + 0.5f);
 		}
 
 		/* Project custom lnor on (vec_ref, vec_ortho) plane. */
@@ -468,24 +472,26 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 
 		cos_beta = dot_v3v3(lnor_space->vec_ref, vec);
 
-		if (cos_beta > (1.0f - 1e-6f)) {
-			r_clnor_data[1] = 0;
-		}
-		else {
+		if (cos_beta < LNOR_SPACE_TRIGO_THRESHOLD) {
 			float beta = saacosf(cos_beta);
 			if (dot_v3v3(lnor_space->vec_ortho, vec) < 0.0f) {
 				beta = pi2 - beta;
 			}
 
 			if (beta > lnor_space->ref_beta) {
-				r_clnor_data[1] = (short)(-(pi2 - beta) / (pi2 - lnor_space->ref_beta) * (float)SHRT_MAX);
+				r_clnor_data[1] = (short)floorf(-(pi2 - beta) / (pi2 - lnor_space->ref_beta) * (float)SHRT_MAX + 0.5f);
 			}
 			else {
-				r_clnor_data[1] = (short)(beta / lnor_space->ref_beta * (float)SHRT_MAX);
+				r_clnor_data[1] = (short)floorf(beta / lnor_space->ref_beta * (float)SHRT_MAX + 0.5f);
 			}
+		}
+		else {
+			r_clnor_data[1] = 0;
 		}
 	}
 }
+
+#undef LNOR_SPACE_TRIGO_THRESHOLD
 
 #define LOOP_SPLIT_TASK_BLOCK_SIZE 1024
 

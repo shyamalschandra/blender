@@ -344,6 +344,7 @@ static void data_transfer_dtdata_type_postprocess(
 			custom_nors_dst = CustomData_add_layer(ldata_dst, CD_CUSTOMLOOPNORMAL, CD_CALLOC, NULL, num_loops_dst);
 		}
 
+		/* Note loop_nors_dst contains our custom normals as transferred from source... */
 		BKE_mesh_normals_loop_custom_set(verts_dst, num_verts_dst, edges_dst, num_edges_dst,
 		                                 loops_dst, loop_nors_dst, NULL, num_loops_dst,
 		                                 polys_dst, poly_nors_dst, num_polys_dst,
