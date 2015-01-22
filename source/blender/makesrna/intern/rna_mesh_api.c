@@ -153,9 +153,7 @@ static void rna_Mesh_calc_smooth_groups(Mesh *mesh, int use_bitflags, int *r_pol
 	                    r_group_total, use_bitflags);
 }
 
-static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_loopnors)[3],
-                                                    const float *custom_loopnors_factors,
-                                                    bool use_current_clnors, const bool use_vertices)
+static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_loopnors)[3], const bool use_vertices)
 {
 	float (*polynors)[3];
 	short (*clnors)[2];
@@ -168,7 +166,6 @@ static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_l
 	}
 	else {
 		clnors = CustomData_add_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL, CD_DEFAULT, NULL, numloops);
-		use_current_clnors = false;
 	}
 
 	if (CustomData_has_layer(&mesh->pdata, CD_NORMAL)) {
@@ -182,17 +179,16 @@ static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_l
 	}
 
 	if (use_vertices) {
-		BKE_mesh_normals_loop_custom_from_vertices_set(mesh->mvert, custom_loopnors, custom_loopnors_factors,
-		                                               mesh->totvert, mesh->medge, mesh->totedge,
-		                                               mesh->mloop, mesh->totloop, mesh->mpoly,
-		                                               (const float (*)[3])polynors, mesh->totpoly,
-		                                               clnors, use_current_clnors);
+		BKE_mesh_normals_loop_custom_from_vertices_set(mesh->mvert, custom_loopnors, mesh->totvert,
+		                                               mesh->medge, mesh->totedge, mesh->mloop, mesh->totloop,
+		                                               mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly,
+		                                               clnors);
 	}
 	else {
 		BKE_mesh_normals_loop_custom_set(mesh->mvert, mesh->totvert, mesh->medge, mesh->totedge,
-		                                 mesh->mloop, custom_loopnors, custom_loopnors_factors, mesh->totloop,
+		                                 mesh->mloop, custom_loopnors, mesh->totloop,
 		                                 mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly,
-		                                 clnors, use_current_clnors);
+		                                 clnors);
 	}
 
 	if (free_polynors) {
@@ -200,11 +196,9 @@ static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_l
 	}
 }
 
-static void rna_Mesh_define_normals_split_custom(Mesh *mesh, ReportList *reports, int normals_len, float *normals,
-                                                 int factors_len, float *factors, int use_current_custom_normals)
+static void rna_Mesh_define_normals_split_custom(Mesh *mesh, ReportList *reports, int normals_len, float *normals)
 {
 	float (*loopnors)[3] = (float (*)[3])normals;
-	const float *loopnors_factors = (const float *)factors;
 	const int numloops = mesh->totloop;
 
 	if (normals_len != numloops * 3) {
@@ -213,23 +207,14 @@ static void rna_Mesh_define_normals_split_custom(Mesh *mesh, ReportList *reports
 		            (float)normals_len / 3.0f, numloops);
 		return;
 	}
-	if (!ELEM(factors_len, numloops, 0)) {
-		BKE_reportf(reports, RPT_ERROR,
-		            "Mesh.define_normals_split_custom(): number of factors is not number of loops (%f / %d)",
-		            (float)factors_len, numloops);
-		return;
-	}
 
-	rna_Mesh_define_normals_split_custom_do(mesh, loopnors, loopnors_factors, (bool)use_current_custom_normals, false);
+	rna_Mesh_define_normals_split_custom_do(mesh, loopnors, false);
 }
 
-static void rna_Mesh_define_normals_split_custom_from_vertices(Mesh *mesh, ReportList *reports,
-                                                               int normals_len, float *normals,
-                                                               int factors_len, float *factors,
-                                                               int use_current_custom_normals)
+static void rna_Mesh_define_normals_split_custom_from_vertices(
+        Mesh *mesh, ReportList *reports, int normals_len, float *normals)
 {
 	float (*vertnors)[3] = (float (*)[3])normals;
-	const float *vertnors_factors = (const float *)factors;
 	const int numverts = mesh->totvert;
 
 	if (normals_len != numverts * 3) {
@@ -239,15 +224,8 @@ static void rna_Mesh_define_normals_split_custom_from_vertices(Mesh *mesh, Repor
 		            (float)normals_len / 3.0f, numverts);
 		return;
 	}
-	if (!ELEM(factors_len, numverts, 0)) {
-		BKE_reportf(reports, RPT_ERROR,
-		            "Mesh.define_normals_split_custom_from_vertices(): "
-		            "number of factors is not number of vertices (%f / %d)",
-		            (float)factors_len, numverts);
-		return;
-	}
 
-	rna_Mesh_define_normals_split_custom_do(mesh, vertnors, vertnors_factors, (bool)use_current_custom_normals, true);
+	rna_Mesh_define_normals_split_custom_do(mesh, vertnors, true);
 }
 
 static void rna_Mesh_transform(Mesh *mesh, float *mat, int shape_keys)
@@ -315,12 +293,6 @@ void RNA_api_mesh(StructRNA *srna)
 	parm = RNA_def_float_array(func, "normals", 1, NULL, -1.0f, 1.0f, "", "Normals", 0.0f, 0.0f);
 	RNA_def_property_multi_array(parm, 2, normals_array_dim);
 	RNA_def_property_flag(parm, PROP_DYNAMIC | PROP_REQUIRED);
-	parm = RNA_def_float_array(func, "factors", 1, NULL, 0.0f, 1.0f, "",
-	                           "Interpolation factors (0.0 to use full auto normal, 1.0 to use full custom given one)",
-	                           0.0f, 0.0f);
-	RNA_def_property_flag(parm, PROP_DYNAMIC);
-	RNA_def_boolean(func, "use_current_custom_normals", false, "",
-	                "Try to use current custom split normals data as basis (if available), instead of plain auto ones");
 
 	func = RNA_def_function(srna, "define_normals_split_custom_from_vertices",
 	                        "rna_Mesh_define_normals_split_custom_from_vertices");
@@ -332,12 +304,6 @@ void RNA_api_mesh(StructRNA *srna)
 	parm = RNA_def_float_array(func, "normals", 1, NULL, -1.0f, 1.0f, "", "Normals", 0.0f, 0.0f);
 	RNA_def_property_multi_array(parm, 2, normals_array_dim);
 	RNA_def_property_flag(parm, PROP_DYNAMIC | PROP_REQUIRED);
-	parm = RNA_def_float_array(func, "factors", 1, NULL, 0.0f, 1.0f, "",
-	                           "Interpolation factors (0.0 to use full auto normal, 1.0 to use full custom given one)",
-	                           0.0f, 0.0f);
-	RNA_def_property_flag(parm, PROP_DYNAMIC);
-	RNA_def_boolean(func, "use_current_custom_normals", false, "",
-	                "Try to use current custom split normals data as basis (if available), instead of plain auto ones");
 
 	func = RNA_def_function(srna, "update", "ED_mesh_update");
 	RNA_def_boolean(func, "calc_edges", 0, "Calculate Edges", "Force recalculation of edges");

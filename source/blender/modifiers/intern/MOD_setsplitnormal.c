@@ -35,6 +35,7 @@
 
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
+#include "BLI_bitmap.h"
 #include "BLI_linklist.h"
 #include "BLI_string.h"
 
@@ -139,20 +140,64 @@ static void generate_vert_coordinates(DerivedMesh *dm, Object *ob, Object *ob_ce
 	}
 }
 
+/* Note this modifies nos_new in-place. */
+static void mix_normals(
+        const float mix_factor, MDeformVert *dvert, const int defgrp_index, const bool use_invert_vgroup,
+        const short mix_mode,
+        const int num_verts, MLoop *mloop, float (*nos_old)[3], float (*nos_new)[3], const int num_loops)
+{
+	/* Mix with org normals... */
+	float *facs = NULL, *wfac;
+	float (*no_new)[3], (*no_old)[3];
+	int i;
+
+	if (dvert) {
+		facs = MEM_mallocN(sizeof(*facs) * (size_t)num_loops, __func__);
+		BKE_defvert_extract_vgroup_to_loopweights(
+		            dvert, defgrp_index, num_verts, mloop, num_loops, facs, use_invert_vgroup);
+	}
+
+	for (i = num_loops, no_new = nos_new, no_old = nos_old, wfac = facs; i--; no_new++, no_old++, wfac++) {
+		const float fac = facs ? *wfac * mix_factor : mix_factor;
+
+		switch (mix_mode) {
+			case MOD_SETSPLITNORMAL_MIX_ADD:
+				add_v3_v3(*no_new, *no_old);
+				normalize_v3(*no_new);
+				break;
+			case MOD_SETSPLITNORMAL_MIX_SUB:
+				sub_v3_v3(*no_new, *no_old);
+				normalize_v3(*no_new);
+				break;
+			case MOD_SETSPLITNORMAL_MIX_MUL:
+				mul_v3_v3(*no_new, *no_old);
+				normalize_v3(*no_new);
+				break;
+			case MOD_SETSPLITNORMAL_MIX_COPY:
+				break;
+		}
+		interp_v3_v3v3_slerp_safe(*no_new, *no_old, *no_new, fac);
+	}
+
+	MEM_SAFE_FREE(facs);
+}
+
 static void setSplitNormalModifier_do_ellipsoid(
         SetSplitNormalModifierData *smd, Object *ob, DerivedMesh *dm,
-        short (*clnors)[2], float (*polynors)[3],
+        short (*clnors)[2], float (*loopnors)[3], float (*polynors)[3],
+        const short mix_mode, const float mix_factor,
         MDeformVert *dvert, const int defgrp_index, const bool use_invert_vgroup,
         MVert *mvert, const int num_verts, MEdge *medge, const int num_edges,
         MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
 {
 	const bool use_bbox_center = ((smd->flags & MOD_SETSPLITNORMAL_CENTER_BBOX) != 0) && (smd->target == NULL);
-	const bool use_current_clnors = (smd->flags & MOD_SETSPLITNORMAL_USE_CURCLNORS) != 0;
+	int i;
 
 	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
-	float *facs = MEM_mallocN(sizeof(*facs) * num_verts, __func__);
-
+	float (*nos)[3] = MEM_mallocN(sizeof(*nos) * num_loops, __func__);
 	float size[3];
+
+	BLI_bitmap *done_verts = BLI_BITMAP_NEW((size_t)num_verts, __func__);
 
 	generate_vert_coordinates(dm, ob, smd->target, use_bbox_center, num_verts, cos, size);
 
@@ -182,54 +227,63 @@ static void setSplitNormalModifier_do_ellipsoid(
 		const float A = size[0], B = size[1], C = size[2];
 		const float m2 = (B * B) / (A * A);
 		const float n2 = (C * C) / (A * A);
-		int i = num_verts;
+
+		MLoop *ml;
+		float (*no)[3];
 
 		/* We reuse cos to now store the ellipsoid-normal of the verts! */
-		while (i--) {
-			float *co = cos[i];
+		for (i = num_loops, ml = mloop, no = nos; i-- ; ml++, no++) {
+			const int vidx = ml->v;
+			float *co = cos[vidx];
 
-			facs[i] = get_weight(dvert, defgrp_index, use_invert_vgroup, i);
-			if (facs[i]) {
+			if (!BLI_BITMAP_TEST(done_verts, vidx)) {
 				const float x2 = co[0] * co[0];
 				const float y2 = co[1] * co[1];
 				const float z2 = co[2] * co[2];
 				const float a2 = x2 + (y2 / m2) + (z2 / n2);
 				const float b2 = (m2 * x2) + y2 + (m2 * z2 / n2);
 				const float c2 = (n2 * x2) + (n2 * y2 / m2) + z2;
+
 				co[0] /= a2;
 				co[1] /= b2;
 				co[2] /= c2;
 				normalize_v3(co);
+
+				BLI_BITMAP_ENABLE(done_verts, vidx);
 			}
-			else {
-				zero_v3(co);
-			}
+			copy_v3_v3(*no, co);
 		}
 	}
 
-	BKE_mesh_normals_loop_custom_from_vertices_set(mvert, cos, facs, num_verts, medge, num_edges, mloop, num_loops,
-	                                               mpoly, (const float(*)[3])polynors, num_polys,
-	                                               clnors, use_current_clnors);
+	if (loopnors) {
+		mix_normals(mix_factor, dvert, defgrp_index, use_invert_vgroup,
+		            mix_mode, num_verts, mloop, loopnors, nos, num_loops);
+	}
+
+	BKE_mesh_normals_loop_custom_set(mvert, num_verts, medge, num_edges, mloop, nos, num_loops,
+	                                 mpoly, (const float(*)[3])polynors, num_polys, clnors);
 
 	MEM_freeN(cos);
-	MEM_freeN(facs);
+	MEM_freeN(nos);
+	MEM_freeN(done_verts);
 }
 
 static void setSplitNormalModifier_do_trackto(
         SetSplitNormalModifierData *smd, Object *ob, DerivedMesh *dm,
-        short (*clnors)[2], float (*polynors)[3],
+        short (*clnors)[2], float (*loopnors)[3], float (*polynors)[3],
+        const short mix_mode, const float mix_factor,
         MDeformVert *dvert, const int defgrp_index, const bool use_invert_vgroup,
         MVert *mvert, const int num_verts, MEdge *medge, const int num_edges,
         MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
 {
 	const bool use_parallel_normals = (smd->flags & MOD_SETSPLITNORMAL_USE_PARALLEL_TRACKTO) != 0;
 	const bool use_bbox_center = (smd->flags & MOD_SETSPLITNORMAL_CENTER_BBOX) != 0;
-	const bool use_current_clnors = (smd->flags & MOD_SETSPLITNORMAL_USE_CURCLNORS) != 0;
 
 	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
-	float *facs = MEM_mallocN(sizeof(*facs) * num_verts, __func__);
+	float (*nos)[3] = MEM_mallocN(sizeof(*nos) * num_loops, __func__);
 
 	float target_co[3];
+	int i;
 
 	dm->getVertCos(dm, cos);
 
@@ -244,7 +298,6 @@ static void setSplitNormalModifier_do_trackto(
 
 	if (use_parallel_normals) {
 		float no[3];
-		int i = num_verts;
 
 		if (use_bbox_center) {
 			float min_co[3], max_co[3];
@@ -259,31 +312,43 @@ static void setSplitNormalModifier_do_trackto(
 			normalize_v3_v3(no, target_co);
 		}
 
-		/* We reuse cos to now store the ellipsoid-normal of the verts! */
-		while (i--) {
-			copy_v3_v3(cos[i], no);
-			facs[i] = get_weight(dvert, defgrp_index, use_invert_vgroup, i);
+		for (i = num_loops; i--; ) {
+			copy_v3_v3(nos[i], no);
 		}
 	}
 	else {
-		int i = num_verts;
+		BLI_bitmap *done_verts = BLI_BITMAP_NEW((size_t)num_verts, __func__);
+		MLoop *ml;
+		float (*no)[3];
 
-		/* We reuse cos to now store the ellipsoid-normal of the verts! */
-		while (i--) {
-			float *co = cos[i];
+		/* We reuse cos to now store the 'to target' normal of the verts! */
+		for (i = num_loops, no = nos, ml = mloop; i--; no++, ml++) {
+			const int vidx = ml->v;
+			float *co = cos[vidx];
 
-			sub_v3_v3v3(co, target_co, co);
-			normalize_v3(co);
-			facs[i] = get_weight(dvert, defgrp_index, use_invert_vgroup, i);
+			if (!BLI_BITMAP_TEST(done_verts, vidx)) {
+				sub_v3_v3v3(co, target_co, co);
+				normalize_v3(co);
+
+				BLI_BITMAP_ENABLE(done_verts, vidx);
+			}
+
+			copy_v3_v3(*no, co);
 		}
+
+		MEM_freeN(done_verts);
 	}
 
-	BKE_mesh_normals_loop_custom_from_vertices_set(mvert, cos, facs, num_verts, medge, num_edges, mloop, num_loops,
-	                                               mpoly, (const float(*)[3])polynors, num_polys,
-	                                               clnors, use_current_clnors);
+	if (loopnors) {
+		mix_normals(mix_factor, dvert, defgrp_index, use_invert_vgroup,
+		            mix_mode, num_verts, mloop, loopnors, nos, num_loops);
+	}
+
+	BKE_mesh_normals_loop_custom_set(mvert, num_verts, medge, num_edges, mloop, nos, num_loops,
+	                                 mpoly, (const float(*)[3])polynors, num_polys, clnors);
 
 	MEM_freeN(cos);
-	MEM_freeN(facs);
+	MEM_freeN(nos);
 }
 
 static bool is_valid_target(SetSplitNormalModifierData *smd)
@@ -309,17 +374,25 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 	MPoly *mpoly = dm->getPolyArray(dm);
 
 	const bool use_invert_vgroup = ((smd->flags & MOD_SETSPLITNORMAL_INVERT_VGROUP) != 0);
+	const bool use_current_clnors = (smd->flags & MOD_SETSPLITNORMAL_USE_CURCLNORS) != 0;
 
 	int defgrp_index;
 	MDeformVert *dvert;
 
+	float (*loopnors)[3] = NULL;
 	short (*clnors)[2];
 
 	float (*polynors)[3];
 	bool free_polynors = false;
 
-	if (!is_valid_target(smd)) {
+	if (!is_valid_target(smd) || !num_loops) {
 		return;
+	}
+
+	if (use_current_clnors) {
+		Mesh *me = ob->data;
+		dm->calcLoopNormals(dm, (me->flag & ME_AUTOSMOOTH) != 0, me->smoothresh);
+		loopnors = dm->getLoopDataArray(dm, CD_NORMAL);
 	}
 
 	clnors = CustomData_duplicate_referenced_layer(&dm->loopData, CD_CUSTOMLOOPNORMAL, num_loops);
@@ -338,12 +411,16 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 	modifier_get_vgroup(ob, dm, smd->defgrp_name, &dvert, &defgrp_index);
 
 	if (smd->mode == MOD_SETSPLITNORMAL_MODE_ELLIPSOID) {
-		setSplitNormalModifier_do_ellipsoid(smd, ob, dm, clnors, polynors, dvert, defgrp_index, use_invert_vgroup,
-		                                    mvert, num_verts, medge, num_edges, mloop, num_loops, mpoly, num_polys);
+		setSplitNormalModifier_do_ellipsoid(
+		            smd, ob, dm, clnors, loopnors, polynors,
+		            smd->mix_mode, smd->mix_factor, dvert, defgrp_index, use_invert_vgroup,
+		            mvert, num_verts, medge, num_edges, mloop, num_loops, mpoly, num_polys);
 	}
 	else if (smd->mode == MOD_SETSPLITNORMAL_MODE_TRACKTO) {
-		setSplitNormalModifier_do_trackto(smd, ob, dm, clnors, polynors, dvert, defgrp_index, use_invert_vgroup,
-		                                  mvert, num_verts, medge, num_edges, mloop, num_loops, mpoly, num_polys);
+		setSplitNormalModifier_do_trackto(
+		            smd, ob, dm, clnors, loopnors, polynors,
+		            smd->mix_mode, smd->mix_factor, dvert, defgrp_index, use_invert_vgroup,
+		            mvert, num_verts, medge, num_edges, mloop, num_loops, mpoly, num_polys);
 	}
 
 	if (free_polynors) {
@@ -357,6 +434,9 @@ static void initData(ModifierData *md)
 
 	smd->mode = MOD_SETSPLITNORMAL_MODE_ELLIPSOID;
 	smd->flags = MOD_SETSPLITNORMAL_USE_CURCLNORS;
+
+	smd->mix_mode = MOD_SETSPLITNORMAL_MIX_COPY;
+	smd->mix_factor = 1.0f;
 }
 
 static void copyData(ModifierData *md, ModifierData *target)

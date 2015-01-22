@@ -4357,6 +4357,14 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem prop_mix_mode_items[] = {
+		{MOD_SETSPLITNORMAL_MIX_COPY, "COPY", 0, "Copy", "Copy new normals (i.e. replace old ones)"},
+	    {MOD_SETSPLITNORMAL_MIX_ADD, "ADD", 0, "Add", "Copy sum of new and org normals"},
+	    {MOD_SETSPLITNORMAL_MIX_SUB, "SUB", 0, "Substract", "Copy new normals minus old normals"},
+	    {MOD_SETSPLITNORMAL_MIX_MUL, "MUL", 0, "Multiply", "Copy product of old and new normals (*not* cross product)"},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "SetSplitNormalModifier", "Modifier");
 	RNA_def_struct_ui_text(srna, "Set Split Normal Modifier", "Modifier affecting split normals");
 	RNA_def_struct_sdna(srna, "SetSplitNormalModifierData");
@@ -4365,6 +4373,21 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, prop_mode_items);
 	RNA_def_property_ui_text(prop, "Mode", "How to affect (generate) normals");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "use_current_normals", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_USE_CURCLNORS);
+	RNA_def_property_boolean_default(prop, true);
+	RNA_def_property_ui_text(prop, "Use Current Normals", "Use current split normals to mix generated ones in");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "mix_mode", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, prop_mix_mode_items);
+	RNA_def_property_ui_text(prop, "Mix Mode", "How to mix new generated normals with existing ones");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_float(srna, "mix_factor", 1.0f, 0.0f, 1.0f, "Mix Factor",
+	                     "How much of generated normals to mix with exiting ones", 0.0f, 1.0f);
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "vertex_group", PROP_STRING, PROP_NONE);
@@ -4396,13 +4419,6 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Parallel Normals",
 	                         "Use same direction for all normals, from origin to target's center "
 	                         "(Track Object mode only)");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
-	prop = RNA_def_property(srna, "use_current_custom_split_normals", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_USE_CURCLNORS);
-	RNA_def_property_boolean_default(prop, true);
-	RNA_def_property_ui_text(prop, "Use Custom Split Normals",
-	                         "Use current custom split normals as basis, instead of auto-computed ones, if available");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 }
 

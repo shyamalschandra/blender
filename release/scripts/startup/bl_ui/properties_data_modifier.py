@@ -1355,31 +1355,22 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         sub = col.row()
         sub.active = needs_object_bbox_center
         sub.prop(md, "use_bbox_center")
-        col.prop(md, "use_current_custom_split_normals")
 
         col = split.column()
-        row = col.row(align=True)
-        row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
-        sub = row.row(align=True)
-        sub.active = has_vgroup
-        sub.prop(md, "use_invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
         row = col.row(align=True)
         row.active = (md.mode == 'TRACKTO')
         row.prop(md, "use_trackto_parallel")
-
-    def COPY_SPLIT_NORMAL(self, layout, ob, md):
-        has_vgroup = bool(md.vertex_group)
-
-        row = layout.row()
-        row.prop(md, "mode", expand=True)
+        col.prop(md, "use_current_normals")
 
         split = layout.split()
+        split.active = md.use_current_normals
 
-        col = split.column()
-        col.prop(md, "target", text="")
-        col.prop(md, "use_current_custom_split_normals")
+        col = split.column(align=True)
+        col.label("Mix Mode:")
+        col.prop(md, "mix_mode", text="")
 
-        col = split.column()
+        col = split.column(align=True)
+        col.prop(md, "mix_factor")
         row = col.row(align=True)
         row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
         sub = row.row(align=True)

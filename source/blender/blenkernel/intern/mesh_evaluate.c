@@ -491,8 +491,6 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 	}
 }
 
-#undef LNOR_SPACE_TRIGO_THRESHOLD
-
 #define LOOP_SPLIT_TASK_BLOCK_SIZE 1024
 
 typedef struct LoopSplitTaskData {
@@ -1241,16 +1239,13 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
  * Compute internal representation of given custom normals (as an array of float[2]).
  * It also makes sure the mesh matches those custom normals, by setting sharp edges flag as needed to get a
  * same custom lnor for all loops sharing a same smooth fan.
- * If use_vertices if true, custom_loopnors and custom_loopnors_facs are assumed to be per-vertex, not per-loop
+ * If use_vertices if true, custom_loopnors is assumed to be per-vertex, not per-loop
  * (this allows to set whole vert's normals at once, useful in some cases).
- * If use_clnors_data is true, auto lnors will be computed using data available in given r_clnors_data. Useful to edit
- * custom normals instead of simply overwriting them!
  */
 static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
-                                         MLoop *mloops, float (*custom_loopnors)[3],
-                                         const float *custom_loopnors_facs, const int numLoops,
+                                         MLoop *mloops, float (*custom_loopnors)[3], const int numLoops,
                                          MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                         short (*r_clnors_data)[2], const bool use_clnors_data, const bool use_vertices)
+                                         short (*r_clnors_data)[2], const bool use_vertices)
 {
 	/* We *may* make that poor BKE_mesh_normals_loop_split() even more complex by making it handling that
 	 * feature too, would probably be more efficient in absolute.
@@ -1272,7 +1267,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 	/* Compute current lnor spaces. */
 	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 	                            mpolys, polynors, numPolys, use_split_normals, split_angle,
-	                            &lnors_spaces, use_clnors_data ? r_clnors_data : NULL, loop_to_poly);
+	                            &lnors_spaces, NULL, loop_to_poly);
 
 	/* Now, check each current smooth fan (one lnor space per smooth fan!), and if all its matching custom lnors
 	 * are not (enough) equal, add sharp edges as needed.
@@ -1306,21 +1301,17 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				LinkNode *loops = lnors_spaces.lspaces[i]->loops;
 				MLoop *prev_ml = NULL;
 				const float *org_nor = NULL;
-				float org_fac = 0.0f;
 
 				while (loops) {
 					const int lidx = GET_INT_FROM_POINTER(loops->link);
 					MLoop *ml = &mloops[lidx];
 					const int nidx = use_vertices ? (int)ml->v : lidx;
 					float *nor = custom_loopnors[nidx];
-					const float fac = custom_loopnors_facs ? custom_loopnors_facs[nidx] : 0.0f;
 
 					if (!org_nor) {
 						org_nor = nor;
-						org_fac = fac;
 					}
-					else if (dot_v3v3(org_nor, nor) < 1.0f - 1e-6f ||
-					         (custom_loopnors_facs && fabsf(org_fac - fac) > 1e-6f))
+					else if (dot_v3v3(org_nor, nor) < LNOR_SPACE_TRIGO_THRESHOLD)
 					{
 						/* Current normal differs too much from org one, we have to tag the edge between
 						 * previous loop's face and current's one as sharp.
@@ -1332,7 +1323,6 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 						medges[(prev_ml->e == mlp->e) ? prev_ml->e : ml->e].flag |= ME_SHARP;
 
 						org_nor = nor;
-						org_fac = fac;
 					}
 
 					prev_ml = ml;
@@ -1347,7 +1337,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 		BKE_lnor_spaces_free(&lnors_spaces);
 		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 		                            mpolys, polynors, numPolys, use_split_normals, split_angle,
-		                            &lnors_spaces, use_clnors_data ? r_clnors_data : NULL, loop_to_poly);
+		                            &lnors_spaces, NULL, loop_to_poly);
 	}
 	else {
 		BLI_BITMAP_SET_ALL(done_loops, true, (size_t)numLoops);
@@ -1370,7 +1360,6 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 			if (loops) {
 				int nbr_nors = 0;
 				float avg_nor[3];
-				float avg_fac = 0.0f;
 				short clnor_data_tmp[2], *clnor_data;
 
 				zero_v3(avg_nor);
@@ -1381,9 +1370,6 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 
 					nbr_nors++;
 					add_v3_v3(avg_nor, nor);
-					if (custom_loopnors_facs) {
-						avg_fac += custom_loopnors_facs[nidx];
-					}
 					BLI_SMALLSTACK_PUSH(clnors_data, (short *)r_clnors_data[lidx]);
 
 					loops = loops->next;
@@ -1391,13 +1377,6 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				}
 
 				mul_v3_fl(avg_nor, 1.0f / (float)nbr_nors);
-				if (custom_loopnors_facs) {
-					avg_fac /= (float)nbr_nors;
-					if (avg_fac < 1.0f - 1e-6f) {
-						/* Slerp with final computed lnors, which may include custom lnors if required! */
-						interp_v3_v3v3_slerp_safe(avg_nor, lnors[i], avg_nor, avg_fac);
-					}
-				}
 				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], avg_nor, clnor_data_tmp);
 
 				while ((clnor_data = BLI_SMALLSTACK_POP(clnors_data))) {
@@ -1409,16 +1388,6 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				const int nidx = use_vertices ? (int)mloops[i].v : i;
 				float *nor = custom_loopnors[nidx];
 				float tnor[3];
-
-				if (custom_loopnors_facs) {
-					const float fac = custom_loopnors_facs[nidx];
-
-					if (fac < 1.0f - 1e-6f) {
-						/* Slerp with final computed lnors, which may include custom lnors if required! */
-						interp_v3_v3v3_slerp_safe(tnor, lnors[i], nor, fac);
-						nor = tnor;
-					}
-				}
 
 				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], nor, r_clnors_data[i]);
 				BLI_BITMAP_DISABLE(done_loops, i);
@@ -1433,27 +1402,25 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 }
 
 void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
-                                      MLoop *mloops, float (*custom_loopnors)[3],
-                                      const float *custom_loopnors_facs, const int numLoops,
+                                      MLoop *mloops, float (*custom_loopnors)[3], const int numLoops,
                                       MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                      short (*r_clnors_data)[2], const bool use_clnors_data)
+                                      short (*r_clnors_data)[2])
 {
-	mesh_normals_loop_custom_set(mverts, numVerts, medges, numEdges, mloops, custom_loopnors,
-	                             custom_loopnors_facs, numLoops, mpolys, polynors, numPolys,
-	                             r_clnors_data, use_clnors_data, false);
+	mesh_normals_loop_custom_set(mverts, numVerts, medges, numEdges, mloops, custom_loopnors, numLoops,
+	                             mpolys, polynors, numPolys, r_clnors_data, false);
 }
 
-void BKE_mesh_normals_loop_custom_from_vertices_set(MVert *mverts, float (*custom_vertnors)[3],
-                                                    const float *custom_vertnors_facs, const int numVerts,
+void BKE_mesh_normals_loop_custom_from_vertices_set(MVert *mverts, float (*custom_vertnors)[3], const int numVerts,
                                                     MEdge *medges, const int numEdges,
                                                     MLoop *mloops, const int numLoops,
                                                     MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                                    short (*r_clnors_data)[2], const bool use_clnors_data)
+                                                    short (*r_clnors_data)[2])
 {
-	mesh_normals_loop_custom_set(mverts, numVerts, medges, numEdges, mloops, custom_vertnors,
-	                             custom_vertnors_facs, numLoops, mpolys, polynors, numPolys,
-	                             r_clnors_data, use_clnors_data, true);
+	mesh_normals_loop_custom_set(mverts, numVerts, medges, numEdges, mloops, custom_vertnors, numLoops,
+	                             mpolys, polynors, numPolys, r_clnors_data, true);
 }
+
+#undef LNOR_SPACE_TRIGO_THRESHOLD
 
 /** \} */
 
