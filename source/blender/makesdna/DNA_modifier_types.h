@@ -83,6 +83,7 @@ typedef enum ModifierType {
 	eModifierType_LaplacianDeform   = 47,
 	eModifierType_Wireframe         = 48,
 	eModifierType_DataTransfer      = 49,
+	eModifierType_SetSplitNormal    = 50,
 	NUM_MODIFIER_TYPES
 } ModifierType;
 
@@ -1419,5 +1420,39 @@ enum {
 	MOD_DATATRANSFER_USE_POLY         = 1 << 31,
 };
 
+/* Set Split Normals modifier */
+typedef struct SetSplitNormalModifierData {
+	ModifierData modifier;
+	char defgrp_name[64];  /* MAX_VGROUP_NAME */
+	struct Object *target;  /* Source of normals, or center of ellipsoid. */
+	short mode;
+	short flags;
+	short mix_mode;
+	short pad_s1;
+	float mix_factor;
+	float pad_f1;
+} SetSplitNormalModifierData;
+
+/* SetSplitNormalModifierData.mode */
+enum {
+	MOD_SETSPLITNORMAL_MODE_ELLIPSOID    = 0,
+	MOD_SETSPLITNORMAL_MODE_TRACKTO      = 1,
+};
+
+/* SetSplitNormalModifierData.flags */
+enum {
+	MOD_SETSPLITNORMAL_INVERT_VGROUP        = (1 << 0),
+	MOD_SETSPLITNORMAL_CENTER_BBOX          = (1 << 1),
+	MOD_SETSPLITNORMAL_USE_CURCLNORS        = (1 << 2),
+	MOD_SETSPLITNORMAL_USE_PARALLEL_TRACKTO = (1 << 3),
+};
+
+/* SetSplitNormalModifierData.mix_mode */
+enum {
+	MOD_SETSPLITNORMAL_MIX_COPY = 0,
+	MOD_SETSPLITNORMAL_MIX_ADD  = 1,
+	MOD_SETSPLITNORMAL_MIX_SUB  = 2,
+	MOD_SETSPLITNORMAL_MIX_MUL  = 3,
+};
 
 #endif  /* __DNA_MODIFIER_TYPES_H__ */

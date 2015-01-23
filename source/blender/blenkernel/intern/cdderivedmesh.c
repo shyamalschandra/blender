@@ -1540,6 +1540,7 @@ static CDDerivedMesh *cdDM_create(const char *desc)
 
 	dm->calcNormals = CDDM_calc_normals;
 	dm->calcLoopNormals = CDDM_calc_loop_normals;
+	dm->calcLoopNormalsSpaces = CDDM_calc_loop_normals_spaces;
 	dm->recalcTessellation = CDDM_recalc_tessellation;
 
 	dm->getVertCos = cdDM_getVertCos;
@@ -2158,6 +2159,14 @@ void CDDM_calc_normals(DerivedMesh *dm)
 
 void CDDM_calc_loop_normals(DerivedMesh *dm, const bool use_split_normals, const float split_angle)
 {
+	CDDM_calc_loop_normals_spaces(dm, use_split_normals, split_angle, NULL);
+}
+
+//#define DEBUG_CLNORS
+
+void CDDM_calc_loop_normals_spaces(
+        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopsNorSpaces *r_lnors_spaces)
+{
 	MVert *mverts = dm->getVertArray(dm);
 	MEdge *medges = dm->getEdgeArray(dm);
 	MLoop *mloops = dm->getLoopArray(dm);
@@ -2193,10 +2202,40 @@ void CDDM_calc_loop_normals(DerivedMesh *dm, const bool use_split_normals, const
 
 	dm->dirty &= ~DM_DIRTY_NORMALS;
 
-	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
-	                            mpolys, pnors, numPolys, use_split_normals, split_angle);
-}
+	{
+		short (*clnor_data)[2] = CustomData_get_layer(ldata, CD_CUSTOMLOOPNORMAL);
 
+		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
+		                            mpolys, (const float (*)[3])pnors, numPolys,
+		                            use_split_normals, split_angle,
+		                            r_lnors_spaces, clnor_data, NULL);
+#ifdef DEBUG_CLNORS
+		if (r_lnors_spaces) {
+			int i;
+			for (i = 0; i < numLoops; i++) {
+				if (r_lnors_spaces->lspaces[i]->ref_alpha != 0.0f) {
+					LinkNode *loops = r_lnors_spaces->lspaces[i]->loops;
+					printf("Loop %d uses lnor space %p:\n", i, r_lnors_spaces->lspaces[i]);
+					print_v3("\tfinal lnor", lnors[i]);
+					print_v3("\tauto lnor", r_lnors_spaces->lspaces[i]->vec_lnor);
+					print_v3("\tref_vec", r_lnors_spaces->lspaces[i]->vec_ref);
+					printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", r_lnors_spaces->lspaces[i]->ref_alpha,
+					       r_lnors_spaces->lspaces[i]->ref_beta, r_lnors_spaces->lspaces[i]->loops);
+					printf("\t\t(shared with loops");
+					while(loops) {
+						printf(" %d", GET_INT_FROM_POINTER(loops->link));
+						loops = loops->next;
+					}
+					printf(")\n");
+				}
+				else {
+					printf("Loop %d has no lnor space\n", i);
+				}
+			}
+		}
+#endif
+	}
+}
 
 void CDDM_calc_normals_tessface(DerivedMesh *dm)
 {

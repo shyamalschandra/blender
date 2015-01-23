@@ -88,6 +88,7 @@ struct MTFace;
 struct Object;
 struct Scene;
 struct Mesh;
+struct MLoopsNorSpaces;
 struct BMEditMesh;
 struct KeyBlock;
 struct ModifierData;
@@ -198,6 +199,10 @@ struct DerivedMesh {
 
 	/** Calculate loop (split) normals */
 	void (*calcLoopNormals)(DerivedMesh *dm, const bool use_split_normals, const float split_angle);
+
+	/** Calculate loop (split) normals, and returns split loop normal spaces. */
+	void (*calcLoopNormalsSpaces)(DerivedMesh *dm, const bool use_split_normals, const float split_angle,
+	                              struct MLoopsNorSpaces *r_lnors_spaces);
 
 	/** Recalculates mesh tessellation */
 	void (*recalcTessellation)(DerivedMesh *dm);

@@ -265,7 +265,7 @@ static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<
 	int numverts = b_mesh.vertices.length();
 	int numfaces = b_mesh.tessfaces.length();
 	int numtris = 0;
-	bool use_loop_normals = b_mesh.use_auto_smooth();
+	bool use_loop_normals = b_mesh.use_auto_smooth() || b_mesh.has_custom_normals();
 
 	BL::Mesh::vertices_iterator v;
 	BL::Mesh::tessfaces_iterator f;

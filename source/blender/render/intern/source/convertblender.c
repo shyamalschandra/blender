@@ -3178,6 +3178,9 @@ static void init_render_mesh(Render *re, ObjectRen *obr, int timeoffset)
 		dm= mesh_create_derived_render(re->scene, ob, mask);
 	if (dm==NULL) return;	/* in case duplicated object fails? */
 
+	/* In case we have some tessloopnormal data available, always do autosmooth! */
+	do_autosmooth = do_autosmooth || ((dm->getTessFaceDataArray(dm, CD_TESSLOOPNORMAL) != NULL) && !do_displace);
+
 	if (mask & CD_MASK_ORCO) {
 		orco = get_object_orco(re, ob);
 		if (!orco) {
