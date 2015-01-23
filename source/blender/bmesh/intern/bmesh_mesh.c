@@ -524,20 +524,20 @@ static void bm_mesh_edges_sharp_tag(BMesh *bm, const float (*vnos)[3], const flo
 /* BMesh version of BKE_mesh_normals_loop_split() in mesh_evaluate.c
  * Will use first clnors_data array, and fallback to cd_loop_clnors_offset (use NULL and -1 to not use clnors). */
 static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const float (*fnos)[3], float (*r_lnos)[3],
-                                       MLoopsNorSpaces *r_lnors_spaces,
+                                       MLoopNorSpaceset *r_lnors_spaceset,
                                        short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	BMIter fiter;
 	BMFace *f_curr;
 	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
 
-	MLoopsNorSpaces _lnors_spaces = {NULL};
+	MLoopNorSpaceset _lnors_spaceset = {NULL};
 
 	/* Temp normal stack. */
 	BLI_SMALLSTACK_DECLARE(normal, float *);
 	/* Temp clnors stack. */
 	BLI_SMALLSTACK_DECLARE(clnors, short *);
-	/* Temp edge vectors stack, only used when computing lnor spaces. */
+	/* Temp edge vectors stack, only used when computing lnor spaceset. */
 	BLI_Stack *edge_vectors = NULL;
 
 	{
@@ -551,13 +551,13 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 		BM_mesh_elem_index_ensure(bm, htype);
 	}
 
-	if (!r_lnors_spaces && has_clnors) {
-		/* We need to compute lnor spaces if some custom lnor data are given to us! */
-		r_lnors_spaces = &_lnors_spaces;
+	if (!r_lnors_spaceset && has_clnors) {
+		/* We need to compute lnor spaceset if some custom lnor data are given to us! */
+		r_lnors_spaceset = &_lnors_spaceset;
 	}
-	if (r_lnors_spaces) {
-		if (!r_lnors_spaces->mem) {
-			BKE_lnor_spaces_init(r_lnors_spaces, bm->totloop);
+	if (r_lnors_spaceset) {
+		if (!r_lnors_spaceset->mem) {
+			BKE_lnor_spaceset_init(r_lnors_spaceset, bm->totloop);
 		}
 		edge_vectors = BLI_stack_new(sizeof(float[3]), __func__);
 	}
@@ -571,9 +571,9 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 		l_curr = l_first = BM_FACE_FIRST_LOOP(f_curr);
 		do {
 			if (BM_elem_flag_test(l_curr->e, BM_ELEM_TAG) &&
-			    (!r_lnors_spaces || BM_elem_flag_test(l_curr->v, BM_ELEM_TAG)))
+			    (!r_lnors_spaceset || BM_elem_flag_test(l_curr->v, BM_ELEM_TAG)))
 			{
-				/* A smooth edge, and we are not generating lnors_spaces, or the related vertex is sharp.
+				/* A smooth edge, and we are not generating lnors_spaceset, or the related vertex is sharp.
 				 * We skip it because it is either:
 				 * - in the middle of a 'smooth fan' already computed (or that will be as soon as we hit
 				 *   one of its ends, i.e. one of its two sharp edges), or...
@@ -592,9 +592,9 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 				copy_v3_v3(r_lnos[l_curr_index], no);
 
 				/* If needed, generate this (simple!) lnor space. */
-				if (r_lnors_spaces) {
+				if (r_lnors_spaceset) {
 					float vec_curr[3], vec_prev[3];
-					MLoopNorSpace *lnor_space = BKE_lnor_space_create(r_lnors_spaces);
+					MLoopNorSpace *lnor_space = BKE_lnor_space_create(r_lnors_spaceset);
 
 					{
 						const BMVert *v_pivot = l_curr->v;
@@ -612,7 +612,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 
 					BKE_lnor_space_define(lnor_space, r_lnos[l_curr_index], vec_curr, vec_prev, NULL);
 					/* We know there is only one loop in this space, no need to create a linklist in this case... */
-					BKE_lnor_space_add_loop(r_lnors_spaces, lnor_space, l_curr_index, false);
+					BKE_lnor_space_add_loop(r_lnors_spaceset, lnor_space, l_curr_index, false);
 
 					if (has_clnors) {
 						short (*clnor)[2] = clnors_data ? &clnors_data[l_curr_index] :
@@ -653,7 +653,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 
 				const float *co_pivot = vcos ? vcos[BM_elem_index_get(v_pivot)] : v_pivot->co;
 
-				MLoopNorSpace *lnor_space = r_lnors_spaces ? BKE_lnor_space_create(r_lnors_spaces) : NULL;
+				MLoopNorSpace *lnor_space = r_lnors_spaceset ? BKE_lnor_space_create(r_lnors_spaceset) : NULL;
 
 				BLI_assert((edge_vectors == NULL) || BLI_stack_is_empty(edge_vectors));
 
@@ -670,7 +670,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 					normalize_v3(vec_org);
 					copy_v3_v3(vec_curr, vec_org);
 
-					if (r_lnors_spaces) {
+					if (r_lnors_spaceset) {
 						BLI_stack_push(edge_vectors, vec_org);
 					}
 				}
@@ -729,9 +729,9 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 					/* We store here a pointer to all loop-normals processed. */
 					BLI_SMALLSTACK_PUSH(normal, (float *)r_lnos[lfan_pivot_index]);
 
-					if (r_lnors_spaces) {
+					if (r_lnors_spaceset) {
 						/* Assign current lnor space to current 'vertex' loop. */
-						BKE_lnor_space_add_loop(r_lnors_spaces, lnor_space, lfan_pivot_index, true);
+						BKE_lnor_space_add_loop(r_lnors_spaceset, lnor_space, lfan_pivot_index, true);
 						if (e_next != e_org) {
 							/* We store here all edges-normalized vectors processed. */
 							BLI_stack_push(edge_vectors, vec_next);
@@ -753,8 +753,8 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 				{
 					float lnor_len = normalize_v3(lnor);
 
-					/* If we are generating lnor spaces, we can now define the one for this fan. */
-					if (r_lnors_spaces) {
+					/* If we are generating lnor spaceset, we can now define the one for this fan. */
+					if (r_lnors_spaceset) {
 						if (UNLIKELY(lnor_len == 0.0f)) {
 							/* Use vertex normal as fallback! */
 							copy_v3_v3(lnor, r_lnos[lfan_pivot_index]);
@@ -802,17 +802,17 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 				}
 
 				/* Tag related vertex as sharp, to avoid fanning around it again (in case it was a smooth one). */
-				if (r_lnors_spaces) {
+				if (r_lnors_spaceset) {
 					BM_elem_flag_enable(l_curr->v, BM_ELEM_TAG);
 				}
 			}
 		} while ((l_curr = l_curr->next) != l_first);
 	}
 
-	if (r_lnors_spaces) {
+	if (r_lnors_spaceset) {
 		BLI_stack_free(edge_vectors);
-		if (r_lnors_spaces == &_lnors_spaces) {
-			BKE_lnor_spaces_free(r_lnors_spaces);
+		if (r_lnors_spaceset == &_lnors_spaceset) {
+			BKE_lnor_spaceset_free(r_lnors_spaceset);
 		}
 	}
 }
@@ -850,7 +850,7 @@ static void bm_mesh_loops_from_vert_normals(BMesh *bm, const float (*vnos)[3], f
  * first)!
  */
 void BM_mesh_loop_normals_update(BMesh *bm, const bool use_split_normals, const float split_angle, float (*r_lnos)[3],
-                                 MLoopsNorSpaces *r_lnors_spaces,
+                                 MLoopNorSpaceset *r_lnors_spaceset,
                                  short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
@@ -861,10 +861,10 @@ void BM_mesh_loop_normals_update(BMesh *bm, const bool use_split_normals, const 
 	        bm_mesh_edges_sharp_tag(bm, NULL, NULL, has_clnors ? (float)M_PI : split_angle, r_lnos);
 
 	        /* Finish computing lnos by accumulating face normals in each fan of faces defined by sharp edges. */
-	        bm_mesh_loops_calc_normals(bm, NULL, NULL, r_lnos, r_lnors_spaces, clnors_data, cd_loop_clnors_offset);
+	        bm_mesh_loops_calc_normals(bm, NULL, NULL, r_lnos, r_lnors_spaceset, clnors_data, cd_loop_clnors_offset);
 	}
 	else {
-		BLI_assert(!r_lnors_spaces);
+		BLI_assert(!r_lnors_spaceset);
 		bm_mesh_loops_from_vert_normals(bm, NULL, r_lnos);
 	}
 }
@@ -878,7 +878,7 @@ void BM_mesh_loop_normals_update(BMesh *bm, const bool use_split_normals, const 
  */
 void BM_loops_calc_normal_vcos(BMesh *bm, const float (*vcos)[3], const float (*vnos)[3], const float (*fnos)[3],
                                const bool use_split_normals, const float split_angle, float (*r_lnos)[3],
-                               MLoopsNorSpaces *r_lnors_spaces,
+                               MLoopNorSpaceset *r_lnors_spaceset,
                                short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
@@ -889,10 +889,10 @@ void BM_loops_calc_normal_vcos(BMesh *bm, const float (*vcos)[3], const float (*
 		bm_mesh_edges_sharp_tag(bm, vnos, fnos, has_clnors ? (float)M_PI : split_angle, r_lnos);
 
 		/* Finish computing lnos by accumulating face normals in each fan of faces defined by sharp edges. */
-		bm_mesh_loops_calc_normals(bm, vcos, fnos, r_lnos, r_lnors_spaces, clnors_data, cd_loop_clnors_offset);
+		bm_mesh_loops_calc_normals(bm, vcos, fnos, r_lnos, r_lnors_spaceset, clnors_data, cd_loop_clnors_offset);
 	}
 	else {
-		BLI_assert(!r_lnors_spaces);
+		BLI_assert(!r_lnors_spaceset);
 		bm_mesh_loops_from_vert_normals(bm, vnos, r_lnos);
 	}
 }

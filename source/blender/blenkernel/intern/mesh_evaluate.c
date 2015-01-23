@@ -59,7 +59,7 @@
 
 #include "mikktspace.h"
 
-#define DEBUG_TIME
+// #define DEBUG_TIME
 
 #include "PIL_time.h"
 #ifdef DEBUG_TIME
@@ -319,24 +319,24 @@ void BKE_mesh_calc_normals_tessface(MVert *mverts, int numVerts, MFace *mfaces, 
 		MEM_freeN(fnors);
 }
 
-void BKE_lnor_spaces_init(MLoopsNorSpaces *lnors_spaces, const int numLoops)
+void BKE_lnor_spaceset_init(MLoopNorSpaceset *lnors_spaceset, const int numLoops)
 {
-	MemArena *mem = lnors_spaces->mem = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
-	lnors_spaces->lspaces = BLI_memarena_calloc(mem, sizeof(MLoopNorSpace *) * (size_t)numLoops);
-	lnors_spaces->loops_pool = BLI_memarena_alloc(mem, sizeof(LinkNode) * (size_t)numLoops);
+	MemArena *mem = lnors_spaceset->mem = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
+	lnors_spaceset->lspaceset = BLI_memarena_calloc(mem, sizeof(MLoopNorSpace *) * (size_t)numLoops);
+	lnors_spaceset->loops_pool = BLI_memarena_alloc(mem, sizeof(LinkNode) * (size_t)numLoops);
 }
 
-void BKE_lnor_spaces_free(MLoopsNorSpaces *lnors_spaces)
+void BKE_lnor_spaceset_free(MLoopNorSpaceset *lnors_spaceset)
 {
-	BLI_memarena_free(lnors_spaces->mem);
-	lnors_spaces->lspaces = NULL;
-	lnors_spaces->loops_pool = NULL;
-	lnors_spaces->mem = NULL;
+	BLI_memarena_free(lnors_spaceset->mem);
+	lnors_spaceset->lspaceset = NULL;
+	lnors_spaceset->loops_pool = NULL;
+	lnors_spaceset->mem = NULL;
 }
 
-MLoopNorSpace *BKE_lnor_space_create(MLoopsNorSpaces *lnors_spaces)
+MLoopNorSpace *BKE_lnor_space_create(MLoopNorSpaceset *lnors_spaceset)
 {
-	return BLI_memarena_calloc(lnors_spaces->mem, sizeof(MLoopNorSpace));
+	return BLI_memarena_calloc(lnors_spaceset->mem, sizeof(MLoopNorSpace));
 }
 
 /* This threshold is a bit touchy (usual float precision issue), this value seems OK. */
@@ -403,12 +403,12 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
 	}
 }
 
-void BKE_lnor_space_add_loop(MLoopsNorSpaces *lnors_spaces, MLoopNorSpace *lnor_space, const int ml_index,
+void BKE_lnor_space_add_loop(MLoopNorSpaceset *lnors_spaceset, MLoopNorSpace *lnor_space, const int ml_index,
                              const bool do_add_loop)
 {
-	lnors_spaces->lspaces[ml_index] = lnor_space;
+	lnors_spaceset->lspaceset[ml_index] = lnor_space;
 	if (do_add_loop) {
-		BLI_linklist_prepend_nlink(&lnor_space->loops, SET_INT_IN_POINTER(ml_index), &lnors_spaces->loops_pool[ml_index]);
+		BLI_linklist_prepend_nlink(&lnor_space->loops, SET_INT_IN_POINTER(ml_index), &lnors_spaceset->loops_pool[ml_index]);
 	}
 }
 
@@ -514,7 +514,7 @@ typedef struct LoopSplitTaskDataCommon {
 	/* Read/write.
 	 * Note we do not need to protect it, though, since two different tasks will *always* affect different
 	 * elements in the arrays. */
-	MLoopsNorSpaces *lnors_spaces;
+	MLoopNorSpaceset *lnors_spaceset;
 	BLI_bitmap *sharp_verts;
 	float (*loopnors)[3];
 	short (*clnors_data)[2];
@@ -587,7 +587,7 @@ static bool loop_split_task_data_pop(LoopSplitTaskDataCommon *common_data, LoopS
 
 static void split_loop_nor_single_do(LoopSplitTaskDataCommon *common_data, LoopSplitTaskData *data)
 {
-	MLoopsNorSpaces *lnors_spaces = common_data->lnors_spaces;
+	MLoopNorSpaceset *lnors_spaceset = common_data->lnors_spaceset;
 	short (*clnors_data)[2] = common_data->clnors_data;
 
 	const MVert *mverts = common_data->mverts;
@@ -613,7 +613,7 @@ static void split_loop_nor_single_do(LoopSplitTaskDataCommon *common_data, LoopS
 	/* printf("BASIC: handling loop %d / edge %d / vert %d\n", ml_curr_index, ml_curr->e, ml_curr->v); */
 
 	/* If needed, generate this (simple!) lnor space. */
-	if (lnors_spaces) {
+	if (lnors_spaceset) {
 		float vec_curr[3], vec_prev[3];
 
 		const unsigned int mv_pivot_index = ml_curr->v;  /* The vertex we are "fanning" around! */
@@ -630,7 +630,7 @@ static void split_loop_nor_single_do(LoopSplitTaskDataCommon *common_data, LoopS
 
 		BKE_lnor_space_define(lnor_space, *lnor, vec_curr, vec_prev, NULL);
 		/* We know there is only one loop in this space, no need to create a linklist in this case... */
-		BKE_lnor_space_add_loop(lnors_spaces, lnor_space, ml_curr_index, false);
+		BKE_lnor_space_add_loop(lnors_spaceset, lnor_space, ml_curr_index, false);
 
 		if (clnors_data) {
 			BKE_lnor_space_custom_data_to_normal(lnor_space, clnors_data[ml_curr_index], *lnor);
@@ -640,7 +640,7 @@ static void split_loop_nor_single_do(LoopSplitTaskDataCommon *common_data, LoopS
 
 static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSplitTaskData *data)
 {
-	MLoopsNorSpaces *lnors_spaces = common_data->lnors_spaces;
+	MLoopNorSpaceset *lnors_spaceset = common_data->lnors_spaceset;
 	float (*loopnors)[3] = common_data->loopnors;
 	short (*clnors_data)[2] = common_data->clnors_data;
 
@@ -712,7 +712,7 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
 		normalize_v3(vec_org);
 		copy_v3_v3(vec_prev, vec_org);
 
-		if (lnors_spaces) {
+		if (lnors_spaceset) {
 			BLI_stack_push(edge_vectors, vec_org);
 		}
 	}
@@ -762,9 +762,9 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
 		/* We store here a pointer to all loop-normals processed. */
 		BLI_SMALLSTACK_PUSH(normal, (float *)(loopnors[mlfan_vert_index]));
 
-		if (lnors_spaces) {
+		if (lnors_spaceset) {
 			/* Assign current lnor space to current 'vertex' loop. */
-			BKE_lnor_space_add_loop(lnors_spaces, lnor_space, mlfan_vert_index, true);
+			BKE_lnor_space_add_loop(lnors_spaceset, lnor_space, mlfan_vert_index, true);
 			if (me_curr != me_org) {
 				/* We store here all edges-normalized vectors processed. */
 				BLI_stack_push(edge_vectors, vec_curr);
@@ -822,10 +822,10 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
 	{
 		float lnor_len = normalize_v3(lnor);
 
-		/* If we are generating lnor spaces, we can now define the one for this fan,
+		/* If we are generating lnor spaceset, we can now define the one for this fan,
 		 * and optionally compute final lnor from custom data too!
 		 */
-		if (lnors_spaces) {
+		if (lnors_spaceset) {
 			if (UNLIKELY(lnor_len == 0.0f)) {
 				/* Use vertex normal as fallback! */
 				copy_v3_v3(lnor, loopnors[mlfan_vert_index]);
@@ -873,8 +873,8 @@ static void loop_split_worker(TaskPool *UNUSED(pool), void *taskdata, int UNUSED
 	LoopSplitTaskDataCommon *common_data = (LoopSplitTaskDataCommon *)taskdata;
 	LoopSplitTaskData data_buff[LOOP_SPLIT_TASK_BLOCK_SIZE];
 
-	/* Temp edge vectors stack, only used when computing lnor spaces. */
-	BLI_Stack *edge_vectors = common_data->lnors_spaces ? BLI_stack_new(sizeof(float[3]), __func__) : NULL;
+	/* Temp edge vectors stack, only used when computing lnor spaceset. */
+	BLI_Stack *edge_vectors = common_data->lnors_spaceset ? BLI_stack_new(sizeof(float[3]), __func__) : NULL;
 
 	int count = 0;
 
@@ -920,7 +920,7 @@ static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int UNU
 	LoopSplitTaskData data_buff[LOOP_SPLIT_TASK_BLOCK_SIZE];
 	int data_idx = 0;
 
-	MLoopsNorSpaces *lnors_spaces = common_data->lnors_spaces;
+	MLoopNorSpaceset *lnors_spaceset = common_data->lnors_spaceset;
 	BLI_bitmap *sharp_verts = common_data->sharp_verts;
 	float (*loopnors)[3] = common_data->loopnors;
 
@@ -958,13 +958,13 @@ static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int UNU
 
 			LoopSplitTaskData *data = &data_buff[data_idx % LOOP_SPLIT_TASK_BLOCK_SIZE];
 
-			if (!IS_EDGE_SHARP(e2l_curr) && (!lnors_spaces || BLI_BITMAP_TEST_BOOL(sharp_verts, ml_curr->v))) {
-				/* A smooth edge, and we are not generating lnor_spaces, or the related vertex is sharp.
+			if (!IS_EDGE_SHARP(e2l_curr) && (!lnors_spaceset || BLI_BITMAP_TEST_BOOL(sharp_verts, ml_curr->v))) {
+				/* A smooth edge, and we are not generating lnor_spaceset, or the related vertex is sharp.
 				 * We skip it because it is either:
 				 * - in the middle of a 'smooth fan' already computed (or that will be as soon as we hit
 				 *   one of its ends, i.e. one of its two sharp edges), or...
 				 * - the related vertex is a "full smooth" one, in which case pre-populated normals from vertex
-				 *   are just fine (or it has already be handled in a previous loop in case of needed lnors spaces)!
+				 *   are just fine (or it has already be handled in a previous loop in case of needed lnors spaceset)!
 				 */
 				/* printf("Skipping loop %d / edge %d / vert %d(%d)\n", ml_curr_index, ml_curr->e, ml_curr->v, sharp_verts[ml_curr->v]); */
 			}
@@ -979,8 +979,8 @@ static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int UNU
 					data->e2l_prev = NULL;  /* Tag as 'single' task. */
 #endif
 					data->mp_index = mp_index;
-					if (lnors_spaces) {
-						data->lnor_space = BKE_lnor_space_create(lnors_spaces);
+					if (lnors_spaceset) {
+						data->lnor_space = BKE_lnor_space_create(lnors_spaceset);
 					}
 				}
 				/* We *do not need* to check/tag loops as already computed!
@@ -1001,8 +1001,8 @@ static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int UNU
 					data->ml_prev_index = ml_prev_index;
 					data->e2l_prev = e2l_prev;  /* Also tag as 'fan' task. */
 					data->mp_index = mp_index;
-					if (lnors_spaces) {
-						data->lnor_space = BKE_lnor_space_create(lnors_spaces);
+					if (lnors_spaceset) {
+						data->lnor_space = BKE_lnor_space_create(lnors_spaceset);
 						/* Tag related vertex as sharp, to avoid fanning around it again (in case it was a smooth one).
 						 * This *has* to be done outside of workers tasks! */
 						BLI_BITMAP_ENABLE(sharp_verts, ml_curr->v);
@@ -1041,11 +1041,11 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
                                  MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
                                  MPoly *mpolys, const float (*polynors)[3], const int numPolys,
                                  const bool use_split_normals, float split_angle,
-                                 MLoopsNorSpaces *r_lnors_spaces, short (*clnors_data)[2], int *r_loop_to_poly)
+                                 MLoopNorSpaceset *r_lnors_spaceset, short (*clnors_data)[2], int *r_loop_to_poly)
 {
 
 	/* For now this is not supported. if we do not use split normals, we do not generate anything fancy! */
-	BLI_assert(use_split_normals || !(r_lnors_spaces || r_loop_to_poly));
+	BLI_assert(use_split_normals || !(r_lnors_spaceset || r_loop_to_poly));
 
 	if (!use_split_normals) {
 		/* In this case, we simply fill lnors with vnors, quite simple!
@@ -1083,7 +1083,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	int i;
 
 	BLI_bitmap *sharp_verts = NULL;
-	MLoopsNorSpaces _lnors_spaces = {NULL};
+	MLoopNorSpaceset _lnors_spaceset = {NULL};
 
 	TaskScheduler *task_scheduler;
 	TaskPool *task_pool;
@@ -1104,13 +1104,13 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 		}
 	}
 
-	if (!r_lnors_spaces && clnors_data) {
-		/* We need to compute lnor spaces if some custom lnor data are given to us! */
-		r_lnors_spaces = &_lnors_spaces;
+	if (!r_lnors_spaceset && clnors_data) {
+		/* We need to compute lnor spaceset if some custom lnor data are given to us! */
+		r_lnors_spaceset = &_lnors_spaceset;
 	}
-	if (r_lnors_spaces) {
-		if (!r_lnors_spaces->mem) {
-			BKE_lnor_spaces_init(r_lnors_spaces, numLoops);
+	if (r_lnors_spaceset) {
+		if (!r_lnors_spaceset->mem) {
+			BKE_lnor_spaceset_init(r_lnors_spaceset, numLoops);
 		}
 		sharp_verts = BLI_BITMAP_NEW((size_t)numVerts, __func__);
 	}
@@ -1166,8 +1166,8 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 		}
 	}
 
-	if (r_lnors_spaces) {
-		/* Tag vertices that have at least one sharp edge as 'sharp' (used for the lnor spaces computation).
+	if (r_lnors_spaceset) {
+		/* Tag vertices that have at least one sharp edge as 'sharp' (used for the lnor spaceset computation).
 		 * XXX This third loop over edges is a bit disappointing, could not find any other way yet.
 		 *     Not really performance-critical anyway.
 		 */
@@ -1182,7 +1182,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 	}
 
 	/* Init data common to all tasks. */
-	common_taskdata.lnors_spaces = r_lnors_spaces;
+	common_taskdata.lnors_spaceset = r_lnors_spaceset;
 	common_taskdata.loopnors = r_loopnors;
 	common_taskdata.clnors_data = clnors_data;
 
@@ -1217,10 +1217,10 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 		MEM_freeN(loop_to_poly);
 	}
 
-	if (r_lnors_spaces) {
+	if (r_lnors_spaceset) {
 		MEM_freeN(sharp_verts);
-		if (r_lnors_spaces == &_lnors_spaces) {
-			BKE_lnor_spaces_free(r_lnors_spaces);
+		if (r_lnors_spaceset == &_lnors_spaceset) {
+			BKE_lnor_spaceset_free(r_lnors_spaceset);
 		}
 	}
 
@@ -1253,7 +1253,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 	 * by io addons when importing custom normals, and modifier (and perhaps from some editing tools later?).
 	 * So better to keep some simplicity here, and just call BKE_mesh_normals_loop_split() twice!
 	 */
-	MLoopsNorSpaces lnors_spaces = {NULL};
+	MLoopNorSpaceset lnors_spaceset = {NULL};
 	BLI_bitmap *done_loops = BLI_BITMAP_NEW((size_t)numLoops, __func__);
 	float (*lnors)[3] = MEM_callocN(sizeof(*lnors) * (size_t)numLoops, __func__);
 	int *loop_to_poly = MEM_mallocN(sizeof(int) * (size_t)numLoops, __func__);
@@ -1264,27 +1264,27 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 
 	BLI_SMALLSTACK_DECLARE(clnors_data, short *);
 
-	/* Compute current lnor spaces. */
+	/* Compute current lnor spaceset. */
 	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 	                            mpolys, polynors, numPolys, use_split_normals, split_angle,
-	                            &lnors_spaces, NULL, loop_to_poly);
+	                            &lnors_spaceset, NULL, loop_to_poly);
 
 	/* Now, check each current smooth fan (one lnor space per smooth fan!), and if all its matching custom lnors
 	 * are not (enough) equal, add sharp edges as needed.
-	 * This way, next time we run BKE_mesh_normals_loop_split(), we'll get lnor spaces/smooth fans matching
+	 * This way, next time we run BKE_mesh_normals_loop_split(), we'll get lnor spaceset/smooth fans matching
 	 * given custom lnors.
 	 * Note this code *will never* unsharp edges!
 	 * And quite obviously, when we set custom normals per vertices, running this is absolutely useless.
 	 */
 	if (!use_vertices) {
 		for (i = 0; i < numLoops; i++) {
-			if (!lnors_spaces.lspaces[i]) {
+			if (!lnors_spaceset.lspaceset[i]) {
 				/* This should not happen in theory, but in some rare case (probably ugly geometry)
-				 * we can get some NULL loopspaces at this point. :/
+				 * we can get some NULL loopspaceset at this point. :/
 				 * Maybe we should set those loops' edges as sharp?
 				 */
 				BLI_BITMAP_ENABLE(done_loops, i);
-				printf("WARNING! Getting invalid NULL loop spaces for loop %d!\n", i);
+				printf("WARNING! Getting invalid NULL loop spaceset for loop %d!\n", i);
 				continue;
 			}
 
@@ -1298,7 +1298,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				 *     * In smooth fan case, we compare each clnor against a ref one, to avoid small differences adding
 				 *       up into a real big one in the end!
 				 */
-				LinkNode *loops = lnors_spaces.lspaces[i]->loops;
+				LinkNode *loops = lnors_spaceset.lspaceset[i]->loops;
 				MLoop *prev_ml = NULL;
 				const float *org_nor = NULL;
 
@@ -1329,15 +1329,15 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 					loops = loops->next;
 					BLI_BITMAP_ENABLE(done_loops, lidx);
 				}
-				BLI_BITMAP_ENABLE(done_loops, i);  /* For single loops, where lnors_spaces.lspaces[i]->loops is NULL. */
+				BLI_BITMAP_ENABLE(done_loops, i);  /* For single loops, where lnors_spaceset.lspaceset[i]->loops is NULL. */
 			}
 		}
 
-		/* And now, recompute our new auto lnors and lnor spaces! */
-		BKE_lnor_spaces_free(&lnors_spaces);
+		/* And now, recompute our new auto lnors and lnor spaceset! */
+		BKE_lnor_spaceset_free(&lnors_spaceset);
 		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 		                            mpolys, polynors, numPolys, use_split_normals, split_angle,
-		                            &lnors_spaces, NULL, loop_to_poly);
+		                            &lnors_spaceset, NULL, loop_to_poly);
 	}
 	else {
 		BLI_BITMAP_SET_ALL(done_loops, true, (size_t)numLoops);
@@ -1345,9 +1345,9 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 
 	/* And we just have to convert plain object-space custom normals to our lnor space-encoded ones. */
 	for (i = 0; i < numLoops; i++) {
-		if (!lnors_spaces.lspaces[i]) {
+		if (!lnors_spaceset.lspaceset[i]) {
 			BLI_BITMAP_DISABLE(done_loops, i);
-			printf("WARNING! Still getting invalid NULL loop spaces in second loop for loop %d!\n", i);
+			printf("WARNING! Still getting invalid NULL loop spaceset in second loop for loop %d!\n", i);
 			continue;
 		}
 
@@ -1356,7 +1356,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 			 * clnors data (tiny differences in plain custom normals can give rather huge differences in
 			 * computed 2D factors).
 			 */
-			LinkNode *loops = lnors_spaces.lspaces[i]->loops;
+			LinkNode *loops = lnors_spaceset.lspaceset[i]->loops;
 			if (loops) {
 				int nbr_nors = 0;
 				float avg_nor[3];
@@ -1377,7 +1377,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				}
 
 				mul_v3_fl(avg_nor, 1.0f / (float)nbr_nors);
-				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], avg_nor, clnor_data_tmp);
+				BKE_lnor_space_custom_normal_to_data(lnors_spaceset.lspaceset[i], avg_nor, clnor_data_tmp);
 
 				while ((clnor_data = BLI_SMALLSTACK_POP(clnors_data))) {
 					clnor_data[0] = clnor_data_tmp[0];
@@ -1388,7 +1388,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				const int nidx = use_vertices ? (int)mloops[i].v : i;
 				float *nor = custom_loopnors[nidx];
 
-				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], nor, r_clnors_data[i]);
+				BKE_lnor_space_custom_normal_to_data(lnors_spaceset.lspaceset[i], nor, r_clnors_data[i]);
 				BLI_BITMAP_DISABLE(done_loops, i);
 			}
 		}
@@ -1397,7 +1397,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 	MEM_freeN(lnors);
 	MEM_freeN(loop_to_poly);
 	MEM_freeN(done_loops);
-	BKE_lnor_spaces_free(&lnors_spaces);
+	BKE_lnor_spaceset_free(&lnors_spaceset);
 }
 
 void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
