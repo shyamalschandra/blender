@@ -52,17 +52,6 @@
 #include "MOD_util.h"
 
 
-static float get_weight(MDeformVert *dvert, const int defgrp_index, const bool use_invert_vgroup, const int vidx)
-{
-	if (!dvert || defgrp_index == -1) {
-		return 1.0f;
-	}
-	else {
-		const float weight = defvert_find_weight(&dvert[vidx], defgrp_index);
-		return use_invert_vgroup ? 1.0f - weight : weight;
-	}
-}
-
 static void get_min_max_co(float (*cos)[3], const int num_verts, float r_min_co[3], float r_max_co[3])
 {
 	/* XXX Check we can't get this from object?! Don't think so (bbox does not account for DM/mod stack). */
@@ -359,11 +348,14 @@ static bool is_valid_target(SetSplitNormalModifierData *smd)
 	else if ((smd->mode == MOD_SETSPLITNORMAL_MODE_TRACKTO) && smd->target) {
 		return true;
 	}
+	modifier_setError((ModifierData *)smd, "Invalid target settings");
 	return false;
 }
 
 static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *ob, DerivedMesh *dm)
 {
+	Mesh *me = ob->data;
+
 	const int num_verts = dm->getNumVerts(dm);
 	const int num_edges = dm->getNumEdges(dm);
 	const int num_loops = dm->getNumLoops(dm);
@@ -385,12 +377,18 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 	float (*polynors)[3];
 	bool free_polynors = false;
 
+	/* Do not run that modifier at all if autosmooth is disabled! */
 	if (!is_valid_target(smd) || !num_loops) {
 		return;
 	}
 
+	if (!(me->flag & ME_AUTOSMOOTH)) {
+		modifier_setError((ModifierData *)smd, "Please enable 'Auto Smooth' option in mesh settings");
+		return;
+	}
+
+
 	if (use_current_clnors) {
-		Mesh *me = ob->data;
 		dm->calcLoopNormals(dm, (me->flag & ME_AUTOSMOOTH) != 0, me->smoothresh);
 		loopnors = dm->getLoopDataArray(dm, CD_NORMAL);
 	}

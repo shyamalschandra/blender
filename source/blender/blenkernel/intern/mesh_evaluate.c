@@ -1288,7 +1288,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 				continue;
 			}
 
-			if (!BLI_BITMAP_TEST_BOOL(done_loops, i)) {
+			if (!BLI_BITMAP_TEST(done_loops, i)) {
 				/* Notes:
 				 *     * In case of mono-loop smooth fan, loops is NULL, so everything is fine (we have nothing to do).
 				 *     * Loops in this linklist are ordered (in reversed order compared to how they were discovered by
@@ -1387,7 +1387,6 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 			else {
 				const int nidx = use_vertices ? (int)mloops[i].v : i;
 				float *nor = custom_loopnors[nidx];
-				float tnor[3];
 
 				BKE_lnor_space_custom_normal_to_data(lnors_spaces.lspaces[i], nor, r_clnors_data[i]);
 				BLI_BITMAP_DISABLE(done_loops, i);
