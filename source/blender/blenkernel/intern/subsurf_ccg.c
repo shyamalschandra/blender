@@ -3465,7 +3465,6 @@ static CCGDerivedMesh *getCCGDerivedMesh(CCGSubSurf *ss,
 
 	ccgdm->dm.calcNormals = ccgDM_calcNormals;
 	ccgdm->dm.calcLoopNormals = CDDM_calc_loop_normals;
-	ccgdm->dm.calcLoopNormalsSpaces = CDDM_calc_loop_normals_spaces;
 	ccgdm->dm.recalcTessellation = ccgDM_recalcTessellation;
 
 	ccgdm->dm.getVertCos = ccgdm_getVertCos;

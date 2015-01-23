@@ -494,7 +494,6 @@ extern StructRNA RNA_SequenceEditor;
 extern StructRNA RNA_SequenceElement;
 extern StructRNA RNA_SequenceProxy;
 extern StructRNA RNA_SequenceTransform;
-extern StructRNA RNA_SetSplitNormalModifier;
 extern StructRNA RNA_ShaderNode;
 extern StructRNA RNA_ShaderNodeCameraData;
 extern StructRNA RNA_ShaderNodeCombineRGB;

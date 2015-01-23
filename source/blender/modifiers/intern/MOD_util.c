@@ -305,6 +305,5 @@ void modifier_type_init(ModifierTypeInfo *types[])
 	INIT_TYPE(LaplacianDeform);
 	INIT_TYPE(Wireframe);
 	INIT_TYPE(DataTransfer);
-	INIT_TYPE(SetSplitNormal);
 #undef INIT_TYPE
 }

@@ -78,7 +78,6 @@ set(SRC
 	intern/MOD_particlesystem.c
 	intern/MOD_remesh.c
 	intern/MOD_screw.c
-	intern/MOD_setsplitnormal.c
 	intern/MOD_shapekey.c
 	intern/MOD_shrinkwrap.c
 	intern/MOD_simpledeform.c

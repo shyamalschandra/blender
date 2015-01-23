@@ -40,7 +40,6 @@
 struct DerivedMesh;
 struct BMEditMesh;
 struct Mesh;
-struct MLoopsNorSpaces;
 struct Object;
 
 /* creates a new CDDerivedMesh */
@@ -108,8 +107,6 @@ void CDDM_calc_normals(struct DerivedMesh *dm);
 void CDDM_calc_normals_tessface(struct DerivedMesh *dm);
 
 void CDDM_calc_loop_normals(struct DerivedMesh *dm, const bool use_split_normals, const float split_angle);
-void CDDM_calc_loop_normals_spaces(struct DerivedMesh *dm, const bool use_split_normals, const float split_angle,
-                                   struct MLoopsNorSpaces *r_lnors_spaces);
 
 /* calculates edges for a CDDerivedMesh (from face data)
  * this completely replaces the current edge data in the DerivedMesh

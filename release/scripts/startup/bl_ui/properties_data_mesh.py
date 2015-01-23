@@ -154,7 +154,7 @@ class DATA_PT_normals(MeshButtonsPanel, Panel):
         col = split.column()
         col.prop(mesh, "use_auto_smooth")
         sub = col.column()
-        sub.active = mesh.use_auto_smooth and not mesh.has_custom_normals
+        sub.active = mesh.use_auto_smooth
         sub.prop(mesh, "auto_smooth_angle", text="Angle")
 
         split.prop(mesh, "show_double_sided")
@@ -371,13 +371,6 @@ class DATA_PT_customdata(MeshButtonsPanel, Panel):
 
         col.operator("mesh.customdata_clear_mask", icon='X')
         col.operator("mesh.customdata_clear_skin", icon='X')
-
-        if me.has_custom_normals:
-            col.operator("mesh.customdata_add_clear_custom_splitnormals",
-                         icon='X', text="Clear Custom Split Normals Data")
-        else:
-            col.operator("mesh.customdata_add_clear_custom_splitnormals",
-                         icon='ZOOMIN', text="Add Custom Split Normals Data")
 
         col = layout.column()
 
