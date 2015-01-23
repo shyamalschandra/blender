@@ -321,9 +321,23 @@ void BKE_mesh_calc_normals_tessface(MVert *mverts, int numVerts, MFace *mfaces, 
 
 void BKE_lnor_spaceset_init(MLoopNorSpaceset *lnors_spaceset, const int numLoops)
 {
-	MemArena *mem = lnors_spaceset->mem = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
-	lnors_spaceset->lspaceset = BLI_memarena_calloc(mem, sizeof(MLoopNorSpace *) * (size_t)numLoops);
-	lnors_spaceset->loops_pool = BLI_memarena_alloc(mem, sizeof(LinkNode) * (size_t)numLoops);
+	if (!(lnors_spaceset->lspaceset && lnors_spaceset->loops_pool)) {
+		MemArena *mem;
+
+		if (!lnors_spaceset->mem) {
+			lnors_spaceset->mem = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
+		}
+		mem = lnors_spaceset->mem;
+		lnors_spaceset->lspaceset = BLI_memarena_calloc(mem, sizeof(MLoopNorSpace *) * (size_t)numLoops);
+		lnors_spaceset->loops_pool = BLI_memarena_alloc(mem, sizeof(LinkNode) * (size_t)numLoops);
+	}
+}
+
+void BKE_lnor_spaceset_clear(MLoopNorSpaceset *lnors_spaceset)
+{
+	BLI_memarena_clear(lnors_spaceset->mem);
+	lnors_spaceset->lspaceset = NULL;
+	lnors_spaceset->loops_pool = NULL;
 }
 
 void BKE_lnor_spaceset_free(MLoopNorSpaceset *lnors_spaceset)
@@ -1109,9 +1123,7 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
 		r_lnors_spaceset = &_lnors_spaceset;
 	}
 	if (r_lnors_spaceset) {
-		if (!r_lnors_spaceset->mem) {
-			BKE_lnor_spaceset_init(r_lnors_spaceset, numLoops);
-		}
+		BKE_lnor_spaceset_init(r_lnors_spaceset, numLoops);
 		sharp_verts = BLI_BITMAP_NEW((size_t)numVerts, __func__);
 	}
 
@@ -1334,7 +1346,7 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 		}
 
 		/* And now, recompute our new auto lnors and lnor spaceset! */
-		BKE_lnor_spaceset_free(&lnors_spaceset);
+		BKE_lnor_spaceset_clear(&lnors_spaceset);
 		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
 		                            mpolys, polynors, numPolys, use_split_normals, split_angle,
 		                            &lnors_spaceset, NULL, loop_to_poly);

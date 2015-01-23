@@ -556,9 +556,7 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 		r_lnors_spaceset = &_lnors_spaceset;
 	}
 	if (r_lnors_spaceset) {
-		if (!r_lnors_spaceset->mem) {
-			BKE_lnor_spaceset_init(r_lnors_spaceset, bm->totloop);
-		}
+		BKE_lnor_spaceset_init(r_lnors_spaceset, bm->totloop);
 		edge_vectors = BLI_stack_new(sizeof(float[3]), __func__);
 	}
 

@@ -198,6 +198,7 @@ typedef struct MLoopNorSpaceset {
 	struct MemArena *mem;
 } MLoopNorSpaceset;
 void BKE_lnor_spaceset_init(MLoopNorSpaceset *lnors_spaceset, const int numLoops);
+void BKE_lnor_spaceset_clear(MLoopNorSpaceset *lnors_spaceset);
 void BKE_lnor_spaceset_free(MLoopNorSpaceset *lnors_spaceset);
 MLoopNorSpace *BKE_lnor_space_create(MLoopNorSpaceset *lnors_spaceset);
 void BKE_lnor_space_define(
