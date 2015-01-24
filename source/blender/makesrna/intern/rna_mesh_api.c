@@ -101,10 +101,10 @@ static void rna_Mesh_calc_normals_split(Mesh *mesh)
 		free_polynors = true;
 	}
 
-	BKE_mesh_normals_loop_split(mesh->mvert, mesh->totvert, mesh->medge, mesh->totedge,
-	                            mesh->mloop, r_loopnors, mesh->totloop,
-	                            mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly,
-	                            (mesh->flag & ME_AUTOSMOOTH) != 0, mesh->smoothresh, NULL, clnors, NULL);
+	BKE_mesh_normals_loop_split(
+	        mesh->mvert, mesh->totvert, mesh->medge, mesh->totedge,
+	        mesh->mloop, r_loopnors, mesh->totloop, mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly,
+	        (mesh->flag & ME_AUTOSMOOTH) != 0, mesh->smoothresh, NULL, clnors, NULL);
 
 	if (free_polynors) {
 		MEM_freeN(polynors);
@@ -179,16 +179,14 @@ static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_l
 	}
 
 	if (use_vertices) {
-		BKE_mesh_normals_loop_custom_from_vertices_set(mesh->mvert, custom_loopnors, mesh->totvert,
-		                                               mesh->medge, mesh->totedge, mesh->mloop, mesh->totloop,
-		                                               mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly,
-		                                               clnors);
+		BKE_mesh_normals_loop_custom_from_vertices_set(
+		        mesh->mvert, custom_loopnors, mesh->totvert, mesh->medge, mesh->totedge, mesh->mloop, mesh->totloop,
+		        mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly, clnors);
 	}
 	else {
-		BKE_mesh_normals_loop_custom_set(mesh->mvert, mesh->totvert, mesh->medge, mesh->totedge,
-		                                 mesh->mloop, custom_loopnors, mesh->totloop,
-		                                 mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly,
-		                                 clnors);
+		BKE_mesh_normals_loop_custom_set(
+		        mesh->mvert, mesh->totvert, mesh->medge, mesh->totedge, mesh->mloop, custom_loopnors, mesh->totloop,
+		        mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly, clnors);
 	}
 
 	if (free_polynors) {

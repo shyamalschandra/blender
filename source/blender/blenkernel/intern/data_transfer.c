@@ -256,11 +256,8 @@ int BKE_object_data_transfer_dttype_to_srcdst_index(const int dtdata_type)
 
 static void data_transfer_dtdata_type_preprocess(
         Object *UNUSED(ob_src), Object *UNUSED(ob_dst), DerivedMesh *dm_src, DerivedMesh *dm_dst, Mesh *me_dst,
-        const int dtdata_type, const bool dirty_nors_dst, const bool use_split_nors_src, const float split_angle_src,
-        void **r_prepost_data)
+        const int dtdata_type, const bool dirty_nors_dst, const bool use_split_nors_src, const float split_angle_src)
 {
-	*r_prepost_data = NULL;
-
 	if (dtdata_type == DT_TYPE_LNOR) {
 		/* Compute custom normals into regular loop normals, which will be used for the transfer. */
 		MVert *verts_dst = dm_dst ? dm_dst->getVertArray(dm_dst) : me_dst->mvert;
@@ -315,7 +312,7 @@ static void data_transfer_dtdata_type_preprocess(
 
 static void data_transfer_dtdata_type_postprocess(
         Object *UNUSED(ob_src), Object *UNUSED(ob_dst), DerivedMesh *UNUSED(dm_src), DerivedMesh *dm_dst, Mesh *me_dst,
-        const int dtdata_type, const bool changed, void *UNUSED(prepost_data))
+        const int dtdata_type, const bool changed)
 {
 	if (dtdata_type == DT_TYPE_LNOR) {
 		/* Bake edited destination loop normals into custom normals again. */
@@ -1131,7 +1128,6 @@ bool BKE_object_data_transfer_dm(
 	/* Check all possible data types.
 	 * Note item mappings and dest mix weights are cached. */
 	for (i = 0; i < DT_TYPE_MAX; i++) {
-		void *prepost_data;
 		const int dtdata_type = 1 << i;
 		int cddata_type;
 		int fromlayers, tolayers, fromto_idx;
@@ -1142,8 +1138,7 @@ bool BKE_object_data_transfer_dm(
 
 		data_transfer_dtdata_type_preprocess(ob_src, ob_dst, dm_src, dm_dst, me_dst,
 		                                     dtdata_type, dirty_nors_dst,
-		                                     (me_src->flag & ME_AUTOSMOOTH) != 0, me_src->smoothresh,
-		                                     &prepost_data);
+		                                     (me_src->flag & ME_AUTOSMOOTH) != 0, me_src->smoothresh);
 
 		cddata_type = BKE_object_data_transfer_dttype_to_cdtype(dtdata_type);
 
@@ -1340,8 +1335,7 @@ bool BKE_object_data_transfer_dm(
 			}
 		}
 
-		data_transfer_dtdata_type_postprocess(ob_src, ob_dst, dm_src, dm_dst, me_dst,
-		                                      dtdata_type, changed, prepost_data);
+		data_transfer_dtdata_type_postprocess(ob_src, ob_dst, dm_src, dm_dst, me_dst, dtdata_type, changed);
 	}
 
 	for (i = 0; i < DATAMAX; i++) {

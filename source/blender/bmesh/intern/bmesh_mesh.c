@@ -523,9 +523,9 @@ static void bm_mesh_edges_sharp_tag(BMesh *bm, const float (*vnos)[3], const flo
 
 /* BMesh version of BKE_mesh_normals_loop_split() in mesh_evaluate.c
  * Will use first clnors_data array, and fallback to cd_loop_clnors_offset (use NULL and -1 to not use clnors). */
-static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const float (*fnos)[3], float (*r_lnos)[3],
-                                       MLoopNorSpaceset *r_lnors_spaceset,
-                                       short (*clnors_data)[2], const int cd_loop_clnors_offset)
+static void bm_mesh_loops_calc_normals(
+        BMesh *bm, const float (*vcos)[3], const float (*fnos)[3], float (*r_lnos)[3],
+        MLoopNorSpaceset *r_lnors_spaceset, short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	BMIter fiter;
 	BMFace *f_curr;
@@ -847,9 +847,9 @@ static void bm_mesh_loops_from_vert_normals(BMesh *bm, const float (*vnos)[3], f
  * Updates the loop normals of a mesh. Assumes vertex and face normals are valid (else call BM_mesh_normals_update()
  * first)!
  */
-void BM_mesh_loop_normals_update(BMesh *bm, const bool use_split_normals, const float split_angle, float (*r_lnos)[3],
-                                 MLoopNorSpaceset *r_lnors_spaceset,
-                                 short (*clnors_data)[2], const int cd_loop_clnors_offset)
+void BM_mesh_loop_normals_update(
+        BMesh *bm, const bool use_split_normals, const float split_angle, float (*r_lnos)[3],
+        MLoopNorSpaceset *r_lnors_spaceset, short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
 
@@ -874,10 +874,10 @@ void BM_mesh_loop_normals_update(BMesh *bm, const bool use_split_normals, const 
  * Compute split normals, i.e. vertex normals associated with each poly (hence 'loop normals').
  * Useful to materialize sharp edges (or non-smooth faces) without actually modifying the geometry (splitting edges).
  */
-void BM_loops_calc_normal_vcos(BMesh *bm, const float (*vcos)[3], const float (*vnos)[3], const float (*fnos)[3],
-                               const bool use_split_normals, const float split_angle, float (*r_lnos)[3],
-                               MLoopNorSpaceset *r_lnors_spaceset,
-                               short (*clnors_data)[2], const int cd_loop_clnors_offset)
+void BM_loops_calc_normal_vcos(
+        BMesh *bm, const float (*vcos)[3], const float (*vnos)[3], const float (*fnos)[3],
+        const bool use_split_normals, const float split_angle, float (*r_lnos)[3],
+        MLoopNorSpaceset *r_lnors_spaceset, short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
 

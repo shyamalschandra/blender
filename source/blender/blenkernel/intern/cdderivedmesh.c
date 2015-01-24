@@ -2162,7 +2162,7 @@ void CDDM_calc_loop_normals(DerivedMesh *dm, const bool use_split_normals, const
 	CDDM_calc_loop_normals_spaceset(dm, use_split_normals, split_angle, NULL);
 }
 
-//#define DEBUG_CLNORS
+// #define DEBUG_CLNORS
 
 void CDDM_calc_loop_normals_spaceset(
         DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceset *r_lnors_spaceset)
@@ -2175,6 +2175,7 @@ void CDDM_calc_loop_normals_spaceset(
 	CustomData *ldata, *pdata;
 
 	float (*lnors)[3];
+	short (*clnor_data)[2];
 	float (*pnors)[3];
 
 	const int numVerts = dm->getNumVerts(dm);
@@ -2202,40 +2203,39 @@ void CDDM_calc_loop_normals_spaceset(
 
 	dm->dirty &= ~DM_DIRTY_NORMALS;
 
-	{
-		short (*clnor_data)[2] = CustomData_get_layer(ldata, CD_CUSTOMLOOPNORMAL);
+	clnor_data = CustomData_get_layer(ldata, CD_CUSTOMLOOPNORMAL);
 
-		BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
-		                            mpolys, (const float (*)[3])pnors, numPolys,
-		                            use_split_normals, split_angle,
-		                            r_lnors_spaceset, clnor_data, NULL);
+	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
+	                            mpolys, (const float (*)[3])pnors, numPolys,
+	                            use_split_normals, split_angle,
+	                            r_lnors_spaceset, clnor_data, NULL);
 #ifdef DEBUG_CLNORS
-		if (r_lnors_spaceset) {
-			int i;
-			for (i = 0; i < numLoops; i++) {
-				if (r_lnors_spaceset->lspaceset[i]->ref_alpha != 0.0f) {
-					LinkNode *loops = r_lnors_spaceset->lspaceset[i]->loops;
-					printf("Loop %d uses lnor space %p:\n", i, r_lnors_spaceset->lspaceset[i]);
-					print_v3("\tfinal lnor", lnors[i]);
-					print_v3("\tauto lnor", r_lnors_spaceset->lspaceset[i]->vec_lnor);
-					print_v3("\tref_vec", r_lnors_spaceset->lspaceset[i]->vec_ref);
-					printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", r_lnors_spaceset->lspaceset[i]->ref_alpha,
-					       r_lnors_spaceset->lspaceset[i]->ref_beta, r_lnors_spaceset->lspaceset[i]->loops);
-					printf("\t\t(shared with loops");
-					while(loops) {
-						printf(" %d", GET_INT_FROM_POINTER(loops->link));
-						loops = loops->next;
-					}
-					printf(")\n");
+	if (r_lnors_spaceset) {
+		int i;
+		for (i = 0; i < numLoops; i++) {
+			if (r_lnors_spaceset->lspaceset[i]->ref_alpha != 0.0f) {
+				LinkNode *loops = r_lnors_spaceset->lspaceset[i]->loops;
+				printf("Loop %d uses lnor space %p:\n", i, r_lnors_spaceset->lspaceset[i]);
+				print_v3("\tfinal lnor", lnors[i]);
+				print_v3("\tauto lnor", r_lnors_spaceset->lspaceset[i]->vec_lnor);
+				print_v3("\tref_vec", r_lnors_spaceset->lspaceset[i]->vec_ref);
+				printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", r_lnors_spaceset->lspaceset[i]->ref_alpha,
+				       r_lnors_spaceset->lspaceset[i]->ref_beta, r_lnors_spaceset->lspaceset[i]->loops);
+				printf("\t\t(shared with loops");
+				while(loops) {
+					printf(" %d", GET_INT_FROM_POINTER(loops->link));
+					loops = loops->next;
 				}
-				else {
-					printf("Loop %d has no lnor space\n", i);
-				}
+				printf(")\n");
+			}
+			else {
+				printf("Loop %d has no lnor space\n", i);
 			}
 		}
-#endif
 	}
+#endif
 }
+
 
 void CDDM_calc_normals_tessface(DerivedMesh *dm)
 {

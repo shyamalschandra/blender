@@ -1051,14 +1051,15 @@ static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int UNU
  * Compute split normals, i.e. vertex normals associated with each poly (hence 'loop normals').
  * Useful to materialize sharp edges (or non-smooth faces) without actually modifying the geometry (splitting edges).
  */
-void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
-                                 MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
-                                 MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                 const bool use_split_normals, float split_angle,
-                                 MLoopNorSpaceset *r_lnors_spaceset, short (*clnors_data)[2], int *r_loop_to_poly)
+void BKE_mesh_normals_loop_split(
+        MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
+        MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
+        MPoly *mpolys, const float (*polynors)[3], const int numPolys,
+        const bool use_split_normals, float split_angle,
+        MLoopNorSpaceset *r_lnors_spaceset, short (*clnors_data)[2], int *r_loop_to_poly)
 {
 
-	/* For now this is not supported. if we do not use split normals, we do not generate anything fancy! */
+	/* For now this is not supported. If we do not use split normals, we do not generate anything fancy! */
 	BLI_assert(use_split_normals || !(r_lnors_spaceset || r_loop_to_poly));
 
 	if (!use_split_normals) {
@@ -1254,10 +1255,11 @@ void BKE_mesh_normals_loop_split(MVert *mverts, const int numVerts, MEdge *medge
  * If use_vertices if true, custom_loopnors is assumed to be per-vertex, not per-loop
  * (this allows to set whole vert's normals at once, useful in some cases).
  */
-static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
-                                         MLoop *mloops, float (*custom_loopnors)[3], const int numLoops,
-                                         MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                         short (*r_clnors_data)[2], const bool use_vertices)
+static void mesh_normals_loop_custom_set(
+        MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
+        MLoop *mloops, float (*custom_loopnors)[3], const int numLoops,
+        MPoly *mpolys, const float (*polynors)[3], const int numPolys,
+        short (*r_clnors_data)[2], const bool use_vertices)
 {
 	/* We *may* make that poor BKE_mesh_normals_loop_split() even more complex by making it handling that
 	 * feature too, would probably be more efficient in absolute.
@@ -1412,20 +1414,21 @@ static void mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdg
 	BKE_lnor_spaceset_free(&lnors_spaceset);
 }
 
-void BKE_mesh_normals_loop_custom_set(MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
-                                      MLoop *mloops, float (*custom_loopnors)[3], const int numLoops,
-                                      MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                      short (*r_clnors_data)[2])
+void BKE_mesh_normals_loop_custom_set(
+        MVert *mverts, const int numVerts, MEdge *medges, const int numEdges,
+        MLoop *mloops, float (*custom_loopnors)[3], const int numLoops,
+        MPoly *mpolys, const float (*polynors)[3], const int numPolys,
+        short (*r_clnors_data)[2])
 {
 	mesh_normals_loop_custom_set(mverts, numVerts, medges, numEdges, mloops, custom_loopnors, numLoops,
 	                             mpolys, polynors, numPolys, r_clnors_data, false);
 }
 
-void BKE_mesh_normals_loop_custom_from_vertices_set(MVert *mverts, float (*custom_vertnors)[3], const int numVerts,
-                                                    MEdge *medges, const int numEdges,
-                                                    MLoop *mloops, const int numLoops,
-                                                    MPoly *mpolys, const float (*polynors)[3], const int numPolys,
-                                                    short (*r_clnors_data)[2])
+void BKE_mesh_normals_loop_custom_from_vertices_set(
+        MVert *mverts, float (*custom_vertnors)[3], const int numVerts,
+        MEdge *medges, const int numEdges, MLoop *mloops, const int numLoops,
+        MPoly *mpolys, const float (*polynors)[3], const int numPolys,
+        short (*r_clnors_data)[2])
 {
 	mesh_normals_loop_custom_set(mverts, numVerts, medges, numEdges, mloops, custom_vertnors, numLoops,
 	                             mpolys, polynors, numPolys, r_clnors_data, true);

@@ -63,9 +63,9 @@
 
 EnumPropertyItem modifier_type_items[] = {
 	{0, "", 0, N_("Modify"), ""},
-    {eModifierType_DataTransfer, "DATA_TRANSFER", ICON_MOD_DATA_TRANSFER, "Data Transfer", ""},
+	{eModifierType_DataTransfer, "DATA_TRANSFER", ICON_MOD_DATA_TRANSFER, "Data Transfer", ""},
 	{eModifierType_MeshCache, "MESH_CACHE", ICON_MOD_MESHDEFORM, "Mesh Cache", ""},
-    {eModifierType_SetSplitNormal, "SET_SPLIT_NORMAL", ICON_MOD_SETSPLITNORMAL, "Set Split Normals", ""},
+	{eModifierType_SetSplitNormal, "SET_SPLIT_NORMAL", ICON_MOD_SETSPLITNORMAL, "Set Split Normals", ""},
 	{eModifierType_UVProject, "UV_PROJECT", ICON_MOD_UVPROJECT, "UV Project", ""},
 	{eModifierType_UVWarp, "UV_WARP", ICON_MOD_UVPROJECT, "UV Warp", ""},
 	{eModifierType_WeightVGEdit, "VERTEX_WEIGHT_EDIT", ICON_MOD_VERTEX_WEIGHT, "Vertex Weight Edit", ""},
@@ -4131,7 +4131,7 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 	};
 
 	static EnumPropertyItem DT_layer_loop_items[] = {
-	    {DT_TYPE_LNOR, "CUSTOM_NORMAL", 0, "Custom Normals", "Transfer custom normals"},
+		{DT_TYPE_LNOR, "CUSTOM_NORMAL", 0, "Custom Normals", "Transfer custom normals"},
 		{0, NULL, 0, NULL, NULL}
 	};
 	static EnumPropertyItem DT_layer_loop_vcol_items[] = {
@@ -4359,9 +4359,9 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 
 	static EnumPropertyItem prop_mix_mode_items[] = {
 		{MOD_SETSPLITNORMAL_MIX_COPY, "COPY", 0, "Copy", "Copy new normals (i.e. replace old ones)"},
-	    {MOD_SETSPLITNORMAL_MIX_ADD, "ADD", 0, "Add", "Copy sum of new and org normals"},
-	    {MOD_SETSPLITNORMAL_MIX_SUB, "SUB", 0, "Substract", "Copy new normals minus old normals"},
-	    {MOD_SETSPLITNORMAL_MIX_MUL, "MUL", 0, "Multiply", "Copy product of old and new normals (*not* cross product)"},
+		{MOD_SETSPLITNORMAL_MIX_ADD, "ADD", 0, "Add", "Copy sum of new and org normals"},
+		{MOD_SETSPLITNORMAL_MIX_SUB, "SUB", 0, "Substract", "Copy new normals minus old normals"},
+		{MOD_SETSPLITNORMAL_MIX_MUL, "MUL", 0, "Multiply", "Copy product of old and new normals (*not* cross product)"},
 		{0, NULL, 0, NULL, NULL}
 	};
 

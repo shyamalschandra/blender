@@ -1209,7 +1209,7 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	/* 8: CD_NORMAL */
 	/* 3 floats per normal vector */
 	{sizeof(float) * 3, "vec3f", 1, NULL, NULL, NULL, layerInterp_normal, NULL, NULL,
-     NULL, NULL, NULL, NULL, NULL, layerCopyValue_normal},
+	 NULL, NULL, NULL, NULL, NULL, layerCopyValue_normal},
 	/* 9: CD_POLYINDEX (deprecated) */
 	{sizeof(int), "", 0, NULL, NULL, NULL, NULL, NULL, NULL},
 	/* 10: CD_PROP_FLT */
