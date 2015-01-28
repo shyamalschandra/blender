@@ -167,8 +167,11 @@ def write_sysinfo(op):
         output.write("\nImplementation Dependent OpenGL Limits:\n")
         output.write(lilies)
         limit = bgl.Buffer(bgl.GL_INT, 1)
+        limit_fl = bgl.Buffer(bgl.GL_FLOAT, 2)
         bgl.glGetIntegerv(bgl.GL_MAX_TEXTURE_UNITS, limit)
         output.write("Maximum Fixed Function Texture Units:\t%d\n" % limit[0])
+        bgl.glGetFloatv(bgl.GL_MAX_TEXTURE_UNITS, limit_fl)
+        output.write("Point Sprite Size Range:\t Max: %f Min: %f\n" % (limit_fl[0], limit_fl[1]))
 
         output.write("\nGLSL:\n")
         if version[0] > '1':
@@ -186,6 +189,12 @@ def write_sysinfo(op):
             output.write("Maximum Fragment Image Units:\t%d\n" % limit[0])
             bgl.glGetIntegerv(bgl.GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, limit)
             output.write("Maximum Pipeline Image Units:\t%d\n" % limit[0])
+
+    if bpy.app.build_options.cycles:
+        import cycles
+        output.write("\nCycles\n")
+        output.write(lilies)
+        output.write(cycles.engine.system_info())
 
     output.current_line_index = 0
 

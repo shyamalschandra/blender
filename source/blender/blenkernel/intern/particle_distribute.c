@@ -32,6 +32,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "MEM_guardedalloc.h"
 
@@ -651,8 +652,11 @@ static void distribute_children_exec(ParticleTask *thread, ChildParticle *cpa, i
 			cpa->w[i]=0.0f;
 		}
 		
-		if (totw>0.0f) for (w=0; w<4; w++)
-			cpa->w[w]/=totw;
+		if (totw > 0.0f) {
+			for (w = 0; w < 4; w++) {
+				cpa->w[w] /= totw;
+			}
+		}
 		
 		cpa->parent=cpa->pa[0];
 	}
@@ -1140,6 +1144,8 @@ static void distribute_particles_on_dm(ParticleSimulationData *sim, int from)
 		ctx.dm->release(ctx.dm);
 	
 	psys_tasks_free(tasks, numtasks);
+	
+	psys_thread_context_free(&ctx);
 }
 
 /* ready for future use, to emit particles without geometry */
@@ -1148,6 +1154,181 @@ static void distribute_particles_on_shape(ParticleSimulationData *sim, int UNUSE
 	distribute_invalid(sim->scene, sim->psys, 0);
 
 	fprintf(stderr,"Shape emission not yet possible!\n");
+}
+
+/* placeholder for child particle sorting, storing emitter hair-space offset */
+typedef struct ChildParticleSort {
+	int index;
+	float x, y;
+	int parent;
+	bool is_hull;
+} ChildParticleSort;
+
+/* comparison function for sorting children.
+ * primary criterion is the childrens' primary parent
+ * secondary criterion is the combined offset from the parent in the tangential plane,
+ *   which is needed for further constructing the convex hull of children around each parent
+ */
+static int psys_child_cmp(const void *a, const void *b)
+{
+	const ChildParticleSort *cpa_a = a, *cpa_b = b;
+	
+	if (UNLIKELY(cpa_a->parent == cpa_b->parent)) {
+		if (UNLIKELY(cpa_a->x == cpa_b->x))
+			return cpa_a->y < cpa_b->y ? -1 : 1;
+		else
+			return cpa_a->x < cpa_b->x ? -1 : 1;
+	}
+	else
+		return cpa_a->parent < cpa_b->parent ? -1 : 1;
+}
+
+BLI_INLINE bool ccw(const ChildParticleSort *p1, const ChildParticleSort *p2, const ChildParticleSort *p3)
+{
+	return (p2->x - p1->x) * (p3->y - p1->y) - (p2->y - p1->y) * (p3->x - p1->x) > 0.0f;
+}
+
+static int make_convex_child_hull(ChildParticleSort *childdata, int totchild, ChildParticleSort **hull)
+{
+	const int parent = childdata->parent;
+	
+	int tothull, upper_start;
+	int i;
+	
+	tothull = 0;
+	/* lower hull */
+	for (i = 0; i < totchild; ++i) {
+		ChildParticleSort *cdata = &childdata[i];
+		/* limit to the parent group */
+		if (cdata->parent != parent)
+			break;
+		
+		while (tothull >= 2 && !ccw(hull[tothull-2], hull[tothull-1], cdata))
+			--tothull;
+		hull[tothull++] = cdata;
+	}
+	/* this is the actual size of the child group sharing the same parent */
+	totchild = i;
+	
+	/* upper hull */
+	upper_start = tothull + 1;
+	for (i = totchild-2; i >= 0; --i) {
+		ChildParticleSort *cdata = &childdata[i];
+		
+		while (tothull >= upper_start && !ccw(hull[tothull-2], hull[tothull-1], cdata))
+			--tothull;
+		hull[tothull++] = cdata;
+	}
+	
+	return tothull - 1;
+}
+
+BLI_INLINE int count_child_group(ChildParticleSort *data, int start, int totchild)
+{
+	const int parent = data[start].parent;
+	int i;
+	
+	i = start;
+	do {
+		++i;
+	} while (i < totchild && data[i].parent == parent);
+	
+	return i - start;
+}
+
+/* sort children by primary parent and relative emitter location, then calculate convex hulls */
+static void psys_sort_children(ParticleSimulationData *sim)
+{
+	ParticleSystem *psys = sim->psys;
+	ParticleSettings *part = psys->part;
+	const int totchild = psys->totchild;
+	const bool between = (part->childtype == PART_CHILD_FACES);
+	const int cpa_from = between ? PART_FROM_FACE : part->from;
+	
+	ChildParticleSort *sort;
+	int i;
+	
+	if (totchild == 0)
+		return;
+	if (!sim->psmd->dm)
+		return;
+	
+	sort = MEM_mallocN(sizeof(ChildParticleSort) * totchild, "child sorting data");
+	
+	for (i = 0; i < totchild; ++i) {
+		ChildParticle *cpa = &psys->child[i];
+		ChildParticleSort *cdata = &sort[i];
+		
+		ParticleData *parent;
+		float co[3], hairmat[4][4], hairimat[4][4];
+		
+		cdata->index = i;
+		cdata->parent = between ? cpa->pa[0] : cpa->parent;
+		
+		psys_particle_on_emitter(sim->psmd, cpa_from, cpa->num, DMCACHE_ISCHILD, cpa->fuv, cpa->foffset, co, NULL, NULL, NULL, NULL, NULL);
+		
+		parent = &psys->particles[cdata->parent];
+		psys_mat_hair_to_global(sim->ob, sim->psmd->dm, psys->part->from, parent, hairmat);
+		invert_m4_m4(hairimat, hairmat);
+		
+		mul_m4_v3(hairimat, co);
+		cdata->x = co[0];
+		cdata->y = co[1];
+		
+		cdata->is_hull = false;
+	}
+	
+	qsort(sort, totchild, sizeof(ChildParticleSort), psys_child_cmp);
+	
+	/* Calculate the convex hull of children for each parent using Andrew's Monotone Chain algorithm
+	 * http://en.wikibooks.org/wiki/Algorithm_Implementation/Geometry/Convex_hull/Monotone_chain
+	 */
+	{
+		ChildParticle *nchild = MEM_mallocN(sizeof(ChildParticle) * totchild, "sorted child particles");
+		ChildParticle *ncpa = nchild;
+		
+		/* note: the algorithm requires one additional element in the buffer in worst case */
+		ChildParticleSort **hull = MEM_mallocN(sizeof(ChildParticleSort*) * (totchild+1), "child convex hull points");
+		
+		int groupstart = 0;
+		while (groupstart < totchild) {
+			int groupsize, tothull;
+			
+			groupsize = count_child_group(sort, groupstart, totchild);
+			BLI_assert(groupstart + groupsize <= totchild);
+			
+			tothull = make_convex_child_hull(sort + groupstart, groupsize, hull);
+			
+			for (i = 0; i < tothull; ++i) {
+				ChildParticleSort *cdata = hull[i];
+				memcpy(ncpa, psys->child + cdata->index, sizeof(ChildParticle));
+				ncpa->hull_parent = cdata->parent;
+				++ncpa;
+				
+				/* tag actual hull children */
+				cdata->is_hull = true;
+			}
+			
+			/* insert remaining child particles after the hull children */
+			for (i = groupstart; i < groupstart + groupsize; ++i) {
+				ChildParticleSort *cdata = &sort[i];
+				if (!cdata->is_hull) {
+					memcpy(ncpa, psys->child + cdata->index, sizeof(ChildParticle));
+					ncpa->hull_parent = -1;
+					++ncpa;
+				}
+			}
+			
+			groupstart += groupsize;
+		}
+		
+		MEM_freeN(hull);
+		
+		MEM_freeN(psys->child);
+		psys->child = nchild;
+	}
+	
+	MEM_freeN(sort);
 }
 
 void distribute_particles(ParticleSimulationData *sim, int from)
@@ -1163,6 +1344,9 @@ void distribute_particles(ParticleSimulationData *sim, int from)
 	}
 	else
 		distribute_particles_on_shape(sim, from);
+
+	if (from == PART_FROM_CHILD)
+		psys_sort_children(sim);
 
 	if (distr_error) {
 		distribute_invalid(sim->scene, sim->psys, from);

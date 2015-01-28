@@ -212,7 +212,6 @@ typedef struct bPoseChannel {
 	struct bPoseChannel *custom_tx; /* odd feature, display with another bones transform.
 	                                 * needed in rare cases for advanced rigs,
 	                                 * since the alternative is highly complicated - campbell */
-	struct FaceMap *custom_fmap;    /* uses facemap of object to interact with it */
 
 	/* transforms - written in by actions or transform */
 	float loc[3];
@@ -492,7 +491,7 @@ typedef struct bAction {
 	ID id;              /* ID-serialisation for relinking */
 	
 	ListBase curves;    /* function-curves (FCurve) */
-	ListBase chanbase;  /* legacy data - Action Channels (bActionChannel) in pre-2.5 animation system */
+	ListBase chanbase DNA_DEPRECATED;  /* legacy data - Action Channels (bActionChannel) in pre-2.5 animation system */
 	ListBase groups;    /* groups of function-curves (bActionGroup) */
 	ListBase markers;   /* markers local to the Action (used to provide Pose-Libraries) */
 	

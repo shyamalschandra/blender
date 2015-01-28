@@ -258,7 +258,7 @@ static void rna_PoseChannel_rotation_axis_angle_set(PointerRNA *ptr, const float
 	
 	/* for now, assume that rotation mode is axis-angle */
 	pchan->rotAngle = value[0];
-	copy_v3_v3(pchan->rotAxis, (float *)&value[1]);
+	copy_v3_v3(pchan->rotAxis, &value[1]);
 	
 	/* TODO: validate axis? */
 }
@@ -1071,12 +1071,6 @@ static void rna_def_pose_channel(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Custom Shape Transform",
 	                         "Bone that defines the display transform of this custom shape");
 	RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
-	RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
-
-	prop = RNA_def_property(srna, "custom_shape_fmap", PROP_POINTER, PROP_NONE);
-	RNA_def_property_pointer_sdna(prop, NULL, "custom_fmap");
-	RNA_def_property_struct_type(prop, "FaceMap");
-	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
 	
 	/* bone groups */

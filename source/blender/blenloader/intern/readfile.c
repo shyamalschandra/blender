@@ -778,7 +778,7 @@ static void decode_blender_header(FileData *fd)
 	readsize = fd->read(fd, header, sizeof(header));
 	
 	if (readsize == sizeof(header)) {
-		if (strncmp(header, "BLENDER", 7) == 0) {
+		if (STREQLEN(header, "BLENDER", 7)) {
 			int remove_this_endian_test = 1;
 			
 			fd->flags |= FD_FLAGS_FILE_OK;
@@ -1183,7 +1183,7 @@ bool BLO_is_a_library(const char *path, char *dir, char *group)
 		
 		/* now we know that we are in a blend file and it is safe to 
 		 * assume that gp actually points to a group */
-		if (strcmp("Screen", gp) != 0)
+		if (!STREQ("Screen", gp))
 			BLI_strncpy(group, gp, BLO_GROUP_MAX);
 	}
 	return 1;
@@ -2945,7 +2945,6 @@ static void lib_link_pose(FileData *fd, Main *bmain, Object *ob, bPose *pose)
 		pchan->bone = BKE_armature_find_bone_name(arm, pchan->name);
 		
 		pchan->custom = newlibadr_us(fd, arm->id.lib, pchan->custom);
-		pchan->custom_fmap = newlibadr_us(fd, arm->id.lib, pchan->custom_fmap);
 		if (pchan->bone == NULL)
 			rebuild= 1;
 		else if (ob->id.lib==NULL && arm->id.lib) {
@@ -3130,14 +3129,14 @@ static void lib_link_key(FileData *fd, Main *main)
 static void switch_endian_keyblock(Key *key, KeyBlock *kb)
 {
 	int elemsize, a, b;
-	const char *data, *poin, *cp;
+	char *data;
 	
 	elemsize = key->elemsize;
 	data = kb->data;
 	
 	for (a = 0; a < kb->totelem; a++) {
-		cp = key->elemstr;
-		poin = data;
+		const char *cp = key->elemstr;
+		char *poin = data;
 		
 		while (cp[0]) {  /* cp[0] == amount */
 			switch (cp[1]) {  /* cp[1] = type */
@@ -3822,6 +3821,13 @@ static void direct_link_particlesettings(FileData *fd, ParticleSettings *part)
 	direct_link_partdeflect(part->pd);
 	direct_link_partdeflect(part->pd2);
 
+	part->clumpcurve = newdataadr(fd, part->clumpcurve);
+	if (part->clumpcurve)
+		direct_link_curvemapping(fd, part->clumpcurve);
+	part->roughcurve = newdataadr(fd, part->roughcurve);
+	if (part->roughcurve)
+		direct_link_curvemapping(fd, part->roughcurve);
+
 	part->effector_weights = newdataadr(fd, part->effector_weights);
 	if (!part->effector_weights)
 		part->effector_weights = BKE_add_effector_weights(part->eff_group);
@@ -3870,8 +3876,6 @@ static void lib_link_particlesystems(FileData *fd, Object *ob, ID *id, ListBase 
 				psys->clmd->ptcaches.first = psys->clmd->ptcaches.last= NULL;
 				psys->clmd->coll_parms->group = newlibadr(fd, id->lib, psys->clmd->coll_parms->group);
 				psys->clmd->modifier.error = NULL;
-				
-				psys->clmd->debug_data = NULL;
 			}
 		}
 		else {
@@ -4553,7 +4557,7 @@ static void lib_link_object(FileData *fd, Main *main)
 					steeringa->target = newlibadr(fd, ob->id.lib, steeringa->target);
 					steeringa->navmesh = newlibadr(fd, ob->id.lib, steeringa->navmesh);
 				}
-				else if(act->type == ACT_MOUSE) {
+				else if (act->type == ACT_MOUSE) {
 					/* bMouseActuator *moa= act->data; */
 				}
 			}
@@ -4694,7 +4698,6 @@ static void direct_link_modifiers(FileData *fd, ListBase *lb)
 			}
 			
 			clmd->solver_result = NULL;
-			clmd->debug_data = NULL;
 		}
 		else if (md->type == eModifierType_Fluidsim) {
 			FluidsimModifierData *fluidmd = (FluidsimModifierData *)md;
@@ -4931,9 +4934,14 @@ static void direct_link_object(FileData *fd, Object *ob)
 	/* loading saved files with editmode enabled works, but for undo we like
 	 * to stay in object mode during undo presses so keep editmode disabled.
 	 *
-	 * Also when linking in a file don't allow editmode: [#34776] */
+	 * Also when linking in a file don't allow edit and pose modes.
+	 * See [#34776, #42780] for more information.
+	 */
 	if (fd->memfile || (ob->id.flag & (LIB_EXTERN | LIB_INDIRECT))) {
 		ob->mode &= ~(OB_MODE_EDIT | OB_MODE_PARTICLE_EDIT | OB_MODE_HAIR_EDIT);
+		if (!fd->memfile) {
+			ob->mode &= ~OB_MODE_POSE;
+		}
 	}
 	
 	ob->adt = newdataadr(fd, ob->adt);
@@ -6021,7 +6029,7 @@ typedef enum ePointerUserMode {
 
 static bool restore_pointer(ID *id, ID *newid, ePointerUserMode user)
 {
-	if (strcmp(newid->name + 2, id->name + 2) == 0) {
+	if (STREQ(newid->name + 2, id->name + 2)) {
 		if (newid->lib == id->lib) {
 			if (user == USER_ONE) {
 				if (newid->us == 0) {
@@ -7611,9 +7619,7 @@ static BHead *read_global(BlendFileData *bfd, FileData *fd, BHead *bhead)
 	bfd->main->build_commit_timestamp = fg->build_commit_timestamp;
 	BLI_strncpy(bfd->main->build_hash, fg->build_hash, sizeof(bfd->main->build_hash));
 	
-	bfd->winpos = fg->winpos;
 	bfd->fileflags = fg->fileflags;
-	bfd->displaymode = fg->displaymode;
 	bfd->globalf = fg->globalf;
 	BLI_strncpy(bfd->filename, fg->filename, sizeof(bfd->filename));
 	
@@ -9123,7 +9129,7 @@ static ID *append_named_part(Main *mainl, FileData *fd, const char *idname, cons
 		if (bhead->code == idcode) {
 			const char *idname_test= bhead_id_name(fd, bhead);
 			
-			if (strcmp(idname_test + 2, idname) == 0) {
+			if (STREQ(idname_test + 2, idname)) {
 				found = 1;
 				id = is_yet_read(fd, mainl, bhead);
 				if (id == NULL) {
@@ -9244,7 +9250,7 @@ static void append_id_part(FileData *fd, Main *mainvar, ID *id, ID **r_id)
 	for (bhead = blo_firstbhead(fd); bhead; bhead = blo_nextbhead(fd, bhead)) {
 		if (bhead->code == GS(id->name)) {
 			
-			if (strcmp(id->name, bhead_id_name(fd, bhead))==0) {
+			if (STREQ(id->name, bhead_id_name(fd, bhead))) {
 				id->flag &= ~LIB_READ;
 				id->flag |= LIB_NEED_EXPAND;
 //				printf("read lib block %s\n", id->name);

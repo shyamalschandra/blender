@@ -182,7 +182,7 @@ void draw_mesh_paint(View3D *v3d, RegionView3D *rv3d,
                      struct Object *ob, struct DerivedMesh *dm, const int draw_flags);
 
 /* drawsimdebug.c */
-void draw_sim_debug_data(Scene *scene, View3D *v3d, ARegion *ar, Base *base, struct SimDebugData *debug_data);
+void draw_sim_debug_data(Scene *scene, View3D *v3d, ARegion *ar);
 
 /* drawstrands.c */
 void draw_strands_edit_hair(Scene *scene, View3D *v3d, ARegion *ar, struct BMEditStrands *edit);

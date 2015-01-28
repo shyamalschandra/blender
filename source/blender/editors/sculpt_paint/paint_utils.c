@@ -52,6 +52,7 @@
 #include "BKE_context.h"
 #include "BKE_DerivedMesh.h"
 #include "BKE_image.h"
+#include "BKE_material.h"
 #include "BKE_paint.h"
 #include "BKE_report.h"
 
@@ -176,7 +177,7 @@ float paint_get_tex_pixel(MTex *mtex, float u, float v, struct ImagePool *pool, 
 	float co[3] = {u, v, 0.0f};
 
 	externtex(mtex, co, &intensity,
-	          rgba, rgba + 1, rgba + 2, rgba + 3, thread, pool);
+	          rgba, rgba + 1, rgba + 2, rgba + 3, thread, pool, false);
 
 	return intensity;
 }
@@ -188,7 +189,7 @@ void paint_get_tex_pixel_col(MTex *mtex, float u, float v, float rgba[4], struct
 	float intensity;
 
 	hasrgb = externtex(mtex, co, &intensity,
-	                   rgba, rgba + 1, rgba + 2, rgba + 3, thread, pool);
+	                   rgba, rgba + 1, rgba + 2, rgba + 3, thread, pool, false);
 	if (!hasrgb) {
 		rgba[0] = intensity;
 		rgba[1] = intensity;
@@ -390,12 +391,12 @@ static int imapaint_pick_face(ViewContext *vc, const int mval[2], unsigned int *
 }
 
 
-static Image *imapaint_face_image(DerivedMesh *dm, int face_index)
+static Image *imapaint_face_image(Object *ob, Mesh *me, int face_index)
 {
 	Image *ima;
-	MFace *mf = dm->getTessFaceArray(dm) + face_index;
-	Material *ma = dm->mat[mf->mat_nr];
-	ima = ma ? ma->texpaintslot[ma->paint_active_slot].ima : NULL;
+	MPoly *mp = me->mpoly + face_index;
+	Material *ma = give_current_material(ob, mp->mat_nr + 1);;
+	ima = ma && ma->texpaintslot ? ma->texpaintslot[ma->paint_active_slot].ima : NULL;
 
 	return ima;
 }
@@ -449,15 +450,14 @@ void paint_sample_color(bContext *C, ARegion *ar, int x, int y, bool texpaint_pr
 		bool use_material = (imapaint->mode == IMAGEPAINT_MODE_MATERIAL);
 
 		if (ob) {
+			Mesh *me = (Mesh *)ob->data;
 			DerivedMesh *dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
 
 			ViewContext vc;
 			const int mval[2] = {x, y};
 			unsigned int faceindex;
-			unsigned int totface = dm->getNumTessFaces(dm);
+			unsigned int totface = me->totface;
 			MTFace *dm_mtface = dm->getTessFaceDataArray(dm, CD_MTFACE);
-
-			DM_update_materials(dm, ob);
 
 			if (dm_mtface) {
 				view3d_set_viewcontext(C, &vc);
@@ -468,7 +468,7 @@ void paint_sample_color(bContext *C, ARegion *ar, int x, int y, bool texpaint_pr
 					Image *image;
 					
 					if (use_material) 
-						image = imapaint_face_image(dm, faceindex);
+						image = imapaint_face_image(ob, me, faceindex);
 					else
 						image = imapaint->canvas;
 					

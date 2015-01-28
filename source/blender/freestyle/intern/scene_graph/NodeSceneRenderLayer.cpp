@@ -1,5 +1,5 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * ***** BEGIN GPL LICENSE BLOCK *****
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -15,21 +15,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * Contributor: 
- *		Jeroen Bakker 
- *		Monique Dewanchand
+ * ***** END GPL LICENSE BLOCK *****
  */
 
-#include "COM_ChannelInfo.h"
-#include "COM_defines.h"
-#include <stdio.h>
-
-/**
- * @brief create new ChannelInfo instance and sets the defaults.
+/** \file blender/freestyle/intern/scene_graph/NodeSceneRenderLayer.cpp
+ *  \ingroup freestyle
+ *  \brief Class to represent a scene render layer in Blender.
  */
-ChannelInfo::ChannelInfo()
+
+#include "NodeSceneRenderLayer.h"
+
+namespace Freestyle {
+
+void NodeSceneRenderLayer::accept(SceneVisitor& v)
 {
-	this->m_number = 0;
-	this->m_premultiplied = true;
-	this->m_type = COM_CT_UNUSED;
+	v.visitNodeSceneRenderLayer(*this);
 }
+
+} /* namespace Freestyle */

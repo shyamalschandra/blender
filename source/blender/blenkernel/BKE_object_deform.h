@@ -55,20 +55,6 @@ bool BKE_object_defgroup_clear_all(struct Object *ob, const bool use_selection);
 void BKE_object_defgroup_remove(struct Object *ob, struct bDeformGroup *defgroup);
 void BKE_object_defgroup_remove_all(struct Object *ob);
 
-/* Face map operations */
-struct bFaceMap *BKE_object_facemap_add(struct Object *ob);
-struct bFaceMap *BKE_object_facemap_add_name(struct Object *ob, const char *name);
-void BKE_object_facemap_remove(struct Object *ob, struct bFaceMap *fmap);
-void BKE_object_fmap_remove_all(struct Object *ob);
-
-void ED_fmap_face_add(struct Object *ob, struct bFaceMap *fmap, int facenum);
-void ED_fmap_face_remove(struct Object *ob, struct bFaceMap *fmap, int facenum);
-
-int fmap_name_index(struct Object *ob, const char *name);
-void fmap_unique_name(struct bFaceMap *fmap, struct Object *ob);
-struct bFaceMap *fmap_find_name(struct Object *ob, const char *name);
-void fmap_copy_list(struct ListBase *outbase, struct ListBase *inbase);
-
 /* Select helpers */
 enum eVGroupSelect;
 bool *BKE_object_defgroup_subset_from_select_type(
@@ -86,5 +72,12 @@ bool *BKE_object_defgroup_selected_get(struct Object *ob, int defbase_tot, int *
 #ifdef __cplusplus
 }
 #endif
+
+/* Select helpers */
+bool *BKE_objdef_vgroup_subset_from_select_type(
+        struct Object *ob, enum eVGroupSelect subset_type, int *r_vgroup_tot, int *r_subset_count);
+void BKE_objdef_vgroup_subset_to_index_array(
+        const bool *vgroup_validmap, const int vgroup_tot, int *r_vgroup_subset_map);
+
 
 #endif  /* __BKE_OBJECT_DEFORM_H__ */

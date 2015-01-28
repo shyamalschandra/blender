@@ -3519,6 +3519,7 @@ void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float 
 	/* step 5) draw name ............................................... */
 	/* TODO: when renaming, we might not want to draw this, especially if name happens to be longer than channel */
 	if (acf->name) {
+		const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
 		char name[ANIM_CHAN_NAME_SIZE]; /* hopefully this will be enough! */
 		
 		/* set text color */
@@ -3532,7 +3533,7 @@ void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float 
 		acf->name(ale, name);
 		
 		offset += 3;
-		UI_draw_string(offset, ytext, name);
+		UI_fontstyle_draw_simple(fstyle, offset, ytext, name);
 		
 		/* draw red underline if channel is disabled */
 		if ((ale->type == ANIMTYPE_FCURVE) && (ale->flag & FCURVE_DISABLED)) {
@@ -3909,7 +3910,7 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, bAnimChann
 }
 
 /* Draw UI widgets the given channel */
-void ANIM_channel_draw_widgets(bContext *C, bAnimContext *ac, bAnimListElem *ale, uiBlock *block, float yminc, float ymaxc, size_t channel_index)
+void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListElem *ale, uiBlock *block, float yminc, float ymaxc, size_t channel_index)
 {
 	bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 	View2D *v2d = &ac->ar->v2d;
@@ -3966,16 +3967,24 @@ void ANIM_channel_draw_widgets(bContext *C, bAnimContext *ac, bAnimListElem *ale
 			/* color swatch for layer color */
 			bGPDlayer *gpl = (bGPDlayer *)ale->data;
 			PointerRNA ptr;
+			float w = ICON_WIDTH / 2.0f;
 			
 			RNA_pointer_create(ale->id, &RNA_GPencilLayer, ale->data, &ptr);
 			
-			UI_block_emboss_set(block, UI_EMBOSS);
+			UI_block_align_begin(block);
 			
-			uiDefButR(block, UI_BTYPE_COLOR, 1, "", offset, yminc, ICON_WIDTH, ICON_WIDTH, 
+			UI_block_emboss_set(block, RNA_boolean_get(&ptr, "is_stroke_visible") ? UI_EMBOSS : UI_EMBOSS_NONE);
+			uiDefButR(block, UI_BTYPE_COLOR, 1, "", offset, yminc, w, ICON_WIDTH, 
 			          &ptr, "color", -1, 
 			          0, 0, 0, 0, gpl->info);
 			
+			UI_block_emboss_set(block, RNA_boolean_get(&ptr, "is_fill_visible") ? UI_EMBOSS : UI_EMBOSS_NONE);
+			uiDefButR(block, UI_BTYPE_COLOR, 1, "", offset + w, yminc, w, ICON_WIDTH, 
+			          &ptr, "fill_color", -1, 
+			          0, 0, 0, 0, gpl->info);
+			
 			UI_block_emboss_set(block, UI_EMBOSS_NONE);
+			UI_block_align_end(block);
 			
 			offset += ICON_WIDTH;
 		}

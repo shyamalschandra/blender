@@ -22,11 +22,12 @@ from bpy.types import Panel, UIList, Menu
 from rna_prop_ui import PropertyPanel
 from bpy.app.translations import pgettext_iface as iface_
 
-from bl_ui.properties_physics_common import (point_cache_ui,
-                                             effector_weights_ui,
-                                             basic_force_field_settings_ui,
-                                             basic_force_field_falloff_ui,
-                                             )
+from bl_ui.properties_physics_common import (
+        point_cache_ui,
+        effector_weights_ui,
+        basic_force_field_settings_ui,
+        basic_force_field_falloff_ui,
+        )
 
 
 def particle_panel_enabled(context, psys):
@@ -52,7 +53,12 @@ def particle_panel_poll(cls, context):
     if not settings:
         return False
 
-    return settings.is_fluid is False and (engine in cls.COMPAT_ENGINES)
+    if settings.is_fluid:
+        return False
+    if hasattr(cls, 'COMPAT_ENGINES') and not (engine in cls.COMPAT_ENGINES):
+        return False
+
+    return True
 
 
 def particle_get_settings(context):
@@ -61,6 +67,22 @@ def particle_get_settings(context):
     elif isinstance(context.space_data.pin_id, bpy.types.ParticleSettings):
         return context.space_data.pin_id
     return None
+
+
+class PARTICLE_MT_specials(Menu):
+    bl_label = "Particle Specials"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
+
+    def draw(self, context):
+        layout = self.layout
+
+        props = layout.operator("particle.copy_particle_systems", text="Copy Active to Selected Objects")
+        props.use_active = True
+        props.remove_target_particles = False
+
+        props = layout.operator("particle.copy_particle_systems", text="Copy All to Selected Objects")
+        props.use_active = False
+        props.remove_target_particles = True
 
 
 class PARTICLE_MT_hair_dynamics_presets(Menu):
@@ -79,6 +101,30 @@ class ParticleButtonsPanel():
     @classmethod
     def poll(cls, context):
         return particle_panel_poll(cls, context)
+
+
+def find_modifier(ob, psys):
+    for md in ob.modifiers:
+        if md.type == 'PARTICLE_SYSTEM':
+            if md.particle_system == psys:
+                return md
+
+class PARTICLE_UL_particle_systems(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index, flt_flag):
+        ob = data
+        psys = item
+
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            md = find_modifier(ob, psys)
+
+            layout.prop(psys, "name", text="", emboss=False, icon_value=icon)
+            if md:
+                layout.prop(md, "show_render", emboss=False, icon_only=True, icon='RESTRICT_RENDER_OFF' if md.show_render else 'RESTRICT_RENDER_ON')
+                layout.prop(md, "show_viewport", emboss=False, icon_only=True, icon='RESTRICT_VIEW_OFF' if md.show_viewport else 'RESTRICT_VIEW_ON')
+
+        elif self.layout_type in {'GRID'}:
+            layout.alignment = 'CENTER'
+            layout.label(text="", icon_value=icon)
 
 
 class PARTICLE_PT_context_particles(ParticleButtonsPanel, Panel):
@@ -105,12 +151,13 @@ class PARTICLE_PT_context_particles(ParticleButtonsPanel, Panel):
         if ob:
             row = layout.row()
 
-            row.template_list("UI_UL_list", "particle_systems", ob, "particle_systems",
+            row.template_list("PARTICLE_UL_particle_systems", "particle_systems", ob, "particle_systems",
                               ob.particle_systems, "active_index", rows=1)
 
             col = row.column(align=True)
             col.operator("object.particle_system_add", icon='ZOOMIN', text="")
             col.operator("object.particle_system_remove", icon='ZOOMOUT', text="")
+            col.menu("PARTICLE_MT_specials", icon='DOWNARROW_HLT', text="")
 
         if psys is None:
             part = particle_get_settings(context)
@@ -323,11 +370,14 @@ class PARTICLE_PT_hair_dynamics(ParticleButtonsPanel, Panel):
         sub.prop(cloth, "density_target", text="Density Target")
         sub.prop(cloth, "density_strength", slider=True, text="Strength")
         col.prop(cloth, "voxel_cell_size")
-        sub = col.column(align=True)
-        sub.prop(cloth, "debug1")
-        sub.prop(cloth, "debug2")
-        sub.prop(cloth, "debug3")
-        sub.prop(cloth, "debug4")
+
+        split.separator()
+
+        col = split.column()
+        col.label(text="Pinning")
+        col.prop(cloth, "pin_stiffness", text="Goal Strength")
+
+        split.separator()
 
         split.separator()
 
@@ -343,7 +393,6 @@ class PARTICLE_PT_hair_dynamics(ParticleButtonsPanel, Panel):
 
         row = col.row()
         row.prop(psys.settings, "show_hair_grid", text="HairGrid")
-        row.prop(cloth_md, "show_debug_data", text="Debug")
 
         if result:
             box = layout.box()
@@ -392,7 +441,6 @@ class PARTICLE_UL_shape_keys(UIList):
 
 class PARTICLE_MT_shape_key_specials(Menu):
     bl_label = "Shape Key Specials"
-    COMPAT_ENGINES = {'BLENDER_RENDER'}
 
     def draw(self, context):
         layout = self.layout
@@ -407,7 +455,6 @@ class PARTICLE_MT_shape_key_specials(Menu):
 
 class PARTICLE_PT_shape_keys(ParticleButtonsPanel, Panel):
     bl_label = "Shape Keys"
-    COMPAT_ENGINES = {'BLENDER_RENDER'}
 
     def draw(self, context):
         layout = self.layout
@@ -1275,8 +1322,17 @@ class PARTICLE_PT_children(ParticleButtonsPanel, Panel):
         col.label(text="Effects:")
 
         sub = col.column(align=True)
-        sub.prop(part, "clump_factor", slider=True)
-        sub.prop(part, "clump_shape", slider=True)
+        sub.prop(part, "use_clump_curve")
+        if part.use_clump_curve:
+            sub.template_curve_mapping(part, "clump_curve")
+        else:
+            sub.prop(part, "clump_factor", slider=True)
+            sub.prop(part, "clump_shape", slider=True)
+        sub = col.column(align=True)
+        sub.prop(part, "use_clump_noise")
+        subsub = sub.column()
+        subsub.enabled = part.use_clump_noise
+        subsub.prop(part, "clump_noise_size")
 
         sub = col.column(align=True)
         sub.prop(part, "child_length", slider=True)
@@ -1300,20 +1356,28 @@ class PARTICLE_PT_children(ParticleButtonsPanel, Panel):
             sub.prop(part, "child_parting_max", text="Max")
 
         col = split.column()
-        col.label(text="Roughness:")
 
-        sub = col.column(align=True)
-        sub.prop(part, "roughness_1", text="Uniform")
-        sub.prop(part, "roughness_1_size", text="Size")
+        col.prop(part, "use_roughness_curve")
+        if part.use_roughness_curve:
+            sub = col.column()
+            sub.template_curve_mapping(part, "roughness_curve")
+            sub.prop(part, "roughness_1", text="Roughness")
+            sub.prop(part, "roughness_1_size", text="Size")
+        else:
+            col.label(text="Roughness:")
 
-        sub = col.column(align=True)
-        sub.prop(part, "roughness_endpoint", "Endpoint")
-        sub.prop(part, "roughness_end_shape")
+            sub = col.column(align=True)
+            sub.prop(part, "roughness_1", text="Uniform")
+            sub.prop(part, "roughness_1_size", text="Size")
 
-        sub = col.column(align=True)
-        sub.prop(part, "roughness_2", text="Random")
-        sub.prop(part, "roughness_2_size", text="Size")
-        sub.prop(part, "roughness_2_threshold", slider=True)
+            sub = col.column(align=True)
+            sub.prop(part, "roughness_endpoint", "Endpoint")
+            sub.prop(part, "roughness_end_shape")
+
+            sub = col.column(align=True)
+            sub.prop(part, "roughness_2", text="Random")
+            sub.prop(part, "roughness_2_size", text="Size")
+            sub.prop(part, "roughness_2_threshold", slider=True)
 
         layout.row().label(text="Kink:")
         layout.row().prop(part, "kink", expand=True)
@@ -1321,14 +1385,27 @@ class PARTICLE_PT_children(ParticleButtonsPanel, Panel):
         split = layout.split()
         split.active = part.kink != 'NO'
 
-        col = split.column()
-        sub = col.column(align=True)
-        sub.prop(part, "kink_amplitude")
-        sub.prop(part, "kink_amplitude_clump", text="Clump", slider=True)
-        col.prop(part, "kink_flat", slider=True)
-        col = split.column(align=True)
-        col.prop(part, "kink_frequency")
-        col.prop(part, "kink_shape", slider=True)
+        if part.kink in {'SPIRAL'}:
+            col = split.column()
+            sub = col.column(align=True)
+            sub.prop(part, "kink_amplitude", text="Radius")
+            sub.prop(part, "kink_amplitude_random", text="Random", slider=True)
+            sub = col.column(align=True)
+            sub.prop(part, "kink_axis")
+            sub.prop(part, "kink_axis_random", text="Random", slider=True)
+            col = split.column(align=True)
+            col.prop(part, "kink_frequency", text="Frequency")
+            col.prop(part, "kink_shape", text="Shape", slider=True)
+            col.prop(part, "kink_extra_steps", text="Steps")
+        else:
+            col = split.column()
+            sub = col.column(align=True)
+            sub.prop(part, "kink_amplitude")
+            sub.prop(part, "kink_amplitude_clump", text="Clump", slider=True)
+            col.prop(part, "kink_flat", slider=True)
+            col = split.column(align=True)
+            col.prop(part, "kink_frequency")
+            col.prop(part, "kink_shape", slider=True)
 
 
 class PARTICLE_PT_field_weights(ParticleButtonsPanel, Panel):

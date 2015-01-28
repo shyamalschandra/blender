@@ -220,7 +220,6 @@ class SpellChecker():
         "polycount",
         "polygonization", "polygonalization",  # yuck!
         "selectability",
-        "slurph",
         "stitchable",
         "symmetrize",
         "trackability",
@@ -266,6 +265,7 @@ class SpellChecker():
         "ok",
         "orco",
         "ortho",
+        "pano",
         "persp",
         "pref", "prefs",
         "prev",
@@ -454,6 +454,7 @@ class SpellChecker():
         "vcol", "vcols",
         "vgroup", "vgroups",
         "vinterlace",
+        "vse",
         "wasd", "wasdqe",  # keys...
         "wetmap", "wetmaps",
         "wpaint",

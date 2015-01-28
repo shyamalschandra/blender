@@ -86,6 +86,7 @@ set(SRC
 	intern/curve.c
 	intern/customdata.c
 	intern/customdata_file.c
+	intern/data_transfer.c
 	intern/deform.c
 	intern/depsgraph.c
 	intern/displist.c
@@ -95,6 +96,7 @@ set(SRC
 	intern/editmesh_bvh.c
 	intern/editstrands.c
 	intern/effect.c
+	intern/facemap.c
 	intern/fcurve.c
 	intern/fluidsim.c
 	intern/fmodifier.c
@@ -122,6 +124,7 @@ set(SRC
 	intern/mesh.c
 	intern/mesh_evaluate.c
 	intern/mesh_mapping.c
+	intern/mesh_remap.c
 	intern/mesh_sample.c
 	intern/mesh_validate.c
 	intern/modifier.c
@@ -137,6 +140,7 @@ set(SRC
 	intern/packedFile.c
 	intern/paint.c
 	intern/particle.c
+	intern/particle_child.c
 	intern/particle_distribute.c
 	intern/particle_system.c
 	intern/pbvh.c
@@ -204,12 +208,14 @@ set(SRC
 	BKE_curve.h
 	BKE_customdata.h
 	BKE_customdata_file.h
+	BKE_data_transfer.h
 	BKE_deform.h
 	BKE_depsgraph.h
 	BKE_displist.h
 	BKE_dynamicpaint.h
 	BKE_editstrands.h
 	BKE_effect.h
+	BKE_facemap.h
 	BKE_fcurve.h
 	BKE_fluidsim.h
 	BKE_font.h
@@ -234,6 +240,7 @@ set(SRC
 	BKE_mball.h
 	BKE_mesh.h
 	BKE_mesh_mapping.h
+	BKE_mesh_remap.h
 	BKE_mesh_sample.h
 	BKE_modifier.h
 	BKE_movieclip.h
@@ -280,6 +287,7 @@ set(SRC
 	tracking_private.h
 	intern/CCGSubSurf.h
 	intern/pbvh_intern.h
+	intern/data_transfer_intern.h
 )
 
 if(WITH_BINRELOC)

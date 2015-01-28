@@ -73,7 +73,7 @@ typedef struct CustomData {
 } CustomData;
 
 /* CustomData.type */
-enum {
+typedef enum CustomDataType {
 	CD_MVERT            = 0,
 	CD_MSTICKY          = 1,  /* DEPRECATED */
 	CD_MDEFORMVERT      = 2,
@@ -124,7 +124,7 @@ enum {
 	CD_MSURFACE_SAMPLE  = 42,
 
 	CD_NUMTYPES         = 43
-};
+} CustomDataType;
 
 /* Bits for CustomDataMask */
 #define CD_MASK_MVERT		(1 << CD_MVERT)

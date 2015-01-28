@@ -96,11 +96,7 @@ static ID **get_selected_and_linked_obs(bContext *C, short *count, short scavisf
 
 static int vergname(const void *v1, const void *v2)
 {
-	char **x1, **x2;
-	
-	x1 = (char **)v1;
-	x2 = (char **)v2;
-	
+	const char * const *x1 = v1, * const *x2 = v2;
 	return BLI_natstrcmp(*x1, *x2);
 }
 
@@ -170,7 +166,7 @@ void make_unique_prop_names(bContext *C, char *str)
 	/* now we check for double names, and change them */
 	
 	for (nr=0; nr<propcount; nr++) {
-		if (names[nr]!=str && strcmp( names[nr], str )==0 ) {
+		if (names[nr] != str && STREQ(names[nr], str)) {
 			BLI_newname(str, +1);
 		}
 	}

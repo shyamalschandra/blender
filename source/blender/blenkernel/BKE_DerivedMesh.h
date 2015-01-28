@@ -187,7 +187,8 @@ struct DerivedMesh {
 	DerivedMeshType type;
 	float auto_bump_scale;
 	DMDirtyFlag dirty;
-	int totmat; /* total materials. Will be valid only before object drawing. */
+	short totfmaps;
+	short totmat; /* total materials. Will be valid only before object drawing. */
 	struct Material **mat; /* material array. Will be valid only before object drawing */
 
 	/* use for converting to BMesh which doesn't store bevel weight and edge crease by default */
@@ -197,7 +198,7 @@ struct DerivedMesh {
 	void (*calcNormals)(DerivedMesh *dm);
 
 	/** Calculate loop (split) normals */
-	void (*calcLoopNormals)(DerivedMesh *dm, const float split_angle);
+	void (*calcLoopNormals)(DerivedMesh *dm, const bool use_split_normals, const float split_angle);
 
 	/** Recalculates mesh tessellation */
 	void (*recalcTessellation)(DerivedMesh *dm);
@@ -466,6 +467,10 @@ struct DerivedMesh {
 	                           void (*setMaterial)(void *userData, int matnr, void *attribs),
 	                           bool (*setFace)(void *userData, int index), void *userData);
 
+	struct GPUDrawObject *(*gpuObjectNew)(DerivedMesh *dm);
+	void (*copy_gpu_data)(DerivedMesh *dm, int type, float *varray, int *index,
+	                      int *mat_orig_to_new, void *user_data);
+	
 	/** Release reference to the DerivedMesh. This function decides internally
 	 * if the DerivedMesh will be freed, or cached for later use. */
 	void (*release)(DerivedMesh *dm);
@@ -745,6 +750,8 @@ typedef struct DMVertexAttribs {
 
 void DM_vertex_attributes_from_gpu(DerivedMesh *dm,
                                    struct GPUVertexAttribs *gattribs, DMVertexAttribs *attribs);
+
+void DM_draw_attrib_vertex(DMVertexAttribs *attribs, int a, int index, int vert);
 
 void DM_add_tangent_layer(DerivedMesh *dm);
 void DM_calc_auto_bump_scale(DerivedMesh *dm);

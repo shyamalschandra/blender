@@ -88,6 +88,8 @@
 #undef SEQP_BEGIN
 #undef SEQ_END
 
+static Sequence *special_seq_update = NULL;
+
 void color3ubv_from_seq(Scene *curscene, Sequence *seq, unsigned char col[3])
 {
 	unsigned char blendcol[3];
@@ -482,7 +484,7 @@ static void draw_seq_text(View2D *v2d, Sequence *seq, float x1, float x2, float 
 		}
 	}
 	else if (seq->type == SEQ_TYPE_MOVIECLIP) {
-		if (seq->clip && strcmp(name, seq->clip->id.name + 2) != 0) {
+		if (seq->clip && !STREQ(name, seq->clip->id.name + 2)) {
 			str_len = BLI_snprintf(str, sizeof(str), "%s: %s | %d",
 			                       name, seq->clip->id.name + 2, seq->len);
 		}
@@ -492,7 +494,7 @@ static void draw_seq_text(View2D *v2d, Sequence *seq, float x1, float x2, float 
 		}
 	}
 	else if (seq->type == SEQ_TYPE_MASK) {
-		if (seq->mask && strcmp(name, seq->mask->id.name + 2) != 0) {
+		if (seq->mask && !STREQ(name, seq->mask->id.name + 2)) {
 			str_len = BLI_snprintf(str, sizeof(str), "%s: %s | %d",
 			                       name, seq->mask->id.name + 2, seq->len);
 		}
@@ -752,9 +754,11 @@ static void draw_seq_strip(const bContext *C, SpaceSeq *sseq, Scene *scene, AReg
 	else {  /* normal operation */
 		draw_shadedstrip(seq, background_col, x1, y1, x2, y2);
 	}
-	
-	if ((sseq->draw_flag & SEQ_DRAW_OFFSET_EXT) && !is_single_image) {
-		draw_sequence_extensions(scene, ar, seq);
+
+	if (!is_single_image) {
+		if ((sseq->draw_flag & SEQ_DRAW_OFFSET_EXT) || (seq == special_seq_update)) {
+			draw_sequence_extensions(scene, ar, seq);
+		}
 	}
 
 	draw_seq_handle(v2d, seq, handsize_clamped, SEQ_LEFTHANDLE);
@@ -847,19 +851,29 @@ static void draw_seq_strip(const bContext *C, SpaceSeq *sseq, Scene *scene, AReg
 	}
 }
 
-static Sequence *special_seq_update = NULL;
-
-static void UNUSED_FUNCTION(set_special_seq_update) (int val)
+void sequencer_special_update_set(Sequence *seq)
 {
-//	int x;
+	special_seq_update = seq;
+}
 
-	/* if mouse over a sequence && LEFTMOUSE */
-	if (val) {
-// XXX		special_seq_update = find_nearest_seq(&x);
-	}
-	else {
-		special_seq_update = NULL;
-	}
+Sequence *ED_sequencer_special_preview_get(void)
+{
+	return special_seq_update;
+}
+
+void ED_sequencer_special_preview_set(bContext *C, const int mval[2])
+{
+	Scene *scene = CTX_data_scene(C);
+	ARegion *ar = CTX_wm_region(C);
+	int hand;
+	Sequence *seq;
+	seq = find_nearest_seq(scene, &ar->v2d, &hand, mval);
+	sequencer_special_update_set(seq);
+}
+
+void ED_sequencer_special_preview_clear(void)
+{
+	sequencer_special_update_set(NULL);
 }
 
 ImBuf *sequencer_ibuf_get(struct Main *bmain, Scene *scene, SpaceSeq *sseq, int cfra, int frame_ofs)
@@ -872,9 +886,6 @@ ImBuf *sequencer_ibuf_get(struct Main *bmain, Scene *scene, SpaceSeq *sseq, int 
 	short is_break = G.is_break;
 
 	render_size = sseq->render_size;
-	if (render_size == 99) {
-		render_size = 100;
-	}
 	if (render_size == 0) {
 		render_size = scene->r.size;
 	}
@@ -889,7 +900,10 @@ ImBuf *sequencer_ibuf_get(struct Main *bmain, Scene *scene, SpaceSeq *sseq, int 
 	rectx = (render_size * (float)scene->r.xsch) / 100.0f + 0.5f;
 	recty = (render_size * (float)scene->r.ysch) / 100.0f + 0.5f;
 
-	context = BKE_sequencer_new_render_data(bmain->eval_ctx, bmain, scene, rectx, recty, proxy_size);
+	BKE_sequencer_new_render_data(
+	        bmain->eval_ctx, bmain, scene,
+	        rectx, recty, proxy_size,
+	        &context);
 
 	/* sequencer could start rendering, in this case we need to be sure it wouldn't be canceled
 	 * by Esc pressed somewhere in the past
@@ -1272,24 +1286,18 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 		glEnd();
 
 		/* safety border */
-		if ((sseq->flag & SEQ_DRAW_SAFE_MARGINS) != 0) {
-			float fac = 0.1;
+		if (sseq->flag & SEQ_SHOW_SAFE_MARGINS) {
+			UI_draw_safe_areas(
+			        x1, x2, y1, y2,
+			        scene->safe_areas.title,
+			        scene->safe_areas.action);
 
-			float a = fac * (x2 - x1);
-			x1 += a;
-			x2 -= a;
-
-			a = fac * (y2 - y1);
-			y1 += a;
-			y2 -= a;
-
-			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-			UI_draw_roundbox_corner_set(UI_CNR_ALL);
-			UI_draw_roundbox_gl_mode(GL_LINE_LOOP, x1, y1, x2, y2, 12.0);
-
-			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
+			if (sseq->flag & SEQ_SHOW_SAFE_CENTER) {
+				UI_draw_safe_areas(
+				        x1, x2, y1, y2,
+				        scene->safe_areas.title_center,
+				        scene->safe_areas.action_center);
+			}
 		}
 
 		setlinestyle(0);
@@ -1444,6 +1452,15 @@ static void draw_seq_strips(const bContext *C, Editing *ed, ARegion *ar)
 	/* draw the last selected last (i.e. 'active' in other parts of Blender), removes some overlapping error */
 	if (last_seq)
 		draw_seq_strip(C, sseq, scene, ar, last_seq, 120, pixelx);
+
+	/* draw highlight when previewing a single strip */
+	if (special_seq_update) {
+		const Sequence *seq = special_seq_update;
+		glEnable(GL_BLEND);
+		glColor4ub(255, 255, 255, 48);
+		glRectf(seq->startdisp, seq->machine + SEQ_STRIP_OFSBOTTOM, seq->enddisp, seq->machine + SEQ_STRIP_OFSTOP);
+		glDisable(GL_BLEND);
+	}
 }
 
 static void seq_draw_sfra_efra(Scene *scene, View2D *v2d)

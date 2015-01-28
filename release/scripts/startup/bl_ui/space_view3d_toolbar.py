@@ -100,6 +100,13 @@ class VIEW3D_PT_tools_object(View3DPanel, Panel):
                 row.operator("object.shade_smooth", text="Smooth")
                 row.operator("object.shade_flat", text="Flat")
 
+            if obj_type in {'MESH'}:
+                col = layout.column(align=True)
+                col.label(text="Data Transfer:")
+                row = col.row(align=True)
+                row.operator("object.data_transfer", text="Data")
+                row.operator("object.datalayout_transfer", text="Data Layout")
+
 
 class VIEW3D_PT_tools_add_object(View3DPanel, Panel):
     bl_category = "Create"
@@ -874,10 +881,8 @@ class VIEW3D_PT_tools_brush(Panel, View3DPaintPanel):
                 col.prop(brush, "count")
                 col = layout.column()
                 col.prop(settings, "use_default_interpolate")
-                sub = col.column(align=True)
-                sub.active = settings.use_default_interpolate
-                sub.prop(brush, "steps", slider=True)
-                sub.prop(settings, "default_key_count", slider=True)
+                col.prop(brush, "steps", slider=True)
+                col.prop(settings, "default_key_count", slider=True)
             elif tool == 'LENGTH':
                 layout.prop(brush, "length_mode", expand=True)
             elif tool == 'PUFF':
@@ -1134,18 +1139,23 @@ class VIEW3D_PT_slots_projectpaint(View3DPanel, Panel):
                                   mat, "texture_paint_images",
                                   mat, "paint_active_slot", rows=2)
 
+                if mat.texture_paint_slots:
+                    slot = mat.texture_paint_slots[mat.paint_active_slot]
+                else:
+                    slot = None
+
                 if (not mat.use_nodes) and context.scene.render.engine in {'BLENDER_RENDER', 'BLENDER_GAME'}:
                     row = col.row(align=True)
                     row.operator_menu_enum("paint.add_texture_paint_slot", "type")
                     row.operator("paint.delete_texture_paint_slot", text="", icon='X')
 
-                    if mat.texture_paint_slots:
-                        slot = mat.texture_paint_slots[mat.paint_active_slot]
-
+                    if slot:
                         col.prop(mat.texture_slots[slot.index], "blend_type")
                         col.separator()
-                        col.label("UV Map")
-                        col.prop_search(slot, "uv_layer", ob.data, "uv_textures", text="")
+                
+                if slot and slot.index != -1:
+                    col.label("UV Map")
+                    col.prop_search(slot, "uv_layer", ob.data, "uv_textures", text="")
 
         elif settings.mode == 'IMAGE':
             mesh = ob.data
@@ -1605,7 +1615,9 @@ class VIEW3D_PT_tools_weightpaint(View3DPanel, Panel):
 
         col = layout.column()
         col.operator("paint.weight_gradient")
-        col.operator("object.vertex_group_transfer_weight", text="Transfer Weights")
+        prop = col.operator("object.data_transfer", text="Transfer Weights")
+        prop.use_reverse_transfer = True
+        prop.data_type = 'VGROUP_WEIGHTS'
 
 
 class VIEW3D_PT_tools_weightpaint_options(Panel, View3DPaintPanel):

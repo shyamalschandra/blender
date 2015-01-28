@@ -1108,6 +1108,11 @@ static void write_particlesettings(WriteData *wd, ListBase *idbase)
 			writestruct(wd, DATA, "PartDeflect", 1, part->pd2);
 			writestruct(wd, DATA, "EffectorWeights", 1, part->effector_weights);
 
+			if (part->clumpcurve)
+				write_curvemapping(wd, part->clumpcurve);
+			if (part->roughcurve)
+				write_curvemapping(wd, part->roughcurve);
+			
 			dw = part->dupliweights.first;
 			for (; dw; dw=dw->next) {
 				/* update indices */
@@ -1448,7 +1453,7 @@ static void write_pose(WriteData *wd, bPose *pose)
 
 	/* write IK param */
 	if (pose->ikparam) {
-		const char *structname = (char *)BKE_pose_ikparam_get_name(pose);
+		const char *structname = BKE_pose_ikparam_get_name(pose);
 		if (structname)
 			writestruct(wd, DATA, structname, 1, pose->ikparam);
 	}
@@ -1909,6 +1914,10 @@ static void write_customdata(WriteData *wd, ID *id, int count, CustomData *data,
 		}
 		else if (layer->type == CD_GRID_PAINT_MASK) {
 			write_grid_paint_mask(wd, count, layer->data);
+		}
+		else if (layer->type == CD_FACEMAP) {
+			const int *layer_data = layer->data;
+			writedata(wd, DATA, sizeof(*layer_data) * count, layer_data);
 		}
 		else {
 			CustomData_file_write_info(layer->type, &structname, &structnum);
@@ -3449,7 +3458,7 @@ static void write_global(WriteData *wd, int fileflags, Main *mainvar)
 	char subvstr[8];
 	
 	/* prevent mem checkers from complaining */
-	fg.pads= 0;
+	memset(fg.pad, 0, sizeof(fg.pad));
 	memset(fg.filename, 0, sizeof(fg.filename));
 	memset(fg.build_hash, 0, sizeof(fg.build_hash));
 
@@ -3458,8 +3467,6 @@ static void write_global(WriteData *wd, int fileflags, Main *mainvar)
 	/* XXX still remap G */
 	fg.curscreen= screen;
 	fg.curscene= screen ? screen->scene : NULL;
-	fg.displaymode= G.displaymode;
-	fg.winpos= G.winpos;
 
 	/* prevent to save this, is not good convention, and feature with concerns... */
 	fg.fileflags= (fileflags & ~G_FILE_FLAGS_RUNTIME);

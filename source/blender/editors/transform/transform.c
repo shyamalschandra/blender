@@ -585,7 +585,10 @@ void removeAspectRatio(TransInfo *t, float vec[2])
 
 static void viewRedrawForce(const bContext *C, TransInfo *t)
 {
-	if (t->spacetype == SPACE_VIEW3D) {
+	if (t->options & CTX_GPENCIL_STROKES) {
+		WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, NULL);
+	}
+	else if (t->spacetype == SPACE_VIEW3D) {
 		if (t->options & CTX_PAINT_CURVE) {
 			wmWindow *window = CTX_wm_window(C);
 			WM_paint_cursor_tag_redraw(window, t->ar);
@@ -966,6 +969,7 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 {
 	char cmode = constraintModeToChar(t);
 	bool handled = false;
+	const int modifiers_prev = t->modifiers;
 
 	t->redraw |= handleMouseInput(t, &t->mouse, event);
 
@@ -1490,6 +1494,13 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 				t->state = TRANS_CONFIRM;
 			}
 		}
+	}
+
+	/* if we change snap options, get the unsnapped values back */
+	if ((t->modifiers   & (MOD_SNAP | MOD_SNAP_INVERT)) !=
+	    (modifiers_prev & (MOD_SNAP | MOD_SNAP_INVERT)))
+	{
+	    applyMouseInput(t, &t->mouse, t->mval, t->values);
 	}
 
 	/* Per transform event, if present */
@@ -3160,7 +3171,7 @@ static void initResize(TransInfo *t)
 	t->num.unit_type[2] = B_UNIT_NONE;
 }
 
-static void headerResize(TransInfo *t, float vec[3], char str[MAX_INFO_LEN])
+static void headerResize(TransInfo *t, const float vec[3], char str[MAX_INFO_LEN])
 {
 	char tvec[NUM_STR_REP_LEN * 3];
 	size_t ofs = 0;
@@ -4133,7 +4144,7 @@ static void initTranslation(TransInfo *t)
 	}
 }
 
-static void headerTranslation(TransInfo *t, float vec[3], char str[MAX_INFO_LEN])
+static void headerTranslation(TransInfo *t, const float vec[3], char str[MAX_INFO_LEN])
 {
 	size_t ofs = 0;
 	char tvec[NUM_STR_REP_LEN * 3];
@@ -4226,7 +4237,7 @@ static void headerTranslation(TransInfo *t, float vec[3], char str[MAX_INFO_LEN]
 	}
 }
 
-static void applyTranslationValue(TransInfo *t, float vec[3])
+static void applyTranslationValue(TransInfo *t, const float vec[3])
 {
 	TransData *td = t->data;
 	float tvec[3];
@@ -4963,7 +4974,7 @@ static void initBoneSize(TransInfo *t)
 	t->num.unit_type[2] = B_UNIT_NONE;
 }
 
-static void headerBoneSize(TransInfo *t, float vec[3], char str[MAX_INFO_LEN])
+static void headerBoneSize(TransInfo *t, const float vec[3], char str[MAX_INFO_LEN])
 {
 	char tvec[NUM_STR_REP_LEN * 3];
 	if (hasNumInput(&t->num)) {
@@ -5888,12 +5899,12 @@ void projectEdgeSlideData(TransInfo *t, bool is_final)
 					l_ed_sel = l_ed_sel->prev;
 
 				if (sld->perc < 0.0f) {
-					if (BM_vert_in_face(l_ed_sel->radial_next->f, sv->v_b)) {
+					if (BM_vert_in_face(sv->v_b, l_ed_sel->radial_next->f)) {
 						f_copy_flip = BLI_ghash_lookup(sld->origfaces, l_ed_sel->radial_next->f);
 					}
 				}
 				else if (sld->perc > 0.0f) {
-					if (BM_vert_in_face(l_ed_sel->radial_next->f, sv->v_a)) {
+					if (BM_vert_in_face(sv->v_a, l_ed_sel->radial_next->f)) {
 						f_copy_flip = BLI_ghash_lookup(sld->origfaces, l_ed_sel->radial_next->f);
 					}
 				}
@@ -5953,18 +5964,18 @@ void projectEdgeSlideData(TransInfo *t, bool is_final)
 
 					BMLoop *l_adj = NULL;
 					if (sld->perc < 0.0f) {
-						if (BM_vert_in_face(e_sel->l->f, sv->v_b)) {
+						if (BM_vert_in_face(sv->v_b, e_sel->l->f)) {
 							l_adj = e_sel->l;
 						}
-						else if (BM_vert_in_face(e_sel->l->radial_next->f, sv->v_b)) {
+						else if (BM_vert_in_face(sv->v_b, e_sel->l->radial_next->f)) {
 							l_adj = e_sel->l->radial_next;
 						}
 					}
 					else if (sld->perc > 0.0f) {
-						if (BM_vert_in_face(e_sel->l->f, sv->v_a)) {
+						if (BM_vert_in_face(sv->v_a, e_sel->l->f)) {
 							l_adj = e_sel->l;
 						}
-						else if (BM_vert_in_face(e_sel->l->radial_next->f, sv->v_a)) {
+						else if (BM_vert_in_face(sv->v_a, e_sel->l->radial_next->f)) {
 							l_adj = e_sel->l->radial_next;
 						}
 					}
@@ -7148,7 +7159,7 @@ static void initSeqSlide(TransInfo *t)
 	t->num.unit_type[1] = B_UNIT_NONE;
 }
 
-static void headerSeqSlide(TransInfo *t, float val[2], char str[MAX_INFO_LEN])
+static void headerSeqSlide(TransInfo *t, const float val[2], char str[MAX_INFO_LEN])
 {
 	char tvec[NUM_STR_REP_LEN * 3];
 	size_t ofs = 0;
@@ -7547,7 +7558,7 @@ static void initTimeSlide(TransInfo *t)
 	t->num.unit_type[0] = B_UNIT_NONE;
 }
 
-static void headerTimeSlide(TransInfo *t, float sval, char str[MAX_INFO_LEN])
+static void headerTimeSlide(TransInfo *t, const float sval, char str[MAX_INFO_LEN])
 {
 	char tvec[NUM_STR_REP_LEN * 3];
 

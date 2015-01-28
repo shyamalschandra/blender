@@ -897,9 +897,8 @@ typedef enum HairEditSelectMode {
 } HairEditSelectMode;
 
 /* HairEditSettings->flag */
-typedef enum HairEditFlag {
-	HAIR_EDIT_SHOW_DEBUG    = (1 << 16),
-} HairEditFlag;
+//typedef enum HairEditFlag {
+//} HairEditFlag;
 
 typedef struct HairEditSettings {
 	int flag;
@@ -1013,25 +1012,36 @@ typedef struct UnifiedPaintSettings {
 
 	/* record movement of mouse so that rake can start at an intuitive angle */
 	float last_rake[2];
+	float last_rake_angle;
+	
+	int last_stroke_valid;
+	float average_stroke_accum[3];
+	int average_stroke_counter;
+	
 
 	float brush_rotation;
+	float brush_rotation_sec;
 
 	/*********************************************************************************
 	 *  all data below are used to communicate with cursor drawing and tex sampling  *
 	 *********************************************************************************/
-	int draw_anchored;
 	int anchored_size;
-
-	char draw_inverted;
-	char pad3[7];
 
 	float overlap_factor; /* normalization factor due to accumulated value of curve along spacing.
 	                       * Calculated when brush spacing changes to dampen strength of stroke
 	                       * if space attenuation is used*/
+	char draw_inverted;
+	/* check is there an ongoing stroke right now */
+	char stroke_active;
+
+	char draw_anchored;
+	char do_linear_conversion;
+
 	float anchored_initial_mouse[2];
 
-	/* check is there an ongoing stroke right now */
-	int stroke_active;
+	/* radius of brush, premultiplied with pressure.
+	 * In case of anchored brushes contains the anchored radius */
+	float pixel_radius;
 
 	/* drawing pressure */
 	float size_pressure_value;
@@ -1043,13 +1053,7 @@ typedef struct UnifiedPaintSettings {
 	float mask_tex_mouse[2];
 
 	/* ColorSpace cache to avoid locking up during sampling */
-	int do_linear_conversion;
 	struct ColorSpace *colorspace;
-
-	/* radius of brush, premultiplied with pressure.
-	 * In case of anchored brushes contains the anchored radius */
-	float pixel_radius;
-	int pad4;
 } UnifiedPaintSettings;
 
 typedef enum {
@@ -1242,6 +1246,21 @@ typedef struct PhysicsSettings {
 	int flag, quick_cache_step, rt;
 } PhysicsSettings;
 
+/* ------------------------------------------- */
+/* Safe Area options used in Camera View & VSE
+ */
+typedef struct DisplaySafeAreas {
+	/* each value represents the (x,y) margins as a multiplier.
+	 * 'center' in this context is just the name for a different kind of safe-area */
+
+	float title[2];		/* Title Safe */
+	float action[2];	/* Image/Graphics Safe */
+
+	/* use for alternate aspect ratio */
+	float title_center[2];
+	float action_center[2];
+} DisplaySafeAreas;
+
 /* *************************************************************** */
 /* Scene ID-Block */
 
@@ -1277,6 +1296,7 @@ typedef struct Scene {
 	
 	struct ToolSettings *toolsettings;		/* default allocated now */
 	struct SceneStats *stats;				/* default allocated now */
+	struct DisplaySafeAreas safe_areas;
 
 	/* migrate or replace? depends on some internal things... */
 	/* no, is on the right place (ton) */

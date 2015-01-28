@@ -37,6 +37,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_key_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -56,6 +57,7 @@
 #include "BKE_depsgraph.h"
 #include "BKE_DerivedMesh.h"
 #include "BKE_global.h"
+#include "BKE_key.h"
 #include "BKE_object.h"
 #include "BKE_mesh.h"
 #include "BKE_modifier.h"
@@ -83,9 +85,11 @@
 
 #include "physics_intern.h"
 
-static void PE_create_particle_edit(Scene *scene, Object *ob, PointCache *cache, ParticleSystem *psys);
-static void PTCacheUndo_clear(PTCacheEdit *edit);
-static void recalc_emitter_field(Object *ob, ParticleSystem *psys);
+void PE_create_particle_edit(Scene *scene, Object *ob, PointCache *cache, ParticleSystem *psys);
+void PTCacheUndo_clear(PTCacheEdit *edit);
+void recalc_lengths(PTCacheEdit *edit);
+void recalc_emitter_field(Object *ob, ParticleSystem *psys);
+void update_world_cos(Object *ob, PTCacheEdit *edit);
 
 #define KEY_K					PTCacheEditKey *key; int k
 #define POINT_P					PTCacheEditPoint *point; int p
@@ -1074,7 +1078,7 @@ static void pe_iterate_lengths(Scene *scene, PTCacheEdit *edit)
 	}
 }
 /* set current distances to be kept between neighbouting keys */
-static void recalc_lengths(PTCacheEdit *edit)
+void recalc_lengths(PTCacheEdit *edit)
 {
 	POINT_P; KEY_K;
 
@@ -1090,7 +1094,7 @@ static void recalc_lengths(PTCacheEdit *edit)
 }
 
 /* calculate a tree for finding nearest emitter's vertice */
-static void recalc_emitter_field(Object *ob, ParticleSystem *psys)
+void recalc_emitter_field(Object *ob, ParticleSystem *psys)
 {
 	DerivedMesh *dm=psys_get_modifier(ob, psys)->dm;
 	PTCacheEdit *edit= psys->edit;
@@ -1178,7 +1182,7 @@ static void PE_update_selection(Scene *scene, Object *ob, int useflag)
 		point->flag &= ~PEP_EDIT_RECALC;
 }
 
-static void update_world_cos(Object *ob, PTCacheEdit *edit)
+void update_world_cos(Object *ob, PTCacheEdit *edit)
 {
 	ParticleSystem *psys = edit->psys;
 	ParticleSystemModifierData *psmd= psys_get_modifier(ob, psys);
@@ -1198,6 +1202,9 @@ static void update_world_cos(Object *ob, PTCacheEdit *edit)
 				mul_m4_v3(hairmat, key->world_co);
 		}
 	}
+
+	/* apply hair changes to the active shape key */
+	PE_shapekey_apply(ob, psys);
 }
 static void update_velocities(PTCacheEdit *edit)
 {
@@ -4087,6 +4094,8 @@ static bool shape_cut_test_point(PEData *data, ParticleCacheKey *key)
 	BVHTreeFromMesh *shape_bvh = &data->shape_bvh;
 	const float dir[3] = {1.0f, 0.0f, 0.0f};
 	PointInsideBVH userdata;
+	userdata.bvhdata = data->shape_bvh;
+	userdata.num_hits = 0;
 	
 	userdata.bvhdata = data->shape_bvh;
 	userdata.num_hits = 0;
@@ -4451,7 +4460,7 @@ int PE_undo_valid(Scene *scene)
 	return 0;
 }
 
-static void PTCacheUndo_clear(PTCacheEdit *edit)
+void PTCacheUndo_clear(PTCacheEdit *edit)
 {
 	PTCacheUndo *undo;
 
@@ -4551,8 +4560,46 @@ int PE_minmax(Scene *scene, float min[3], float max[3])
 
 /************************ particle edit toggle operator ************************/
 
+bool PE_shapekey_load(Object *ob, ParticleSystem *psys)
+{
+	const int mode_flag = OB_MODE_PARTICLE_EDIT;
+	const bool is_mode_set = (ob->mode & mode_flag) != 0;
+	
+	if (!is_mode_set)
+		return false;
+	
+	if (psys->edit) {
+		/* set the active shape key */
+		KeyBlock *actkb = BKE_keyblock_from_particles(psys);
+		
+		if (actkb)
+			BKE_keyblock_convert_to_hair_keys(actkb, ob, psys);
+	}
+	
+	return true;
+}
+
+bool PE_shapekey_apply(struct Object *ob, struct ParticleSystem *psys)
+{
+	const int mode_flag = OB_MODE_PARTICLE_EDIT;
+	const bool is_mode_set = (ob->mode & mode_flag) != 0;
+	
+	if (!is_mode_set)
+		return false;
+	
+	if (psys->edit) {
+		/* define the active shape key */
+		KeyBlock *actkb = BKE_keyblock_from_particles(psys);
+		
+		if (actkb)
+			BKE_keyblock_convert_from_hair_keys(ob, psys, actkb);
+	}
+	
+	return true;
+}
+
 /* initialize needed data for bake edit */
-static void PE_create_particle_edit(Scene *scene, Object *ob, PointCache *cache, ParticleSystem *psys)
+void PE_create_particle_edit(Scene *scene, Object *ob, PointCache *cache, ParticleSystem *psys)
 {
 	PTCacheEdit *edit;
 	ParticleSystemModifierData *psmd = (psys) ? psys_get_modifier(ob, psys) : NULL;
@@ -4693,11 +4740,18 @@ static int particle_edit_toggle_exec(bContext *C, wmOperator *op)
 		PTCacheEdit *edit;
 		ob->mode |= mode_flag;
 		edit= PE_create_current(scene, ob);
-	
+		
 		/* mesh may have changed since last entering editmode.
 		 * note, this may have run before if the edit data was just created, so could avoid this and speed up a little */
-		if (edit && edit->psys)
+		if (edit && edit->psys) {
+			/* set the active shape key */
+			KeyBlock *actkb = BKE_keyblock_from_particles(edit->psys);
+			
+			if (actkb)
+				BKE_keyblock_convert_to_hair_keys(actkb, ob, edit->psys);
+			
 			recalc_emitter_field(ob, edit->psys);
+		}
 		
 		toggle_particle_cursor(C, 1);
 		WM_event_add_notifier(C, NC_SCENE|ND_MODE|NS_MODE_PARTICLE, NULL);
