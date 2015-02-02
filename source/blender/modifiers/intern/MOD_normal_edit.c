@@ -21,7 +21,7 @@
  *
  */
 
-/** \file blender/modifiers/intern/MOD_setsplitnormal.c
+/** \file blender/modifiers/intern/MOD_normal_edit.c
  *  \ingroup modifiers
  */
 
@@ -52,23 +52,15 @@
 #include "MOD_util.h"
 
 
-static void get_min_max_co(float (*cos)[3], const int num_verts, float r_min_co[3], float r_max_co[3])
-{
-	/* XXX Check we can't get this from object?! Don't think so (bbox does not account for DM/mod stack). */
-	int i = num_verts;
-	while (i--) {
-		minmax_v3v3_v3(r_min_co, r_max_co, cos[i]);
-	}
-}
-
 static void generate_vert_coordinates(DerivedMesh *dm, Object *ob, Object *ob_center, const bool use_bbox_center,
                                       const int num_verts, float (*r_cos)[3], float r_size[3])
 {
-	float min_co[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
-	float max_co[3] = {FLT_MIN, FLT_MIN, FLT_MIN};
+	float min_co[3], max_co[3];
 	float diff[3];
 	bool do_diff = false;
 	int i, j;
+
+	INIT_MINMAX(min_co, max_co);
 
 	dm->getVertCos(dm, r_cos);
 
@@ -81,7 +73,7 @@ static void generate_vert_coordinates(DerivedMesh *dm, Object *ob, Object *ob_ce
 		}
 	}
 	else {
-		get_min_max_co(r_cos, num_verts, min_co, max_co);
+		minmax_v3v3_v3_array(min_co, max_co, r_cos, num_verts);
 		/* Set size. */
 		sub_v3_v3v3(r_size, max_co, min_co);
 	}
@@ -150,19 +142,19 @@ static void mix_normals(
 		const float fac = facs ? *wfac * mix_factor : mix_factor;
 
 		switch (mix_mode) {
-			case MOD_SETSPLITNORMAL_MIX_ADD:
+			case MOD_NORMALEDIT_MIX_ADD:
 				add_v3_v3(*no_new, *no_old);
 				normalize_v3(*no_new);
 				break;
-			case MOD_SETSPLITNORMAL_MIX_SUB:
+			case MOD_NORMALEDIT_MIX_SUB:
 				sub_v3_v3(*no_new, *no_old);
 				normalize_v3(*no_new);
 				break;
-			case MOD_SETSPLITNORMAL_MIX_MUL:
+			case MOD_NORMALEDIT_MIX_MUL:
 				mul_v3_v3(*no_new, *no_old);
 				normalize_v3(*no_new);
 				break;
-			case MOD_SETSPLITNORMAL_MIX_COPY:
+			case MOD_NORMALEDIT_MIX_COPY:
 				break;
 		}
 		interp_v3_v3v3_slerp_safe(*no_new, *no_old, *no_new, fac);
@@ -171,15 +163,15 @@ static void mix_normals(
 	MEM_SAFE_FREE(facs);
 }
 
-static void setSplitNormalModifier_do_ellipsoid(
-        SetSplitNormalModifierData *smd, Object *ob, DerivedMesh *dm,
+static void normalEditModifier_do_radial(
+        NormalEditModifierData *smd, Object *ob, DerivedMesh *dm,
         short (*clnors)[2], float (*loopnors)[3], float (*polynors)[3],
         const short mix_mode, const float mix_factor,
         MDeformVert *dvert, const int defgrp_index, const bool use_invert_vgroup,
         MVert *mvert, const int num_verts, MEdge *medge, const int num_edges,
         MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
 {
-	const bool use_bbox_center = ((smd->flags & MOD_SETSPLITNORMAL_CENTER_BBOX) != 0) && (smd->target == NULL);
+	const bool use_bbox_center = ((smd->flags & MOD_NORMALEDIT_CENTER_BBOX) != 0) && (smd->target == NULL);
 	int i;
 
 	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
@@ -257,16 +249,16 @@ static void setSplitNormalModifier_do_ellipsoid(
 	MEM_freeN(done_verts);
 }
 
-static void setSplitNormalModifier_do_trackto(
-        SetSplitNormalModifierData *smd, Object *ob, DerivedMesh *dm,
+static void normalEditModifier_do_directional(
+        NormalEditModifierData *smd, Object *ob, DerivedMesh *dm,
         short (*clnors)[2], float (*loopnors)[3], float (*polynors)[3],
         const short mix_mode, const float mix_factor,
         MDeformVert *dvert, const int defgrp_index, const bool use_invert_vgroup,
         MVert *mvert, const int num_verts, MEdge *medge, const int num_edges,
         MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
 {
-	const bool use_parallel_normals = (smd->flags & MOD_SETSPLITNORMAL_USE_PARALLEL_TRACKTO) != 0;
-	const bool use_bbox_center = (smd->flags & MOD_SETSPLITNORMAL_CENTER_BBOX) != 0;
+	const bool use_parallel_normals = (smd->flags & MOD_NORMALEDIT_USE_PARALLEL_DIRECTIONAL) != 0;
+	const bool use_bbox_center = (smd->flags & MOD_NORMALEDIT_CENTER_BBOX) != 0;
 
 	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
 	float (*nos)[3] = MEM_mallocN(sizeof(*nos) * num_loops, __func__);
@@ -292,7 +284,7 @@ static void setSplitNormalModifier_do_trackto(
 			float min_co[3], max_co[3];
 
 			/* We use bbox center as ref, instead of object's center (i.e. (0, 0, 0) in local space). */
-			get_min_max_co(cos, num_verts, min_co, max_co);
+			minmax_v3v3_v3_array(min_co, max_co, cos, num_verts);
 			madd_v3_v3v3fl(no, min_co, max_co, 0.5f);
 			sub_v3_v3v3(no, target_co, no);
 			normalize_v3(no);
@@ -340,19 +332,19 @@ static void setSplitNormalModifier_do_trackto(
 	MEM_freeN(nos);
 }
 
-static bool is_valid_target(SetSplitNormalModifierData *smd)
+static bool is_valid_target(NormalEditModifierData *smd)
 {
-	if (smd->mode == MOD_SETSPLITNORMAL_MODE_ELLIPSOID) {
+	if (smd->mode == MOD_NORMALEDIT_MODE_RADIAL) {
 		return true;
 	}
-	else if ((smd->mode == MOD_SETSPLITNORMAL_MODE_TRACKTO) && smd->target) {
+	else if ((smd->mode == MOD_NORMALEDIT_MODE_DIRECTIONAL) && smd->target) {
 		return true;
 	}
 	modifier_setError((ModifierData *)smd, "Invalid target settings");
 	return false;
 }
 
-static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *ob, DerivedMesh *dm)
+static void normalEditModifier_do(NormalEditModifierData *smd, Object *ob, DerivedMesh *dm)
 {
 	Mesh *me = ob->data;
 
@@ -365,8 +357,8 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 	MLoop *mloop = dm->getLoopArray(dm);
 	MPoly *mpoly = dm->getPolyArray(dm);
 
-	const bool use_invert_vgroup = ((smd->flags & MOD_SETSPLITNORMAL_INVERT_VGROUP) != 0);
-	const bool use_current_clnors = (smd->flags & MOD_SETSPLITNORMAL_USE_CURCLNORS) != 0;
+	const bool use_invert_vgroup = ((smd->flags & MOD_NORMALEDIT_INVERT_VGROUP) != 0);
+	const bool use_current_clnors = (smd->flags & MOD_NORMALEDIT_USE_CURCLNORS) != 0;
 
 	int defgrp_index;
 	MDeformVert *dvert;
@@ -408,14 +400,14 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 
 	modifier_get_vgroup(ob, dm, smd->defgrp_name, &dvert, &defgrp_index);
 
-	if (smd->mode == MOD_SETSPLITNORMAL_MODE_ELLIPSOID) {
-		setSplitNormalModifier_do_ellipsoid(
+	if (smd->mode == MOD_NORMALEDIT_MODE_RADIAL) {
+		normalEditModifier_do_radial(
 		            smd, ob, dm, clnors, loopnors, polynors,
 		            smd->mix_mode, smd->mix_factor, dvert, defgrp_index, use_invert_vgroup,
 		            mvert, num_verts, medge, num_edges, mloop, num_loops, mpoly, num_polys);
 	}
-	else if (smd->mode == MOD_SETSPLITNORMAL_MODE_TRACKTO) {
-		setSplitNormalModifier_do_trackto(
+	else if (smd->mode == MOD_NORMALEDIT_MODE_DIRECTIONAL) {
+		normalEditModifier_do_directional(
 		            smd, ob, dm, clnors, loopnors, polynors,
 		            smd->mix_mode, smd->mix_factor, dvert, defgrp_index, use_invert_vgroup,
 		            mvert, num_verts, medge, num_edges, mloop, num_loops, mpoly, num_polys);
@@ -428,12 +420,12 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 
 static void initData(ModifierData *md)
 {
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *)md;
+	NormalEditModifierData *smd = (NormalEditModifierData *)md;
 
-	smd->mode = MOD_SETSPLITNORMAL_MODE_ELLIPSOID;
-	smd->flags = MOD_SETSPLITNORMAL_USE_CURCLNORS;
+	smd->mode = MOD_NORMALEDIT_MODE_RADIAL;
+	smd->flags = MOD_NORMALEDIT_USE_CURCLNORS;
 
-	smd->mix_mode = MOD_SETSPLITNORMAL_MIX_COPY;
+	smd->mix_mode = MOD_NORMALEDIT_MIX_COPY;
 	smd->mix_factor = 1.0f;
 }
 
@@ -444,7 +436,7 @@ static void copyData(ModifierData *md, ModifierData *target)
 
 static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 {
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *)md;
+	NormalEditModifierData *smd = (NormalEditModifierData *)md;
 	CustomDataMask dataMask = CD_CUSTOMLOOPNORMAL;
 
 	/* Ask for vertexgroups if we need them. */
@@ -462,21 +454,21 @@ static bool dependsOnNormals(ModifierData *UNUSED(md))
 
 static void foreachObjectLink(ModifierData *md, Object *ob, ObjectWalkFunc walk, void *userData)
 {
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
+	NormalEditModifierData *smd = (NormalEditModifierData *) md;
 
 	walk(userData, ob, &smd->target);
 }
 
 static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
 {
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
+	NormalEditModifierData *smd = (NormalEditModifierData *) md;
 
 	walk(userData, ob, (ID **)&smd->target);
 }
 
 static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 {
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *)md;
+	NormalEditModifierData *smd = (NormalEditModifierData *)md;
 
 	return !is_valid_target(smd);
 }
@@ -484,25 +476,25 @@ static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 static void updateDepgraph(ModifierData *md, DagForest *forest, struct Scene *UNUSED(scene),
                            Object *UNUSED(ob), DagNode *obNode)
 {
-	SetSplitNormalModifierData *smd = (SetSplitNormalModifierData *) md;
+	NormalEditModifierData *smd = (NormalEditModifierData *) md;
 
 	if (smd->target) {
 		DagNode *Node = dag_get_node(forest, smd->target);
 
-		dag_add_relation(forest, Node, obNode, DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "SetSplitNormal Modifier");
+		dag_add_relation(forest, Node, obNode, DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "NormalEdit Modifier");
 	}
 }
 
 static DerivedMesh *applyModifier(ModifierData *md, Object *ob, DerivedMesh *dm, ModifierApplyFlag UNUSED(flag))
 {
-	setSplitNormalModifier_do((SetSplitNormalModifierData *)md, ob, dm);
+	normalEditModifier_do((NormalEditModifierData *)md, ob, dm);
 	return dm;
 }
 
-ModifierTypeInfo modifierType_SetSplitNormal = {
+ModifierTypeInfo modifierType_NormalEdit = {
 	/* name */              "Set Split Normals",
-	/* structName */        "SetSplitNormalModifierData",
-	/* structSize */        sizeof(SetSplitNormalModifierData),
+	/* structName */        "NormalEditModifierData",
+	/* structSize */        sizeof(NormalEditModifierData),
 	/* type */              eModifierTypeType_Constructive,
 	/* flags */             eModifierTypeFlag_AcceptsMesh |
 	                        eModifierTypeFlag_AcceptsCVs |

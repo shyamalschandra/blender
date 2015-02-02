@@ -65,7 +65,7 @@ EnumPropertyItem modifier_type_items[] = {
 	{0, "", 0, N_("Modify"), ""},
 	{eModifierType_DataTransfer, "DATA_TRANSFER", ICON_MOD_DATA_TRANSFER, "Data Transfer", ""},
 	{eModifierType_MeshCache, "MESH_CACHE", ICON_MOD_MESHDEFORM, "Mesh Cache", ""},
-	{eModifierType_SetSplitNormal, "SET_SPLIT_NORMAL", ICON_MOD_SETSPLITNORMAL, "Set Split Normals", ""},
+	{eModifierType_NormalEdit, "NORMAL_EDIT", ICON_MOD_NORMALEDIT, "Normal Edit", ""},
 	{eModifierType_UVProject, "UV_PROJECT", ICON_MOD_UVPROJECT, "UV Project", ""},
 	{eModifierType_UVWarp, "UV_WARP", ICON_MOD_UVPROJECT, "UV Warp", ""},
 	{eModifierType_WeightVGEdit, "VERTEX_WEIGHT_EDIT", ICON_MOD_VERTEX_WEIGHT, "Vertex Weight Edit", ""},
@@ -359,8 +359,8 @@ static StructRNA *rna_Modifier_refine(struct PointerRNA *ptr)
 			return &RNA_WireframeModifier;
 		case eModifierType_DataTransfer:
 			return &RNA_DataTransferModifier;
-		case eModifierType_SetSplitNormal:
-			return &RNA_SetSplitNormalModifier;
+		case eModifierType_NormalEdit:
+			return &RNA_NormalEditModifier;
 		/* Default */
 		case eModifierType_None:
 		case eModifierType_ShapeKey:
@@ -435,7 +435,7 @@ RNA_MOD_VGROUP_NAME_SET(LaplacianSmooth, defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(Lattice, name);
 RNA_MOD_VGROUP_NAME_SET(Mask, vgroup);
 RNA_MOD_VGROUP_NAME_SET(MeshDeform, defgrp_name);
-RNA_MOD_VGROUP_NAME_SET(SetSplitNormal, defgrp_name);
+RNA_MOD_VGROUP_NAME_SET(NormalEdit, defgrp_name);
 RNA_MOD_VGROUP_NAME_SET(Shrinkwrap, vgroup_name);
 RNA_MOD_VGROUP_NAME_SET(SimpleDeform, vgroup_name);
 RNA_MOD_VGROUP_NAME_SET(Smooth, defgrp_name);
@@ -522,7 +522,7 @@ RNA_MOD_OBJECT_SET(DataTransfer, ob_source, OB_MESH);
 RNA_MOD_OBJECT_SET(Lattice, object, OB_LATTICE);
 RNA_MOD_OBJECT_SET(Mask, ob_arm, OB_ARMATURE);
 RNA_MOD_OBJECT_SET(MeshDeform, object, OB_MESH);
-RNA_MOD_OBJECT_SET(SetSplitNormal, target, OB_EMPTY);
+RNA_MOD_OBJECT_SET(NormalEdit, target, OB_EMPTY);
 RNA_MOD_OBJECT_SET(Shrinkwrap, target, OB_MESH);
 RNA_MOD_OBJECT_SET(Shrinkwrap, auxTarget, OB_MESH);
 
@@ -4344,31 +4344,31 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 }
 
-static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
+static void rna_def_modifier_normaledit(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
 
 	static EnumPropertyItem prop_mode_items[] = {
-		{MOD_SETSPLITNORMAL_MODE_ELLIPSOID, "ELLIPSOID", 0, "Ellipsoid",
+		{MOD_NORMALEDIT_MODE_RADIAL, "RADIAL", 0, "Radial",
 		        "From an ellipsoid (shape defined by the boundbox's dimensions, target is optional)"},
-		{MOD_SETSPLITNORMAL_MODE_TRACKTO, "TRACKTO", 0, "Track Object",
+		{MOD_NORMALEDIT_MODE_DIRECTIONAL, "DIRECTIONAL", 0, "Directional",
 		        "Normals 'track' (point to) the target object"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
 	static EnumPropertyItem prop_mix_mode_items[] = {
-		{MOD_SETSPLITNORMAL_MIX_COPY, "COPY", 0, "Copy", "Copy new normals (i.e. replace old ones)"},
-		{MOD_SETSPLITNORMAL_MIX_ADD, "ADD", 0, "Add", "Copy sum of new and org normals"},
-		{MOD_SETSPLITNORMAL_MIX_SUB, "SUB", 0, "Substract", "Copy new normals minus old normals"},
-		{MOD_SETSPLITNORMAL_MIX_MUL, "MUL", 0, "Multiply", "Copy product of old and new normals (*not* cross product)"},
+		{MOD_NORMALEDIT_MIX_COPY, "COPY", 0, "Copy", "Copy new normals (i.e. replace old ones)"},
+		{MOD_NORMALEDIT_MIX_ADD, "ADD", 0, "Add", "Copy sum of new and org normals"},
+		{MOD_NORMALEDIT_MIX_SUB, "SUB", 0, "Substract", "Copy new normals minus old normals"},
+		{MOD_NORMALEDIT_MIX_MUL, "MUL", 0, "Multiply", "Copy product of old and new normals (*not* cross product)"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
-	srna = RNA_def_struct(brna, "SetSplitNormalModifier", "Modifier");
-	RNA_def_struct_ui_text(srna, "Set Split Normal Modifier", "Modifier affecting split normals");
-	RNA_def_struct_sdna(srna, "SetSplitNormalModifierData");
-	RNA_def_struct_ui_icon(srna, ICON_MOD_SETSPLITNORMAL);
+	srna = RNA_def_struct(brna, "NormalEditModifier", "Modifier");
+	RNA_def_struct_ui_text(srna, "Normal Edit Modifier", "Modifier affecting/generating custom normals");
+	RNA_def_struct_sdna(srna, "NormalEditModifierData");
+	RNA_def_struct_ui_icon(srna, ICON_MOD_NORMALEDIT);
 
 	prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, prop_mode_items);
@@ -4376,7 +4376,7 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "use_current_normals", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_USE_CURCLNORS);
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_NORMALEDIT_USE_CURCLNORS);
 	RNA_def_property_boolean_default(prop, true);
 	RNA_def_property_ui_text(prop, "Use Current Normals", "Use current split normals to mix generated ones in");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
@@ -4393,28 +4393,28 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "vertex_group", PROP_STRING, PROP_NONE);
 	RNA_def_property_string_sdna(prop, NULL, "defgrp_name");
 	RNA_def_property_ui_text(prop, "Vertex Group", "Vertex group name for selecting/weighting the affected areas");
-	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_SetSplitNormalModifier_defgrp_name_set");
+	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_NormalEditModifier_defgrp_name_set");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "use_invert_vertex_group", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_INVERT_VGROUP);
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_NORMALEDIT_INVERT_VGROUP);
 	RNA_def_property_ui_text(prop, "Invert", "Invert vertex group influence");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "target", PROP_POINTER, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Target", "Target object used to affect normals");
-	RNA_def_property_pointer_funcs(prop, NULL, "rna_SetSplitNormalModifier_target_set", NULL, NULL);
+	RNA_def_property_pointer_funcs(prop, NULL, "rna_NormalEditModifier_target_set", NULL, NULL);
 	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
 	RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
 
-	prop = RNA_def_property(srna, "use_center_bounds", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_CENTER_BBOX);
-	RNA_def_property_ui_text(prop, "Center Bounds",
+	prop = RNA_def_property(srna, "use_bbox_center", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_NORMALEDIT_CENTER_BBOX);
+	RNA_def_property_ui_text(prop, "BoundingBox Center",
 	                         "Use bounding box center instead of own object center as origin");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-	prop = RNA_def_property(srna, "use_trackto_parallel", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_USE_PARALLEL_TRACKTO);
+	prop = RNA_def_property(srna, "use_directional_parallel", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_NORMALEDIT_USE_PARALLEL_DIRECTIONAL);
 	RNA_def_property_boolean_default(prop, true);
 	RNA_def_property_ui_text(prop, "Parallel Normals",
 	                         "Use same direction for all normals, from origin to target's center "
@@ -4536,7 +4536,7 @@ void RNA_def_modifier(BlenderRNA *brna)
 	rna_def_modifier_laplaciandeform(brna);
 	rna_def_modifier_wireframe(brna);
 	rna_def_modifier_datatransfer(brna);
-	rna_def_modifier_setsplitnormal(brna);
+	rna_def_modifier_normaledit(brna);
 }
 
 #endif
