@@ -1342,8 +1342,8 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
     def NORMAL_EDIT(self, layout, ob, md):
         has_vgroup = bool(md.vertex_group)
-        needs_object_bbox_center = (((md.mode == 'RADIAL') and not md.target) or
-                                    ((md.mode == 'DIRECTIONAL') and md.use_directional_parallel))
+        needs_object_offset = (((md.mode == 'RADIAL') and not md.target) or
+                               ((md.mode == 'DIRECTIONAL') and md.use_directional_parallel))
 
         row = layout.row()
         row.prop(md, "mode", expand=True)
@@ -1352,26 +1352,22 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
         col = split.column()
         col.prop(md, "target", text="")
-        sub = col.row()
-        sub.active = needs_object_bbox_center
-        sub.prop(md, "use_center_bounds")
-
-        col = split.column()
+        sub = col.column(align=True)
+        sub.active = needs_object_offset
+        sub.prop(md, "offset")
         row = col.row(align=True)
         row.active = (md.mode == 'DIRECTIONAL')
         row.prop(md, "use_directional_parallel")
+
+        col = split.column()
         col.prop(md, "use_current_normals")
 
-        split = layout.split()
-        split.active = md.use_current_normals
-
-        col = split.column(align=True)
-        col.label("Mix Mode:")
-        col.prop(md, "mix_mode", text="")
-
-        col = split.column(align=True)
-        col.prop(md, "mix_factor")
-        row = col.row(align=True)
+        subcol = col.column(align=True)
+        subcol.active = md.use_current_normals
+        subcol.label("Mix Mode:")
+        subcol.prop(md, "mix_mode", text="")
+        subcol.prop(md, "mix_factor")
+        row = subcol.row(align=True)
         row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
         sub = row.row(align=True)
         sub.active = has_vgroup

@@ -52,7 +52,7 @@
 #include "MOD_util.h"
 
 
-static void generate_vert_coordinates(DerivedMesh *dm, Object *ob, Object *ob_center, const bool use_bbox_center,
+static void generate_vert_coordinates(DerivedMesh *dm, Object *ob, Object *ob_center, const float offset[3],
                                       const int num_verts, float (*r_cos)[3], float r_size[3])
 {
 	float min_co[3], max_co[3];
@@ -102,12 +102,8 @@ static void generate_vert_coordinates(DerivedMesh *dm, Object *ob, Object *ob_ce
 
 		do_diff = true;
 	}
-	else if (use_bbox_center) {
-		/* Translate our coordinates so that center of bounding box is at (0, 0, 0). */
-
-		/* Compute bbox center in local coordinates. */
-		add_v3_v3v3(diff, min_co, max_co);
-		mul_v3_fl(diff, -0.5f);
+	else if (!is_zero_v3(offset)) {
+		negate_v3_v3(diff, offset);
 
 		do_diff = true;
 	}
@@ -171,7 +167,6 @@ static void normalEditModifier_do_radial(
         MVert *mvert, const int num_verts, MEdge *medge, const int num_edges,
         MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
 {
-	const bool use_bbox_center = ((smd->flags & MOD_NORMALEDIT_CENTER_BBOX) != 0) && (smd->target == NULL);
 	int i;
 
 	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
@@ -180,7 +175,7 @@ static void normalEditModifier_do_radial(
 
 	BLI_bitmap *done_verts = BLI_BITMAP_NEW((size_t)num_verts, __func__);
 
-	generate_vert_coordinates(dm, ob, smd->target, use_bbox_center, num_verts, cos, size);
+	generate_vert_coordinates(dm, ob, smd->target, smd->offset, num_verts, cos, size);
 
 	/* size gives us our spheroid coefficients (A, B, C).
 	 * Then, we want to find out for each vert its (a, b, c) triple (proportional to (A, B, C) one).
@@ -258,7 +253,6 @@ static void normalEditModifier_do_directional(
         MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
 {
 	const bool use_parallel_normals = (smd->flags & MOD_NORMALEDIT_USE_PARALLEL_DIRECTIONAL) != 0;
-	const bool use_bbox_center = (smd->flags & MOD_NORMALEDIT_CENTER_BBOX) != 0;
 
 	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
 	float (*nos)[3] = MEM_mallocN(sizeof(*nos) * num_loops, __func__);
@@ -280,18 +274,8 @@ static void normalEditModifier_do_directional(
 	if (use_parallel_normals) {
 		float no[3];
 
-		if (use_bbox_center) {
-			float min_co[3], max_co[3];
-
-			/* We use bbox center as ref, instead of object's center (i.e. (0, 0, 0) in local space). */
-			minmax_v3v3_v3_array(min_co, max_co, cos, num_verts);
-			madd_v3_v3v3fl(no, min_co, max_co, 0.5f);
-			sub_v3_v3v3(no, target_co, no);
-			normalize_v3(no);
-		}
-		else {
-			normalize_v3_v3(no, target_co);
-		}
+		sub_v3_v3v3(no, target_co, smd->offset);
+		normalize_v3(no);
 
 		for (i = num_loops; i--; ) {
 			copy_v3_v3(nos[i], no);

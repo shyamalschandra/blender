@@ -1430,7 +1430,7 @@ typedef struct NormalEditModifierData {
 	short mix_mode;
 	short pad_s1;
 	float mix_factor;
-	float pad_f1;
+	float offset[3];
 } NormalEditModifierData;
 
 /* NormalEditModifierData.mode */
@@ -1442,9 +1442,8 @@ enum {
 /* NormalEditModifierData.flags */
 enum {
 	MOD_NORMALEDIT_INVERT_VGROUP            = (1 << 0),
-	MOD_NORMALEDIT_CENTER_BBOX              = (1 << 1),
-	MOD_NORMALEDIT_USE_CURCLNORS            = (1 << 2),
-	MOD_NORMALEDIT_USE_PARALLEL_DIRECTIONAL = (1 << 3),
+	MOD_NORMALEDIT_USE_CURCLNORS            = (1 << 1),
+	MOD_NORMALEDIT_USE_PARALLEL_DIRECTIONAL = (1 << 2),
 };
 
 /* NormalEditModifierData.mix_mode */

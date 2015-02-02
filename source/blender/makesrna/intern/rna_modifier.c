@@ -4381,6 +4381,11 @@ static void rna_def_modifier_normaledit(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Use Current Normals", "Use current split normals to mix generated ones in");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
+	prop = RNA_def_float_array(srna, "offset", 3, NULL, -FLT_MAX, FLT_MAX, "Offset",
+	                           "Offset from object's center", -100.0f, 100.0f);
+	RNA_def_property_subtype(prop, PROP_COORDS);
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
 	prop = RNA_def_property(srna, "mix_mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, prop_mix_mode_items);
 	RNA_def_property_ui_text(prop, "Mix Mode", "How to mix new generated normals with existing ones");
@@ -4406,12 +4411,6 @@ static void rna_def_modifier_normaledit(BlenderRNA *brna)
 	RNA_def_property_pointer_funcs(prop, NULL, "rna_NormalEditModifier_target_set", NULL, NULL);
 	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
 	RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
-
-	prop = RNA_def_property(srna, "use_bbox_center", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_NORMALEDIT_CENTER_BBOX);
-	RNA_def_property_ui_text(prop, "BoundingBox Center",
-	                         "Use bounding box center instead of own object center as origin");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "use_directional_parallel", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_NORMALEDIT_USE_PARALLEL_DIRECTIONAL);
