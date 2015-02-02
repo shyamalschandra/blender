@@ -2222,7 +2222,7 @@ void CDDM_calc_loop_normals_spaceset(
 				printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", r_lnors_spaceset->lspaceset[i]->ref_alpha,
 				       r_lnors_spaceset->lspaceset[i]->ref_beta, r_lnors_spaceset->lspaceset[i]->loops);
 				printf("\t\t(shared with loops");
-				while(loops) {
+				while (loops) {
 					printf(" %d", GET_INT_FROM_POINTER(loops->link));
 					loops = loops->next;
 				}

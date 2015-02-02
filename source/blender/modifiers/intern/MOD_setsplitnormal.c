@@ -21,7 +21,7 @@
  *
  */
 
-/** \file blender/modifiers/intern/MOD_setsplitnor.c
+/** \file blender/modifiers/intern/MOD_setsplitnormal.c
  *  \ingroup modifiers
  */
 
@@ -455,7 +455,8 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 	return dataMask;
 }
 
-static bool dependsOnNormals(ModifierData *UNUSED(md)) {
+static bool dependsOnNormals(ModifierData *UNUSED(md))
+{
 	return true;
 }
 

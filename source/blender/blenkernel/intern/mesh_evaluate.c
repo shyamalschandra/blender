@@ -812,7 +812,7 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
 		mlfan_next = &mloops[mlfan_curr_index];
 		mpfan_next = &mpolys[mpfan_curr_index];
 		if ((mlfan_curr->v == mlfan_next->v && mlfan_curr->v == mv_pivot_index) ||
-			(mlfan_curr->v != mlfan_next->v && mlfan_curr->v != mv_pivot_index))
+		    (mlfan_curr->v != mlfan_next->v && mlfan_curr->v != mv_pivot_index))
 		{
 			/* We need the previous loop, but current one is our vertex's loop. */
 			mlfan_vert_index = mlfan_curr_index;
@@ -1325,8 +1325,7 @@ static void mesh_normals_loop_custom_set(
 					if (!org_nor) {
 						org_nor = nor;
 					}
-					else if (dot_v3v3(org_nor, nor) < LNOR_SPACE_TRIGO_THRESHOLD)
-					{
+					else if (dot_v3v3(org_nor, nor) < LNOR_SPACE_TRIGO_THRESHOLD) {
 						/* Current normal differs too much from org one, we have to tag the edge between
 						 * previous loop's face and current's one as sharp.
 						 * We know those two loops do not point to the same edge, since we do not allow reversed winding

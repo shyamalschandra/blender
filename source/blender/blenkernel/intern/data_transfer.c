@@ -292,7 +292,7 @@ static void data_transfer_dtdata_type_preprocess(
 					CustomData_set_layer_flag(pdata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
 				}
 				BKE_mesh_calc_normals_poly(verts_dst, num_verts_dst, loops_dst, polys_dst,
-										   num_loops_dst, num_polys_dst, poly_nors_dst, true);
+				                           num_loops_dst, num_polys_dst, poly_nors_dst, true);
 			}
 			/* Cache loop nors into a temp CDLayer. */
 			loop_nors_dst = CustomData_get_layer(ldata_dst, CD_NORMAL);
@@ -302,9 +302,9 @@ static void data_transfer_dtdata_type_preprocess(
 					CustomData_set_layer_flag(ldata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
 				}
 				BKE_mesh_normals_loop_split(verts_dst, num_verts_dst, edges_dst, num_edges_dst,
-											loops_dst, loop_nors_dst, num_loops_dst,
-											polys_dst, (const float (*)[3])poly_nors_dst, num_polys_dst,
-											use_split_nors_dst, split_angle_dst, NULL, custom_nors_dst, NULL);
+				                            loops_dst, loop_nors_dst, num_loops_dst,
+				                            polys_dst, (const float (*)[3])poly_nors_dst, num_polys_dst,
+				                            use_split_nors_dst, split_angle_dst, NULL, custom_nors_dst, NULL);
 			}
 		}
 	}
