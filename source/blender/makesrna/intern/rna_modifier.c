@@ -4407,9 +4407,9 @@ static void rna_def_modifier_setsplitnormal(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
 	RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
 
-	prop = RNA_def_property(srna, "use_bbox_center", PROP_BOOLEAN, PROP_NONE);
+	prop = RNA_def_property(srna, "use_center_bounds", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_SETSPLITNORMAL_CENTER_BBOX);
-	RNA_def_property_ui_text(prop, "BoundingBox Center",
+	RNA_def_property_ui_text(prop, "Center Bounds",
 	                         "Use bounding box center instead of own object center as origin");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 

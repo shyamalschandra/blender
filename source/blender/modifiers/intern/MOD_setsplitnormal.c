@@ -383,7 +383,7 @@ static void setSplitNormalModifier_do(SetSplitNormalModifierData *smd, Object *o
 	}
 
 	if (!(me->flag & ME_AUTOSMOOTH)) {
-		modifier_setError((ModifierData *)smd, "Please enable 'Auto Smooth' option in mesh settings");
+		modifier_setError((ModifierData *)smd, "Enable 'Auto Smooth' option in mesh settings");
 		return;
 	}
 

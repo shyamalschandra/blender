@@ -1354,7 +1354,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.prop(md, "target", text="")
         sub = col.row()
         sub.active = needs_object_bbox_center
-        sub.prop(md, "use_bbox_center")
+        sub.prop(md, "use_center_bounds")
 
         col = split.column()
         row = col.row(align=True)
