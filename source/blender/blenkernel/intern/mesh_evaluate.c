@@ -368,7 +368,7 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
 	const float dtp_ref = dot_v3v3(vec_ref, lnor);
 	const float dtp_other = dot_v3v3(vec_other, lnor);
 
-	if (fabsf(dtp_ref) >= LNOR_SPACE_TRIGO_THRESHOLD || fabsf(dtp_other) >= LNOR_SPACE_TRIGO_THRESHOLD) {
+	if (UNLIKELY(fabsf(dtp_ref) >= LNOR_SPACE_TRIGO_THRESHOLD || fabsf(dtp_other) >= LNOR_SPACE_TRIGO_THRESHOLD)) {
 		/* If vec_ref or vec_other are too much aligned with lnor, we can't build lnor space,
 		 * tag it as invalid and abort. */
 		lnor_space->ref_alpha = lnor_space->ref_beta = 0.0f;
@@ -379,12 +379,12 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
 
 	/* Compute ref alpha, average angle of all available edge vectors to lnor. */
 	if (edge_vectors) {
-		float vec[3];
 		float alpha = 0.0f;
 		int nbr = 0;
 		while (!BLI_stack_is_empty(edge_vectors)) {
-			BLI_stack_pop(edge_vectors, vec);
+			const float *vec = BLI_stack_peek(edge_vectors);
 			alpha += saacosf(dot_v3v3(vec, lnor));
+			BLI_stack_discard(edge_vectors);
 			nbr++;
 		}
 		lnor_space->ref_alpha = alpha / (float)nbr;
@@ -408,7 +408,7 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
 
 	/* Beta is angle between ref_vec and other_vec, around lnor. */
 	dtp = dot_v3v3(lnor_space->vec_ref, vec_other);
-	if (dtp < LNOR_SPACE_TRIGO_THRESHOLD) {
+	if (LIKELY(dtp < LNOR_SPACE_TRIGO_THRESHOLD)) {
 		const float beta = saacos(dtp);
 		lnor_space->ref_beta = (dot_v3v3(lnor_space->vec_ortho, vec_other) < 0.0f) ? pi2 - beta : beta;
 	}
@@ -426,6 +426,17 @@ void BKE_lnor_space_add_loop(MLoopNorSpaceset *lnors_spaceset, MLoopNorSpace *ln
 	}
 }
 
+MINLINE float unit_short_to_float(const short val)
+{
+	return (float)val / (float)SHRT_MAX;
+}
+
+MINLINE short unit_float_to_short(const float val)
+{
+	/* Rounding... */
+	return (short)floorf(val * (float)SHRT_MAX + 0.5f);
+}
+
 void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, const short clnor_data[2], float r_custom_lnor[3])
 {
 	/* NOP custom normal data or invalid lnor space, return. */
@@ -438,9 +449,9 @@ void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space, const short
 		/* TODO Check whether using sincosf() gives any noticeable benefit
 		 *      (could not even get it working under linux though)! */
 		const float pi2 = (float)(M_PI * 2.0);
-		const float alphafac = (float)clnor_data[0] / (float)SHRT_MAX;
+		const float alphafac = unit_short_to_float(clnor_data[0]);
 		const float alpha = (alphafac > 0.0f ? lnor_space->ref_alpha : pi2 - lnor_space->ref_alpha) * alphafac;
-		const float betafac = (float)clnor_data[1] / (float)SHRT_MAX;
+		const float betafac = unit_short_to_float(clnor_data[1]);
 
 		mul_v3_v3fl(r_custom_lnor, lnor_space->vec_lnor, cosf(alpha));
 
@@ -473,10 +484,10 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 		alpha = saacosf(cos_alpha);
 		if (alpha > lnor_space->ref_alpha) {
 			/* Note we could stick to [0, pi] range here, but makes decoding more complex, not worth it. */
-			r_clnor_data[0] = (short)floorf(-(pi2 - alpha) / (pi2 - lnor_space->ref_alpha) * (float)SHRT_MAX + 0.5f);
+			r_clnor_data[0] = unit_float_to_short(-(pi2 - alpha) / (pi2 - lnor_space->ref_alpha));
 		}
 		else {
-			r_clnor_data[0] = (short)floorf(alpha / lnor_space->ref_alpha * (float)SHRT_MAX + 0.5f);
+			r_clnor_data[0] = unit_float_to_short(alpha / lnor_space->ref_alpha);
 		}
 
 		/* Project custom lnor on (vec_ref, vec_ortho) plane. */
@@ -493,10 +504,10 @@ void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space, const float
 			}
 
 			if (beta > lnor_space->ref_beta) {
-				r_clnor_data[1] = (short)floorf(-(pi2 - beta) / (pi2 - lnor_space->ref_beta) * (float)SHRT_MAX + 0.5f);
+				r_clnor_data[1] = unit_float_to_short(-(pi2 - beta) / (pi2 - lnor_space->ref_beta));
 			}
 			else {
-				r_clnor_data[1] = (short)floorf(beta / lnor_space->ref_beta * (float)SHRT_MAX + 0.5f);
+				r_clnor_data[1] = unit_float_to_short(beta / lnor_space->ref_beta);
 			}
 		}
 		else {

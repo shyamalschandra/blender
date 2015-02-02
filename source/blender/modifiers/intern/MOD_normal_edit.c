@@ -58,7 +58,7 @@ static void generate_vert_coordinates(DerivedMesh *dm, Object *ob, Object *ob_ce
 	float min_co[3], max_co[3];
 	float diff[3];
 	bool do_diff = false;
-	int i, j;
+	int i;
 
 	INIT_MINMAX(min_co, max_co);
 
@@ -82,13 +82,10 @@ static void generate_vert_coordinates(DerivedMesh *dm, Object *ob, Object *ob_ce
 	if (is_zero_v3(r_size)) {
 		r_size[0] = r_size[1] = r_size[2] = 1.0f;
 	}
-	else if (min_fff(r_size[0], r_size[1], r_size[2]) < FLT_EPSILON) {
-		j = 3;
-		while (j--) {
-			if (r_size[j] < FLT_EPSILON) {
-				r_size[j] = FLT_EPSILON;
-			}
-		}
+	else {
+		CLAMP_MIN(r_size[0], FLT_EPSILON);
+		CLAMP_MIN(r_size[1], FLT_EPSILON);
+		CLAMP_MIN(r_size[2], FLT_EPSILON);
 	}
 
 	if (ob_center) {
