@@ -4358,7 +4358,7 @@ static void rna_def_modifier_normaledit(BlenderRNA *brna)
 	};
 
 	static EnumPropertyItem prop_mix_mode_items[] = {
-		{MOD_NORMALEDIT_MIX_COPY, "COPY", 0, "Copy", "Copy new normals (i.e. replace old ones)"},
+		{MOD_NORMALEDIT_MIX_COPY, "COPY", 0, "Copy", "Copy new normals (overwrite existing)"},
 		{MOD_NORMALEDIT_MIX_ADD, "ADD", 0, "Add", "Copy sum of new and org normals"},
 		{MOD_NORMALEDIT_MIX_SUB, "SUB", 0, "Substract", "Copy new normals minus old normals"},
 		{MOD_NORMALEDIT_MIX_MUL, "MUL", 0, "Multiply", "Copy product of old and new normals (*not* cross product)"},
@@ -4382,7 +4382,7 @@ static void rna_def_modifier_normaledit(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "mix_mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, prop_mix_mode_items);
-	RNA_def_property_ui_text(prop, "Mix Mode", "How to mix new generated normals with existing ones");
+	RNA_def_property_ui_text(prop, "Mix Mode", "How to mix generated normals with existing ones");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_float(srna, "mix_factor", 1.0f, 0.0f, 1.0f, "Mix Factor",
