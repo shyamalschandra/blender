@@ -373,11 +373,9 @@ class DATA_PT_customdata(MeshButtonsPanel, Panel):
         col.operator("mesh.customdata_clear_skin", icon='X')
 
         if me.has_custom_normals:
-            col.operator("mesh.customdata_add_clear_custom_splitnormals",
-                         icon='X', text="Clear Custom Split Normals Data")
+            col.operator("mesh.customdata_custom_splitnormals_clear", icon='X')
         else:
-            col.operator("mesh.customdata_add_clear_custom_splitnormals",
-                         icon='ZOOMIN', text="Add Custom Split Normals Data")
+            col.operator("mesh.customdata_custom_splitnormals_add", icon='ZOOMIN')
 
         col = layout.column()
 
