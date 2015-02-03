@@ -1442,8 +1442,7 @@ enum {
 /* NormalEditModifierData.flags */
 enum {
 	MOD_NORMALEDIT_INVERT_VGROUP            = (1 << 0),
-	MOD_NORMALEDIT_USE_CURCLNORS            = (1 << 1),
-	MOD_NORMALEDIT_USE_PARALLEL_DIRECTIONAL = (1 << 2),
+	MOD_NORMALEDIT_USE_PARALLEL_DIRECTIONAL = (1 << 1),
 };
 
 /* NormalEditModifierData.mix_mode */

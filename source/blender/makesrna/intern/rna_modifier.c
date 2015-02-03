@@ -4375,12 +4375,6 @@ static void rna_def_modifier_normaledit(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Mode", "How to affect (generate) normals");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-	prop = RNA_def_property(srna, "use_current_normals", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_NORMALEDIT_USE_CURCLNORS);
-	RNA_def_property_boolean_default(prop, true);
-	RNA_def_property_ui_text(prop, "Use Current Normals", "Use current split normals to mix generated ones in");
-	RNA_def_property_update(prop, 0, "rna_Modifier_update");
-
 	prop = RNA_def_float_array(srna, "offset", 3, NULL, -FLT_MAX, FLT_MAX, "Offset",
 	                           "Offset from object's center", -100.0f, 100.0f);
 	RNA_def_property_subtype(prop, PROP_COORDS);

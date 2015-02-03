@@ -64,13 +64,9 @@ static void generate_vert_coordinates(DerivedMesh *dm, Object *ob, Object *ob_ce
 
 	dm->getVertCos(dm, r_cos);
 
-	/* Compute min/max's, aka bbox (use target's ob one if available). */
+	/* Get size (i.e. deformation of the spheroid generating normals), either from target object, or own geometry. */
 	if (ob_center) {
-		BKE_object_dimensions_get(ob_center, r_size);
-		if (is_zero_v3(r_size)) {
-			/* Use ob_center's size as fallback (when it's e.g. an empty...). */
-			copy_v3_v3(r_size, ob_center->size);
-		}
+		copy_v3_v3(r_size, ob_center->size);
 	}
 	else {
 		minmax_v3v3_v3_array(min_co, max_co, r_cos, num_verts);
@@ -339,7 +335,9 @@ static void normalEditModifier_do(NormalEditModifierData *smd, Object *ob, Deriv
 	MPoly *mpoly = dm->getPolyArray(dm);
 
 	const bool use_invert_vgroup = ((smd->flags & MOD_NORMALEDIT_INVERT_VGROUP) != 0);
-	const bool use_current_clnors = (smd->flags & MOD_NORMALEDIT_USE_CURCLNORS) != 0;
+	const bool use_current_clnors = (smd->mix_mode == MOD_NORMALEDIT_MIX_COPY) &&
+	                                (smd->mix_factor == 1.0f) &&
+	                                (smd->defgrp_name[0] == '\0');
 
 	int defgrp_index;
 	MDeformVert *dvert;
@@ -404,7 +402,6 @@ static void initData(ModifierData *md)
 	NormalEditModifierData *smd = (NormalEditModifierData *)md;
 
 	smd->mode = MOD_NORMALEDIT_MODE_RADIAL;
-	smd->flags = MOD_NORMALEDIT_USE_CURCLNORS;
 
 	smd->mix_mode = MOD_NORMALEDIT_MIX_COPY;
 	smd->mix_factor = 1.0f;
@@ -462,7 +459,7 @@ static void updateDepgraph(ModifierData *md, DagForest *forest, struct Scene *UN
 	if (smd->target) {
 		DagNode *Node = dag_get_node(forest, smd->target);
 
-		dag_add_relation(forest, Node, obNode, DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "NormalEdit Modifier");
+		dag_add_relation(forest, Node, obNode, DAG_RL_OB_DATA, "NormalEdit Modifier");
 	}
 }
 

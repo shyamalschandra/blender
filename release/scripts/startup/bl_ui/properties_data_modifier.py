@@ -1356,14 +1356,13 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         sub.active = needs_object_offset
         sub.prop(md, "offset")
         row = col.row(align=True)
+
+        col = split.column()
+        row = col.row()
         row.active = (md.mode == 'DIRECTIONAL')
         row.prop(md, "use_directional_parallel")
 
-        col = split.column()
-        col.prop(md, "use_current_normals")
-
         subcol = col.column(align=True)
-        subcol.active = md.use_current_normals
         subcol.label("Mix Mode:")
         subcol.prop(md, "mix_mode", text="")
         subcol.prop(md, "mix_factor")
