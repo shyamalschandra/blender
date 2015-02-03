@@ -865,7 +865,7 @@ static void loop_split_worker_do(
 
 static void loop_split_worker(TaskPool *UNUSED(pool), void *taskdata, int UNUSED(threadid))
 {
-	LoopSplitTaskDataCommon *common_data = (LoopSplitTaskDataCommon *)taskdata;
+	LoopSplitTaskDataCommon *common_data = taskdata;
 	LoopSplitTaskData *data_buff;
 
 	/* Temp edge vectors stack, only used when computing lnor spaceset. */
@@ -1044,7 +1044,7 @@ static void loop_split_generator_do(LoopSplitTaskDataCommon *common_data, const 
 
 static void loop_split_generator(TaskPool *UNUSED(pool), void *taskdata, int UNUSED(threadid))
 {
-	LoopSplitTaskDataCommon *common_data = (LoopSplitTaskDataCommon *)taskdata;
+	LoopSplitTaskDataCommon *common_data = taskdata;
 
 	loop_split_generator_do(common_data, true);
 }
@@ -1102,7 +1102,7 @@ void BKE_mesh_normals_loop_split(
 	BLI_bitmap *sharp_verts = NULL;
 	MLoopNorSpaceset _lnors_spaceset = {NULL};
 
-	LoopSplitTaskDataCommon common_taskdata = {NULL};
+	LoopSplitTaskDataCommon common_data = {NULL};
 
 #ifdef DEBUG_TIME
 	TIMEIT_START(BKE_mesh_normals_loop_split);
@@ -1194,44 +1194,44 @@ void BKE_mesh_normals_loop_split(
 	}
 
 	/* Init data common to all tasks. */
-	common_taskdata.lnors_spaceset = r_lnors_spaceset;
-	common_taskdata.loopnors = r_loopnors;
-	common_taskdata.clnors_data = clnors_data;
+	common_data.lnors_spaceset = r_lnors_spaceset;
+	common_data.loopnors = r_loopnors;
+	common_data.clnors_data = clnors_data;
 
-	common_taskdata.mverts = mverts;
-	common_taskdata.medges = medges;
-	common_taskdata.mloops = mloops;
-	common_taskdata.mpolys = mpolys;
-	common_taskdata.sharp_verts = sharp_verts;
-	common_taskdata.edge_to_loops = (const int(*)[2])edge_to_loops;
-	common_taskdata.loop_to_poly = loop_to_poly;
-	common_taskdata.polynors = polynors;
-	common_taskdata.numPolys = numPolys;
+	common_data.mverts = mverts;
+	common_data.medges = medges;
+	common_data.mloops = mloops;
+	common_data.mpolys = mpolys;
+	common_data.sharp_verts = sharp_verts;
+	common_data.edge_to_loops = (const int(*)[2])edge_to_loops;
+	common_data.loop_to_poly = loop_to_poly;
+	common_data.polynors = polynors;
+	common_data.numPolys = numPolys;
 
 	if (numLoops < LOOP_SPLIT_TASK_BLOCK_SIZE * 8) {
 		/* Not enough loops to be worth the whole threading overhead... */
-		loop_split_generator_do(&common_taskdata, false);
+		loop_split_generator_do(&common_data, false);
 	}
 	else {
 		TaskScheduler *task_scheduler;
 		TaskPool *task_pool;
 		int nbr_workers;
 
-		common_taskdata.task_queue = BLI_thread_queue_init();
+		common_data.task_queue = BLI_thread_queue_init();
 
 		task_scheduler = BLI_task_scheduler_get();
 		task_pool = BLI_task_pool_create(task_scheduler, NULL);
 
 		nbr_workers = max_ii(2, BLI_task_scheduler_num_threads(task_scheduler));
 		for (i = 1; i < nbr_workers; i++) {
-			BLI_task_pool_push(task_pool, loop_split_worker, &common_taskdata, false, TASK_PRIORITY_HIGH);
+			BLI_task_pool_push(task_pool, loop_split_worker, &common_data, false, TASK_PRIORITY_HIGH);
 		}
-		BLI_task_pool_push(task_pool, loop_split_generator, &common_taskdata, false, TASK_PRIORITY_HIGH);
+		BLI_task_pool_push(task_pool, loop_split_generator, &common_data, false, TASK_PRIORITY_HIGH);
 		BLI_task_pool_work_and_wait(task_pool);
 
 		BLI_task_pool_free(task_pool);
 
-		BLI_thread_queue_free(common_taskdata.task_queue);
+		BLI_thread_queue_free(common_data.task_queue);
 	}
 
 	MEM_freeN(edge_to_loops);
