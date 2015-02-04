@@ -283,7 +283,8 @@ void RNA_api_mesh(StructRNA *srna)
 
 	func = RNA_def_function(srna, "normals_split_custom_set", "rna_Mesh_normals_split_custom_set");
 	RNA_def_function_ui_description(func,
-	                                "Define custom split normals of this mesh (use NULL vectors to keep auto ones)");
+	                                "Define custom split normals of this mesh "
+	                                "(ommit normals to keep auto ones)");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
 	/* TODO, see how array size of 0 works, this shouldnt be used */
 	parm = RNA_def_float_array(func, "normals", 1, NULL, -1.0f, 1.0f, "", "Normals", 0.0f, 0.0f);
@@ -294,7 +295,7 @@ void RNA_api_mesh(StructRNA *srna)
 	                        "rna_Mesh_normals_split_custom_set_from_vertices");
 	RNA_def_function_ui_description(func,
 	                                "Define custom split normals of this mesh, from vertices' normals "
-	                                "(use NULL vectors to keep auto ones)");
+	                                "(ommit normals to keep auto ones)");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
 	/* TODO, see how array size of 0 works, this shouldnt be used */
 	parm = RNA_def_float_array(func, "normals", 1, NULL, -1.0f, 1.0f, "", "Normals", 0.0f, 0.0f);
