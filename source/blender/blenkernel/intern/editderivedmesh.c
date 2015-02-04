@@ -177,7 +177,7 @@ static void emDM_calcLoopNormals(DerivedMesh *dm, const bool use_split_normals, 
 	emDM_calcLoopNormalsSpaceArray(dm, use_split_normals, split_angle, NULL);
 }
 
-//#define DEBUG_CLNORS
+/* #define DEBUG_CLNORS */
 
 static void emDM_calcLoopNormalsSpaceArray(
         DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceArray *r_lnors_spacearr)

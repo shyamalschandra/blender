@@ -2162,7 +2162,7 @@ void CDDM_calc_loop_normals(DerivedMesh *dm, const bool use_split_normals, const
 	CDDM_calc_loop_normals_spacearr(dm, use_split_normals, split_angle, NULL);
 }
 
-// #define DEBUG_CLNORS
+/* #define DEBUG_CLNORS */
 
 void CDDM_calc_loop_normals_spacearr(
         DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceArray *r_lnors_spacearr)
