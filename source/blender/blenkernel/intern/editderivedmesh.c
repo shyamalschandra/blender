@@ -169,17 +169,17 @@ static void emDM_calcNormals(DerivedMesh *dm)
 	dm->dirty &= ~DM_DIRTY_NORMALS;
 }
 
-static void emDM_calcLoopNormalsSpaceset(
+static void emDM_calcLoopNormalsSpaceArray(
         DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceArray *r_lnors_spacearr);
 
 static void emDM_calcLoopNormals(DerivedMesh *dm, const bool use_split_normals, const float split_angle)
 {
-	emDM_calcLoopNormalsSpaceset(dm, use_split_normals, split_angle, NULL);
+	emDM_calcLoopNormalsSpaceArray(dm, use_split_normals, split_angle, NULL);
 }
 
 //#define DEBUG_CLNORS
 
-static void emDM_calcLoopNormalsSpaceset(
+static void emDM_calcLoopNormalsSpaceArray(
         DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceArray *r_lnors_spacearr)
 {
 	EditDerivedBMesh *bmdm = (EditDerivedBMesh *)dm;
@@ -214,14 +214,14 @@ static void emDM_calcLoopNormalsSpaceset(
 	if (r_lnors_spacearr) {
 		int i;
 		for (i = 0; i < numLoops; i++) {
-			if (r_lnors_spacearr->lspaceset[i]->ref_alpha != 0.0f) {
-				LinkNode *loops = r_lnors_spacearr->lspaceset[i]->loops;
-				printf("Loop %d uses lnor space %p:\n", i, r_lnors_spacearr->lspaceset[i]);
+			if (r_lnors_spacearr->lspacearr[i]->ref_alpha != 0.0f) {
+				LinkNode *loops = r_lnors_spacearr->lspacearr[i]->loops;
+				printf("Loop %d uses lnor space %p:\n", i, r_lnors_spacearr->lspacearr[i]);
 				print_v3("\tfinal lnor:", loopNos[i]);
-				print_v3("\tauto lnor:", r_lnors_spacearr->lspaceset[i]->vec_lnor);
-				print_v3("\tref_vec:", r_lnors_spacearr->lspaceset[i]->vec_ref);
-				printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", r_lnors_spacearr->lspaceset[i]->ref_alpha,
-				       r_lnors_spacearr->lspaceset[i]->ref_beta, r_lnors_spacearr->lspaceset[i]->loops);
+				print_v3("\tauto lnor:", r_lnors_spacearr->lspacearr[i]->vec_lnor);
+				print_v3("\tref_vec:", r_lnors_spacearr->lspacearr[i]->vec_ref);
+				printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", r_lnors_spacearr->lspacearr[i]->ref_alpha,
+				       r_lnors_spacearr->lspacearr[i]->ref_beta, r_lnors_spacearr->lspacearr[i]->loops);
 				printf("\t\t(shared with loops");
 				while (loops) {
 					printf(" %d", GET_INT_FROM_POINTER(loops->link));
@@ -1807,7 +1807,7 @@ DerivedMesh *getEditDerivedBMesh(BMEditMesh *em,
 
 	bmdm->dm.calcNormals = emDM_calcNormals;
 	bmdm->dm.calcLoopNormals = emDM_calcLoopNormals;
-	bmdm->dm.calcLoopNormalsSpaceset = emDM_calcLoopNormalsSpaceset;
+	bmdm->dm.calcLoopNormalsSpaceArray = emDM_calcLoopNormalsSpaceArray;
 	bmdm->dm.recalcTessellation = emDM_recalcTessellation;
 
 	bmdm->dm.foreachMappedVert = emDM_foreachMappedVert;

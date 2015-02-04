@@ -199,7 +199,7 @@ typedef struct MLoopNorSpace {
  * Collection of #MLoopNorSpace basic storage & pre-allocation.
  */
 typedef struct MLoopNorSpaceArray {
-	MLoopNorSpace **lspaceset;    /* MLoop aligned array */
+	MLoopNorSpace **lspacearr;    /* MLoop aligned array */
 	struct LinkNode *loops_pool;  /* Allocated once, avoids to call BLI_linklist_prepend_arena() for each loop! */
 	struct MemArena *mem;
 } MLoopNorSpaceArray;

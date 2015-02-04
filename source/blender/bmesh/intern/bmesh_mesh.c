@@ -537,7 +537,7 @@ static void bm_mesh_loops_calc_normals(
 	BLI_SMALLSTACK_DECLARE(normal, float *);
 	/* Temp clnors stack. */
 	BLI_SMALLSTACK_DECLARE(clnors, short *);
-	/* Temp edge vectors stack, only used when computing lnor spaceset. */
+	/* Temp edge vectors stack, only used when computing lnor spacearr. */
 	BLI_Stack *edge_vectors = NULL;
 
 	{
@@ -552,7 +552,7 @@ static void bm_mesh_loops_calc_normals(
 	}
 
 	if (!r_lnors_spacearr && has_clnors) {
-		/* We need to compute lnor spaceset if some custom lnor data are given to us! */
+		/* We need to compute lnor spacearr if some custom lnor data are given to us! */
 		r_lnors_spacearr = &_lnors_spacearr;
 	}
 	if (r_lnors_spacearr) {
@@ -751,7 +751,7 @@ static void bm_mesh_loops_calc_normals(
 				{
 					float lnor_len = normalize_v3(lnor);
 
-					/* If we are generating lnor spaceset, we can now define the one for this fan. */
+					/* If we are generating lnor spacearr, we can now define the one for this fan. */
 					if (r_lnors_spacearr) {
 						if (UNLIKELY(lnor_len == 0.0f)) {
 							/* Use vertex normal as fallback! */

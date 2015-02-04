@@ -1540,7 +1540,7 @@ static CDDerivedMesh *cdDM_create(const char *desc)
 
 	dm->calcNormals = CDDM_calc_normals;
 	dm->calcLoopNormals = CDDM_calc_loop_normals;
-	dm->calcLoopNormalsSpaceset = CDDM_calc_loop_normals_spacearr;
+	dm->calcLoopNormalsSpaceArray = CDDM_calc_loop_normals_spacearr;
 	dm->recalcTessellation = CDDM_recalc_tessellation;
 
 	dm->getVertCos = cdDM_getVertCos;
@@ -2213,14 +2213,14 @@ void CDDM_calc_loop_normals_spacearr(
 	if (r_lnors_spacearr) {
 		int i;
 		for (i = 0; i < numLoops; i++) {
-			if (r_lnors_spacearr->lspaceset[i]->ref_alpha != 0.0f) {
-				LinkNode *loops = r_lnors_spacearr->lspaceset[i]->loops;
-				printf("Loop %d uses lnor space %p:\n", i, r_lnors_spacearr->lspaceset[i]);
+			if (r_lnors_spacearr->lspacearr[i]->ref_alpha != 0.0f) {
+				LinkNode *loops = r_lnors_spacearr->lspacearr[i]->loops;
+				printf("Loop %d uses lnor space %p:\n", i, r_lnors_spacearr->lspacearr[i]);
 				print_v3("\tfinal lnor", lnors[i]);
-				print_v3("\tauto lnor", r_lnors_spacearr->lspaceset[i]->vec_lnor);
-				print_v3("\tref_vec", r_lnors_spacearr->lspaceset[i]->vec_ref);
-				printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", r_lnors_spacearr->lspaceset[i]->ref_alpha,
-				       r_lnors_spacearr->lspaceset[i]->ref_beta, r_lnors_spacearr->lspaceset[i]->loops);
+				print_v3("\tauto lnor", r_lnors_spacearr->lspacearr[i]->vec_lnor);
+				print_v3("\tref_vec", r_lnors_spacearr->lspacearr[i]->vec_ref);
+				printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", r_lnors_spacearr->lspacearr[i]->ref_alpha,
+				       r_lnors_spacearr->lspacearr[i]->ref_beta, r_lnors_spacearr->lspacearr[i]->loops);
 				printf("\t\t(shared with loops");
 				while (loops) {
 					printf(" %d", GET_INT_FROM_POINTER(loops->link));
