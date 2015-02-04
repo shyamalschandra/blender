@@ -319,7 +319,7 @@ void BKE_mesh_calc_normals_tessface(MVert *mverts, int numVerts, MFace *mfaces, 
 		MEM_freeN(fnors);
 }
 
-void BKE_lnor_spaceset_init(MLoopNorSpaceset *lnors_spaceset, const int numLoops)
+void BKE_lnor_spaceset_init(MLoopNorSpaceArray *lnors_spaceset, const int numLoops)
 {
 	if (!(lnors_spaceset->lspaceset && lnors_spaceset->loops_pool)) {
 		MemArena *mem;
@@ -333,14 +333,14 @@ void BKE_lnor_spaceset_init(MLoopNorSpaceset *lnors_spaceset, const int numLoops
 	}
 }
 
-void BKE_lnor_spaceset_clear(MLoopNorSpaceset *lnors_spaceset)
+void BKE_lnor_spaceset_clear(MLoopNorSpaceArray *lnors_spaceset)
 {
 	BLI_memarena_clear(lnors_spaceset->mem);
 	lnors_spaceset->lspaceset = NULL;
 	lnors_spaceset->loops_pool = NULL;
 }
 
-void BKE_lnor_spaceset_free(MLoopNorSpaceset *lnors_spaceset)
+void BKE_lnor_spaceset_free(MLoopNorSpaceArray *lnors_spaceset)
 {
 	BLI_memarena_free(lnors_spaceset->mem);
 	lnors_spaceset->lspaceset = NULL;
@@ -348,7 +348,7 @@ void BKE_lnor_spaceset_free(MLoopNorSpaceset *lnors_spaceset)
 	lnors_spaceset->mem = NULL;
 }
 
-MLoopNorSpace *BKE_lnor_space_create(MLoopNorSpaceset *lnors_spaceset)
+MLoopNorSpace *BKE_lnor_space_create(MLoopNorSpaceArray *lnors_spaceset)
 {
 	return BLI_memarena_calloc(lnors_spaceset->mem, sizeof(MLoopNorSpace));
 }
@@ -417,7 +417,7 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space, const float lnor[3],
 	}
 }
 
-void BKE_lnor_space_add_loop(MLoopNorSpaceset *lnors_spaceset, MLoopNorSpace *lnor_space, const int ml_index,
+void BKE_lnor_space_add_loop(MLoopNorSpaceArray *lnors_spaceset, MLoopNorSpace *lnor_space, const int ml_index,
                              const bool do_add_loop)
 {
 	lnors_spaceset->lspaceset[ml_index] = lnor_space;
@@ -539,7 +539,7 @@ typedef struct LoopSplitTaskDataCommon {
 	/* Read/write.
 	 * Note we do not need to protect it, though, since two different tasks will *always* affect different
 	 * elements in the arrays. */
-	MLoopNorSpaceset *lnors_spaceset;
+	MLoopNorSpaceArray *lnors_spaceset;
 	BLI_bitmap *sharp_verts;
 	float (*loopnors)[3];
 	short (*clnors_data)[2];
@@ -567,7 +567,7 @@ typedef struct LoopSplitTaskDataCommon {
 
 static void split_loop_nor_single_do(LoopSplitTaskDataCommon *common_data, LoopSplitTaskData *data)
 {
-	MLoopNorSpaceset *lnors_spaceset = common_data->lnors_spaceset;
+	MLoopNorSpaceArray *lnors_spaceset = common_data->lnors_spaceset;
 	short (*clnors_data)[2] = common_data->clnors_data;
 
 	const MVert *mverts = common_data->mverts;
@@ -620,7 +620,7 @@ static void split_loop_nor_single_do(LoopSplitTaskDataCommon *common_data, LoopS
 
 static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSplitTaskData *data)
 {
-	MLoopNorSpaceset *lnors_spaceset = common_data->lnors_spaceset;
+	MLoopNorSpaceArray *lnors_spaceset = common_data->lnors_spaceset;
 	float (*loopnors)[3] = common_data->loopnors;
 	short (*clnors_data)[2] = common_data->clnors_data;
 
@@ -902,7 +902,7 @@ static void loop_split_worker(TaskPool *UNUSED(pool), void *taskdata, int UNUSED
 /* Note we use data_buff to detect whether we are in threaded context or not, in later case it is NULL. */
 static void loop_split_generator_do(LoopSplitTaskDataCommon *common_data, const bool threaded)
 {
-	MLoopNorSpaceset *lnors_spaceset = common_data->lnors_spaceset;
+	MLoopNorSpaceArray *lnors_spaceset = common_data->lnors_spaceset;
 	BLI_bitmap *sharp_verts = common_data->sharp_verts;
 	float (*loopnors)[3] = common_data->loopnors;
 
@@ -1058,7 +1058,7 @@ void BKE_mesh_normals_loop_split(
         MLoop *mloops, float (*r_loopnors)[3], const int numLoops,
         MPoly *mpolys, const float (*polynors)[3], const int numPolys,
         const bool use_split_normals, float split_angle,
-        MLoopNorSpaceset *r_lnors_spaceset, short (*clnors_data)[2], int *r_loop_to_poly)
+        MLoopNorSpaceArray *r_lnors_spaceset, short (*clnors_data)[2], int *r_loop_to_poly)
 {
 
 	/* For now this is not supported. If we do not use split normals, we do not generate anything fancy! */
@@ -1100,7 +1100,7 @@ void BKE_mesh_normals_loop_split(
 	int i;
 
 	BLI_bitmap *sharp_verts = NULL;
-	MLoopNorSpaceset _lnors_spaceset = {NULL};
+	MLoopNorSpaceArray _lnors_spaceset = {NULL};
 
 	LoopSplitTaskDataCommon common_data = {NULL};
 
@@ -1276,7 +1276,7 @@ static void mesh_normals_loop_custom_set(
 	 * by io addons when importing custom normals, and modifier (and perhaps from some editing tools later?).
 	 * So better to keep some simplicity here, and just call BKE_mesh_normals_loop_split() twice!
 	 */
-	MLoopNorSpaceset lnors_spaceset = {NULL};
+	MLoopNorSpaceArray lnors_spaceset = {NULL};
 	BLI_bitmap *done_loops = BLI_BITMAP_NEW((size_t)numLoops, __func__);
 	float (*lnors)[3] = MEM_callocN(sizeof(*lnors) * (size_t)numLoops, __func__);
 	int *loop_to_poly = MEM_mallocN(sizeof(int) * (size_t)numLoops, __func__);

@@ -525,13 +525,13 @@ static void bm_mesh_edges_sharp_tag(BMesh *bm, const float (*vnos)[3], const flo
  * Will use first clnors_data array, and fallback to cd_loop_clnors_offset (use NULL and -1 to not use clnors). */
 static void bm_mesh_loops_calc_normals(
         BMesh *bm, const float (*vcos)[3], const float (*fnos)[3], float (*r_lnos)[3],
-        MLoopNorSpaceset *r_lnors_spaceset, short (*clnors_data)[2], const int cd_loop_clnors_offset)
+        MLoopNorSpaceArray *r_lnors_spaceset, short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	BMIter fiter;
 	BMFace *f_curr;
 	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
 
-	MLoopNorSpaceset _lnors_spaceset = {NULL};
+	MLoopNorSpaceArray _lnors_spaceset = {NULL};
 
 	/* Temp normal stack. */
 	BLI_SMALLSTACK_DECLARE(normal, float *);
@@ -849,7 +849,7 @@ static void bm_mesh_loops_from_vert_normals(BMesh *bm, const float (*vnos)[3], f
  */
 void BM_mesh_loop_normals_update(
         BMesh *bm, const bool use_split_normals, const float split_angle, float (*r_lnos)[3],
-        MLoopNorSpaceset *r_lnors_spaceset, short (*clnors_data)[2], const int cd_loop_clnors_offset)
+        MLoopNorSpaceArray *r_lnors_spaceset, short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
 
@@ -877,7 +877,7 @@ void BM_mesh_loop_normals_update(
 void BM_loops_calc_normal_vcos(
         BMesh *bm, const float (*vcos)[3], const float (*vnos)[3], const float (*fnos)[3],
         const bool use_split_normals, const float split_angle, float (*r_lnos)[3],
-        MLoopNorSpaceset *r_lnors_spaceset, short (*clnors_data)[2], const int cd_loop_clnors_offset)
+        MLoopNorSpaceArray *r_lnors_spaceset, short (*clnors_data)[2], const int cd_loop_clnors_offset)
 {
 	const bool has_clnors = clnors_data || (cd_loop_clnors_offset != -1);
 

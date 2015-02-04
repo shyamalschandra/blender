@@ -2165,7 +2165,7 @@ void CDDM_calc_loop_normals(DerivedMesh *dm, const bool use_split_normals, const
 // #define DEBUG_CLNORS
 
 void CDDM_calc_loop_normals_spaceset(
-        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceset *r_lnors_spaceset)
+        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceArray *r_lnors_spaceset)
 {
 	MVert *mverts = dm->getVertArray(dm);
 	MEdge *medges = dm->getEdgeArray(dm);

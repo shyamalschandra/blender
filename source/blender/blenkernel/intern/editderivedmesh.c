@@ -170,7 +170,7 @@ static void emDM_calcNormals(DerivedMesh *dm)
 }
 
 static void emDM_calcLoopNormalsSpaceset(
-        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceset *r_lnors_spaceset);
+        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceArray *r_lnors_spaceset);
 
 static void emDM_calcLoopNormals(DerivedMesh *dm, const bool use_split_normals, const float split_angle)
 {
@@ -180,7 +180,7 @@ static void emDM_calcLoopNormals(DerivedMesh *dm, const bool use_split_normals, 
 //#define DEBUG_CLNORS
 
 static void emDM_calcLoopNormalsSpaceset(
-        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceset *r_lnors_spaceset)
+        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceArray *r_lnors_spaceset)
 {
 	EditDerivedBMesh *bmdm = (EditDerivedBMesh *)dm;
 	BMesh *bm = bmdm->em->bm;
