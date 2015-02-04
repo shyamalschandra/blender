@@ -184,6 +184,9 @@ void BKE_mesh_loop_tangents_ex(
 void BKE_mesh_loop_tangents(
         struct Mesh *mesh, const char *uvmap, float (*r_looptangents)[4], struct ReportList *reports);
 
+/**
+ * References a contiguous loop-fan with normal offset vars.
+ */
 typedef struct MLoopNorSpace {
 	float vec_lnor[3];      /* Automatically computed loop normal. */
 	float vec_ref[3];       /* Reference vector, orthogonal to vec_lnor. */
@@ -192,8 +195,11 @@ typedef struct MLoopNorSpace {
 	float ref_beta;         /* Reference angle, around vec_lnor, in ]0, 2pi] range (0.0 marks that space as invalid). */
 	struct LinkNode *loops; /* All indices (uint_in_ptr) of loops using this lnor space (i.e. smooth fan of loops). */
 } MLoopNorSpace;
+/**
+ * Collection of #MLoopNorSpace basic storage & pre-allocation.
+ */
 typedef struct MLoopNorSpaceset {
-	MLoopNorSpace **lspaceset;
+	MLoopNorSpace **lspaceset;    /* MLoop aligned array */
 	struct LinkNode *loops_pool;  /* Allocated once, avoids to call BLI_linklist_prepend_arena() for each loop! */
 	struct MemArena *mem;
 } MLoopNorSpaceset;
