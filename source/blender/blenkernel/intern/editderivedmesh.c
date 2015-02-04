@@ -170,7 +170,7 @@ static void emDM_calcNormals(DerivedMesh *dm)
 }
 
 static void emDM_calcLoopNormalsSpaceset(
-        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceArray *r_lnors_spaceset);
+        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceArray *r_lnors_spacearr);
 
 static void emDM_calcLoopNormals(DerivedMesh *dm, const bool use_split_normals, const float split_angle)
 {
@@ -180,7 +180,7 @@ static void emDM_calcLoopNormals(DerivedMesh *dm, const bool use_split_normals, 
 //#define DEBUG_CLNORS
 
 static void emDM_calcLoopNormalsSpaceset(
-        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceArray *r_lnors_spaceset)
+        DerivedMesh *dm, const bool use_split_normals, const float split_angle, MLoopNorSpaceArray *r_lnors_spacearr)
 {
 	EditDerivedBMesh *bmdm = (EditDerivedBMesh *)dm;
 	BMesh *bm = bmdm->em->bm;
@@ -209,19 +209,19 @@ static void emDM_calcLoopNormalsSpaceset(
 	cd_loop_clnors_offset = clnors_data ? -1 : CustomData_get_offset(&bm->ldata, CD_CUSTOMLOOPNORMAL);
 
 	BM_loops_calc_normal_vcos(bm, vertexCos, vertexNos, polyNos, use_split_normals, split_angle, loopNos,
-	                          r_lnors_spaceset, clnors_data, cd_loop_clnors_offset);
+	                          r_lnors_spacearr, clnors_data, cd_loop_clnors_offset);
 #ifdef DEBUG_CLNORS
-	if (r_lnors_spaceset) {
+	if (r_lnors_spacearr) {
 		int i;
 		for (i = 0; i < numLoops; i++) {
-			if (r_lnors_spaceset->lspaceset[i]->ref_alpha != 0.0f) {
-				LinkNode *loops = r_lnors_spaceset->lspaceset[i]->loops;
-				printf("Loop %d uses lnor space %p:\n", i, r_lnors_spaceset->lspaceset[i]);
+			if (r_lnors_spacearr->lspaceset[i]->ref_alpha != 0.0f) {
+				LinkNode *loops = r_lnors_spacearr->lspaceset[i]->loops;
+				printf("Loop %d uses lnor space %p:\n", i, r_lnors_spacearr->lspaceset[i]);
 				print_v3("\tfinal lnor:", loopNos[i]);
-				print_v3("\tauto lnor:", r_lnors_spaceset->lspaceset[i]->vec_lnor);
-				print_v3("\tref_vec:", r_lnors_spaceset->lspaceset[i]->vec_ref);
-				printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", r_lnors_spaceset->lspaceset[i]->ref_alpha,
-				       r_lnors_spaceset->lspaceset[i]->ref_beta, r_lnors_spaceset->lspaceset[i]->loops);
+				print_v3("\tauto lnor:", r_lnors_spacearr->lspaceset[i]->vec_lnor);
+				print_v3("\tref_vec:", r_lnors_spacearr->lspaceset[i]->vec_ref);
+				printf("\talpha: %f\n\tbeta: %f\n\tloops: %p\n", r_lnors_spacearr->lspaceset[i]->ref_alpha,
+				       r_lnors_spacearr->lspaceset[i]->ref_beta, r_lnors_spacearr->lspaceset[i]->loops);
 				printf("\t\t(shared with loops");
 				while (loops) {
 					printf(" %d", GET_INT_FROM_POINTER(loops->link));

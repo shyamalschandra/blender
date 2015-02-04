@@ -202,7 +202,7 @@ struct DerivedMesh {
 
 	/** Calculate loop (split) normals, and returns split loop normal spaceset. */
 	void (*calcLoopNormalsSpaceset)(DerivedMesh *dm, const bool use_split_normals, const float split_angle,
-	                                struct MLoopNorSpaceArray *r_lnors_spaceset);
+	                                struct MLoopNorSpaceArray *r_lnors_spacearr);
 
 	/** Recalculates mesh tessellation */
 	void (*recalcTessellation)(DerivedMesh *dm);
