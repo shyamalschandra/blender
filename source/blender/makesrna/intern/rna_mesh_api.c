@@ -85,9 +85,8 @@ static void rna_Mesh_calc_normals_split(Mesh *mesh)
 		CustomData_set_layer_flag(&mesh->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
 	}
 
-	if (CustomData_has_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL)) {
-		clnors = CustomData_get_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL);
-	}
+	/* may be NULL */
+	clnors = CustomData_get_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL);
 
 	if (CustomData_has_layer(&mesh->pdata, CD_NORMAL)) {
 		/* This assume that layer is always up to date, not sure this is the case (esp. in Edit mode?)... */
@@ -160,8 +159,8 @@ static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_l
 	const int numloops = mesh->totloop;
 	bool free_polynors = false;
 
-	if (CustomData_has_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL)) {
-		clnors = CustomData_get_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL);
+	clnors = CustomData_get_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL);
+	if (clnors) {
 		memset(clnors, 0, sizeof(*clnors) * numloops);
 	}
 	else {

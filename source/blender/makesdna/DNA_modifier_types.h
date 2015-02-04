@@ -1450,9 +1450,9 @@ typedef struct NormalEditModifierData {
 	char defgrp_name[64];  /* MAX_VGROUP_NAME */
 	struct Object *target;  /* Source of normals, or center of ellipsoid. */
 	short mode;
-	short flags;
+	short flag;
 	short mix_mode;
-	short pad_s1;
+	char pad[2];
 	float mix_factor;
 	float offset[3];
 } NormalEditModifierData;
@@ -1466,7 +1466,7 @@ enum {
 /* NormalEditModifierData.flags */
 enum {
 	MOD_NORMALEDIT_INVERT_VGROUP            = (1 << 0),
-	MOD_NORMALEDIT_USE_PARALLEL_DIRECTIONAL = (1 << 1),
+	MOD_NORMALEDIT_USE_DIRECTION_PARALLEL   = (1 << 1),
 };
 
 /* NormalEditModifierData.mix_mode */

@@ -4381,7 +4381,7 @@ static void rna_def_modifier_normaledit(BlenderRNA *brna)
 
 	static EnumPropertyItem prop_mix_mode_items[] = {
 		{MOD_NORMALEDIT_MIX_COPY, "COPY", 0, "Copy", "Copy new normals (overwrite existing)"},
-		{MOD_NORMALEDIT_MIX_ADD, "ADD", 0, "Add", "Copy sum of new and org normals"},
+		{MOD_NORMALEDIT_MIX_ADD, "ADD", 0, "Add", "Copy sum of new and old normals"},
 		{MOD_NORMALEDIT_MIX_SUB, "SUB", 0, "Substract", "Copy new normals minus old normals"},
 		{MOD_NORMALEDIT_MIX_MUL, "MUL", 0, "Multiply", "Copy product of old and new normals (*not* cross product)"},
 		{0, NULL, 0, NULL, NULL}
@@ -4418,7 +4418,7 @@ static void rna_def_modifier_normaledit(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "use_invert_vertex_group", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_NORMALEDIT_INVERT_VGROUP);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_NORMALEDIT_INVERT_VGROUP);
 	RNA_def_property_ui_text(prop, "Invert", "Invert vertex group influence");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
@@ -4428,8 +4428,8 @@ static void rna_def_modifier_normaledit(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
 	RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
 
-	prop = RNA_def_property(srna, "use_directional_parallel", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_NORMALEDIT_USE_PARALLEL_DIRECTIONAL);
+	prop = RNA_def_property(srna, "use_direction_parallel", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_NORMALEDIT_USE_DIRECTION_PARALLEL);
 	RNA_def_property_boolean_default(prop, true);
 	RNA_def_property_ui_text(prop, "Parallel Normals",
 	                         "Use same direction for all normals, from origin to target's center "

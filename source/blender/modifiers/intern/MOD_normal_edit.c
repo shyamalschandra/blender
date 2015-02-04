@@ -36,29 +36,23 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 #include "BLI_bitmap.h"
-#include "BLI_linklist.h"
-#include "BLI_string.h"
 
 #include "BKE_cdderivedmesh.h"
 #include "BKE_mesh.h"
-#include "BKE_modifier.h"
-#include "BKE_object.h"
 #include "BKE_deform.h"
 
 #include "depsgraph_private.h"
 
-#include "RE_shader_ext.h"
-
 #include "MOD_util.h"
 
 
-static void generate_vert_coordinates(DerivedMesh *dm, Object *ob, Object *ob_center, const float offset[3],
-                                      const int num_verts, float (*r_cos)[3], float r_size[3])
+static void generate_vert_coordinates(
+        DerivedMesh *dm, Object *ob, Object *ob_center, const float offset[3],
+        const int num_verts, float (*r_cos)[3], float r_size[3])
 {
 	float min_co[3], max_co[3];
 	float diff[3];
 	bool do_diff = false;
-	int i;
 
 	INIT_MINMAX(min_co, max_co);
 
@@ -103,7 +97,7 @@ static void generate_vert_coordinates(DerivedMesh *dm, Object *ob, Object *ob_ce
 	/* Else, no need to change coordinates! */
 
 	if (do_diff) {
-		i = num_verts;
+		int i = num_verts;
 		while (i--) {
 			add_v3_v3(r_cos[i], diff);
 		}
@@ -170,13 +164,13 @@ static void normalEditModifier_do_radial(
 
 	generate_vert_coordinates(dm, ob, smd->target, smd->offset, num_verts, cos, size);
 
-	/* size gives us our spheroid coefficients (A, B, C).
-	 * Then, we want to find out for each vert its (a, b, c) triple (proportional to (A, B, C) one).
+	/* size gives us our spheroid coefficients (a, b, c).
+	 * Then, we want to find out for each vert its (a, b, c) triple (proportional to (a, b, c) one).
 	 *
 	 * Ellipsoid basic equation: (x^2/a^2) + (y^2/b^2) + (z^2/c^2) = 1.
-	 * Since we want to find (a, b, c) matching this equation and proportional to (A, B, C), we can do:
-	 *     m = B / A
-	 *     n = C / A
+	 * Since we want to find (a, b, c) matching this equation and proportional to (a, b, c), we can do:
+	 *     m = b / a
+	 *     n = c / a
 	 * hence:
 	 *     (x^2/a^2) + (y^2/b^2) + (z^2/c^2) = 1
 	 *  -> b^2*c^2*x^2 + a^2*c^2*y^2 + a^2*b^2*z^2 = a^2*b^2*c^2
@@ -193,9 +187,9 @@ static void normalEditModifier_do_radial(
 	 * And we are done!
 	 */
 	{
-		const float A = size[0], B = size[1], C = size[2];
-		const float m2 = (B * B) / (A * A);
-		const float n2 = (C * C) / (A * A);
+		const float a = size[0], b = size[1], c = size[2];
+		const float m2 = (b * b) / (a * a);
+		const float n2 = (c * c) / (a * a);
 
 		MLoop *ml;
 		float (*no)[3];
@@ -245,7 +239,7 @@ static void normalEditModifier_do_directional(
         MVert *mvert, const int num_verts, MEdge *medge, const int num_edges,
         MLoop *mloop, const int num_loops, MPoly *mpoly, const int num_polys)
 {
-	const bool use_parallel_normals = (smd->flags & MOD_NORMALEDIT_USE_PARALLEL_DIRECTIONAL) != 0;
+	const bool use_parallel_normals = (smd->flag & MOD_NORMALEDIT_USE_DIRECTION_PARALLEL) != 0;
 
 	float (*cos)[3] = MEM_mallocN(sizeof(*cos) * num_verts, __func__);
 	float (*nos)[3] = MEM_mallocN(sizeof(*nos) * num_loops, __func__);
@@ -334,7 +328,7 @@ static void normalEditModifier_do(NormalEditModifierData *smd, Object *ob, Deriv
 	MLoop *mloop = dm->getLoopArray(dm);
 	MPoly *mpoly = dm->getPolyArray(dm);
 
-	const bool use_invert_vgroup = ((smd->flags & MOD_NORMALEDIT_INVERT_VGROUP) != 0);
+	const bool use_invert_vgroup = ((smd->flag & MOD_NORMALEDIT_INVERT_VGROUP) != 0);
 	const bool use_current_clnors = (smd->mix_mode == MOD_NORMALEDIT_MIX_COPY) &&
 	                                (smd->mix_factor == 1.0f) &&
 	                                (smd->defgrp_name[0] == '\0');

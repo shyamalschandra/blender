@@ -57,6 +57,7 @@
 
 #include "ED_mesh.h"
 #include "ED_object.h"
+#include "ED_screen.h"
 #include "ED_uvedit.h"
 #include "ED_view3d.h"
 
@@ -839,19 +840,6 @@ void MESH_OT_customdata_clear_skin(wmOperatorType *ot)
 }
 
 /* Clear custom loop normals */
-static int mesh_customdata_custom_splitnormals_add_clear_poll(bContext *C)
-{
-	Object *ob = ED_object_context(C);
-
-	if (ob && ob->type == OB_MESH) {
-		Mesh *me = ob->data;
-		if (me->id.lib == NULL) {
-			return true;
-		}
-	}
-	return false;
-}
-
 static int mesh_customdata_custom_splitnormals_add_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Object *ob = ED_object_context(C);
@@ -884,7 +872,7 @@ void MESH_OT_customdata_custom_splitnormals_add(wmOperatorType *ot)
 
 	/* api callbacks */
 	ot->exec = mesh_customdata_custom_splitnormals_add_exec;
-	ot->poll = mesh_customdata_custom_splitnormals_add_clear_poll;
+	ot->poll = ED_operator_object_active_editable_mesh;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -910,7 +898,7 @@ void MESH_OT_customdata_custom_splitnormals_clear(wmOperatorType *ot)
 
 	/* api callbacks */
 	ot->exec = mesh_customdata_custom_splitnormals_clear_exec;
-	ot->poll = mesh_customdata_custom_splitnormals_add_clear_poll;
+	ot->poll = ED_operator_object_active_editable_mesh;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;

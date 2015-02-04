@@ -1353,7 +1353,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
     def NORMAL_EDIT(self, layout, ob, md):
         has_vgroup = bool(md.vertex_group)
         needs_object_offset = (((md.mode == 'RADIAL') and not md.target) or
-                               ((md.mode == 'DIRECTIONAL') and md.use_directional_parallel))
+                               ((md.mode == 'DIRECTIONAL') and md.use_direction_parallel))
 
         row = layout.row()
         row.prop(md, "mode", expand=True)
@@ -1370,7 +1370,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col = split.column()
         row = col.row()
         row.active = (md.mode == 'DIRECTIONAL')
-        row.prop(md, "use_directional_parallel")
+        row.prop(md, "use_direction_parallel")
 
         subcol = col.column(align=True)
         subcol.label("Mix Mode:")
