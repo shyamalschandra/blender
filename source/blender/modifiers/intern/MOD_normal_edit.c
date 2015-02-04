@@ -329,9 +329,9 @@ static void normalEditModifier_do(NormalEditModifierData *smd, Object *ob, Deriv
 	MPoly *mpoly = dm->getPolyArray(dm);
 
 	const bool use_invert_vgroup = ((smd->flag & MOD_NORMALEDIT_INVERT_VGROUP) != 0);
-	const bool use_current_clnors = (smd->mix_mode == MOD_NORMALEDIT_MIX_COPY) &&
-	                                (smd->mix_factor == 1.0f) &&
-	                                (smd->defgrp_name[0] == '\0');
+	const bool use_current_clnors = !((smd->mix_mode == MOD_NORMALEDIT_MIX_COPY) &&
+	                                  (smd->mix_factor == 1.0f) &&
+	                                  (smd->defgrp_name[0] == '\0'));
 
 	int defgrp_index;
 	MDeformVert *dvert;
