@@ -152,7 +152,7 @@ static void rna_Mesh_calc_smooth_groups(Mesh *mesh, int use_bitflags, int *r_pol
 	                    r_group_total, use_bitflags);
 }
 
-static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_loopnors)[3], const bool use_vertices)
+static void rna_Mesh_normals_split_custom_do(Mesh *mesh, float (*custom_loopnors)[3], const bool use_vertices)
 {
 	float (*polynors)[3];
 	short (*clnors)[2];
@@ -193,22 +193,22 @@ static void rna_Mesh_define_normals_split_custom_do(Mesh *mesh, float (*custom_l
 	}
 }
 
-static void rna_Mesh_define_normals_split_custom(Mesh *mesh, ReportList *reports, int normals_len, float *normals)
+static void rna_Mesh_normals_split_custom_set(Mesh *mesh, ReportList *reports, int normals_len, float *normals)
 {
 	float (*loopnors)[3] = (float (*)[3])normals;
 	const int numloops = mesh->totloop;
 
 	if (normals_len != numloops * 3) {
 		BKE_reportf(reports, RPT_ERROR,
-		            "Mesh.define_normals_split_custom(): number of custom normals is not number of loops (%f / %d)",
+		            "number of custom normals is not number of loops (%f / %d)",
 		            (float)normals_len / 3.0f, numloops);
 		return;
 	}
 
-	rna_Mesh_define_normals_split_custom_do(mesh, loopnors, false);
+	rna_Mesh_normals_split_custom_do(mesh, loopnors, false);
 }
 
-static void rna_Mesh_define_normals_split_custom_from_vertices(
+static void rna_Mesh_normals_split_custom_set_from_vertices(
         Mesh *mesh, ReportList *reports, int normals_len, float *normals)
 {
 	float (*vertnors)[3] = (float (*)[3])normals;
@@ -216,13 +216,12 @@ static void rna_Mesh_define_normals_split_custom_from_vertices(
 
 	if (normals_len != numverts * 3) {
 		BKE_reportf(reports, RPT_ERROR,
-		            "Mesh.define_normals_split_custom_from_vertices(): "
 		            "number of custom normals is not number of vertices (%f / %d)",
 		            (float)normals_len / 3.0f, numverts);
 		return;
 	}
 
-	rna_Mesh_define_normals_split_custom_do(mesh, vertnors, true);
+	rna_Mesh_normals_split_custom_do(mesh, vertnors, true);
 }
 
 static void rna_Mesh_transform(Mesh *mesh, float *mat, int shape_keys)
@@ -282,7 +281,7 @@ void RNA_api_mesh(StructRNA *srna)
 	parm = RNA_def_int(func, "groups", 0, 0, INT_MAX, "groups", "Total number of groups", 0, INT_MAX);
 	RNA_def_property_flag(parm, PROP_OUTPUT);
 
-	func = RNA_def_function(srna, "define_normals_split_custom", "rna_Mesh_define_normals_split_custom");
+	func = RNA_def_function(srna, "normals_split_custom_set", "rna_Mesh_normals_split_custom_set");
 	RNA_def_function_ui_description(func,
 	                                "Define custom split normals of this mesh (use NULL vectors to keep auto ones)");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
@@ -291,8 +290,8 @@ void RNA_api_mesh(StructRNA *srna)
 	RNA_def_property_multi_array(parm, 2, normals_array_dim);
 	RNA_def_property_flag(parm, PROP_DYNAMIC | PROP_REQUIRED);
 
-	func = RNA_def_function(srna, "define_normals_split_custom_from_vertices",
-	                        "rna_Mesh_define_normals_split_custom_from_vertices");
+	func = RNA_def_function(srna, "normals_split_custom_set_from_vertices",
+	                        "rna_Mesh_normals_split_custom_set_from_vertices");
 	RNA_def_function_ui_description(func,
 	                                "Define custom split normals of this mesh, from vertices' normals "
 	                                "(use NULL vectors to keep auto ones)");
