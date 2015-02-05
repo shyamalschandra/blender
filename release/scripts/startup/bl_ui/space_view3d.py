@@ -115,8 +115,8 @@ class VIEW3D_HT_header(Header):
         if obj and mode == 'POSE':
             row = layout.row(align=True)
             row.operator("pose.copy", text="", icon='COPYDOWN')
-            row.operator("pose.paste", text="", icon='PASTEDOWN')
-            row.operator("pose.paste", text="", icon='PASTEFLIPDOWN').flipped = 1
+            row.operator("pose.paste", text="", icon='PASTEDOWN').flipped = False
+            row.operator("pose.paste", text="", icon='PASTEFLIPDOWN').flipped = True
 
 
 class VIEW3D_MT_editor_menus(Menu):
@@ -176,7 +176,7 @@ class VIEW3D_MT_editor_menus(Menu):
 # ********** Utilities **********
 
 
-class ShowHideMenu():
+class ShowHideMenu:
     bl_label = "Show/Hide"
     _operator_name = ""
 
@@ -416,7 +416,7 @@ class VIEW3D_MT_view(Menu):
 
         layout.operator("view3d.clip_border", text="Clipping Border...")
         layout.operator("view3d.zoom_border", text="Zoom Border...")
-        layout.operator("view3d.render_border", text="Render Border...")
+        layout.operator("view3d.render_border", text="Render Border...").camera_only = False
 
         layout.separator()
 
@@ -425,8 +425,8 @@ class VIEW3D_MT_view(Menu):
         layout.separator()
 
         layout.operator("view3d.localview", text="View Global/Local")
-        layout.operator("view3d.view_selected")
-        layout.operator("view3d.view_all")
+        layout.operator("view3d.view_selected").use_all_regions = False
+        layout.operator("view3d.view_all").center = False
 
         layout.separator()
 
@@ -580,8 +580,13 @@ class VIEW3D_MT_select_pose(Menu):
 
         layout.separator()
 
-        layout.operator("pose.select_hierarchy", text="Parent").direction = 'PARENT'
-        layout.operator("pose.select_hierarchy", text="Child").direction = 'CHILD'
+        props = layout.operator("pose.select_hierarchy", text="Parent")
+        props.extend = False
+        props.direction = 'PARENT'
+
+        props = layout.operator("pose.select_hierarchy", text="Child")
+        props.extend = False
+        props.direction = 'CHILD'
 
         layout.separator()
 
@@ -849,8 +854,13 @@ class VIEW3D_MT_select_edit_armature(Menu):
 
         layout.separator()
 
-        layout.operator("armature.select_hierarchy", text="Parent").direction = 'PARENT'
-        layout.operator("armature.select_hierarchy", text="Child").direction = 'CHILD'
+        props = layout.operator("armature.select_hierarchy", text="Parent")
+        props.extend = False
+        props.direction = 'PARENT'
+
+        props = layout.operator("armature.select_hierarchy", text="Child")
+        props.extend = False
+        props.direction = 'CHILD'
 
         layout.separator()
 
@@ -1079,7 +1089,7 @@ class VIEW3D_MT_object(Menu):
 
         layout.operator("object.duplicate_move")
         layout.operator("object.duplicate_move_linked")
-        layout.operator("object.delete", text="Delete...")
+        layout.operator("object.delete", text="Delete...").use_global = False
         layout.operator("object.proxy_make", text="Make Proxy...")
         layout.menu("VIEW3D_MT_make_links", text="Make Links...")
         layout.operator("object.make_dupli_face")
@@ -1822,7 +1832,7 @@ class VIEW3D_MT_pose(Menu):
         layout.separator()
 
         layout.operator("pose.copy")
-        layout.operator("pose.paste")
+        layout.operator("pose.paste").flipped = False
         layout.operator("pose.paste", text="Paste X-Flipped Pose").flipped = True
 
         layout.separator()
@@ -2340,7 +2350,8 @@ class VIEW3D_MT_edit_mesh_faces(Menu):
             layout.separator()
 
         layout.operator("mesh.poke")
-        layout.operator("mesh.quads_convert_to_tris")
+        props = layout.operator("mesh.quads_convert_to_tris")
+        props.quad_method = props.ngon_method = 'BEAUTY'
         layout.operator("mesh.tris_convert_to_quads")
         layout.operator("mesh.face_split_by_edges")
 
@@ -2349,7 +2360,7 @@ class VIEW3D_MT_edit_mesh_faces(Menu):
         layout.operator("mesh.faces_shade_smooth")
         layout.operator("mesh.faces_shade_flat")
 
-        layout.operator("mesh.normals_make_consistent", text="Recalculate Normals")
+        layout.operator("mesh.normals_make_consistent", text="Recalculate Normals").inside = False
 
         layout.separator()
 
@@ -2390,6 +2401,7 @@ class VIEW3D_MT_edit_mesh_clean(Menu):
         layout.operator("mesh.dissolve_degenerate")
         layout.operator("mesh.dissolve_limited")
         layout.operator("mesh.vert_connect_nonplanar")
+        layout.operator("mesh.vert_connect_concave")
         layout.operator("mesh.fill_holes")
 
 
@@ -2742,6 +2754,7 @@ class VIEW3D_MT_edit_armature_roll(Menu):
         layout.operator("transform.transform", text="Set Roll").mode = 'BONE_ROLL'
 
 # ********** Panel **********
+
 
 class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):
     bl_space_type = 'VIEW_3D'
@@ -3218,12 +3231,19 @@ class VIEW3D_PT_background_image(Panel):
                     if bg.view_axis in {'CAMERA', 'ALL'}:
                         col.row().prop(bg, "frame_method", expand=True)
 
-                    row = col.row(align=True)
+                    box = col.box()
+                    row = box.row()
                     row.prop(bg, "offset_x", text="X")
                     row.prop(bg, "offset_y", text="Y")
 
+                    row = box.row()
+                    row.prop(bg, "use_flip_x")
+                    row.prop(bg, "use_flip_y")
+
+                    row = box.row()
                     if bg.view_axis != 'CAMERA':
-                        col.prop(bg, "size")
+                         row.prop(bg, "rotation")
+                         row.prop(bg, "size")
 
 
 class VIEW3D_PT_transform_orientations(Panel):

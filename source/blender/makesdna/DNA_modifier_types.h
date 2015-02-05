@@ -535,15 +535,38 @@ typedef struct ArmatureModifierData {
 	char defgrp_name[64];     /* MAX_VGROUP_NAME */
 } ArmatureModifierData;
 
+enum {
+	MOD_HOOK_UNIFORM_SPACE = (1 << 0),
+};
+
+/* same as WarpModifierFalloff */
+typedef enum {
+	eHook_Falloff_None   = 0,
+	eHook_Falloff_Curve  = 1,
+	eHook_Falloff_Sharp  = 2, /* PROP_SHARP */
+	eHook_Falloff_Smooth = 3, /* PROP_SMOOTH */
+	eHook_Falloff_Root   = 4, /* PROP_ROOT */
+	eHook_Falloff_Linear = 5, /* PROP_LIN */
+	eHook_Falloff_Const  = 6, /* PROP_CONST */
+	eHook_Falloff_Sphere = 7, /* PROP_SPHERE */
+	eHook_Falloff_InvSquare = 8, /* PROP_INVSQUARE */
+	/* PROP_RANDOM not used */
+} HookModifierFalloff;
+
 typedef struct HookModifierData {
 	ModifierData modifier;
 
 	struct Object *object;
 	char subtarget[64];     /* optional name of bone target, MAX_ID_NAME-2 */
 
+	char flag;
+	char falloff_type;      /* use enums from WarpModifier (exact same functionality) */
+	char pad[6];
 	float parentinv[4][4];  /* matrix making current transform unmodified */
 	float cent[3];          /* visualization of hook */
 	float falloff;          /* if not zero, falloff is distance where influence zero */
+
+	struct CurveMapping *curfalloff;
 
 	int *indexar;           /* if NULL, it's using vertexgroup */
 	int totindex;
@@ -698,11 +721,16 @@ typedef enum {
 	eParticleInstanceFlag_UseSize   = (1 << 7),
 } ParticleInstanceModifierFlag;
 
+typedef enum {
+	eParticleInstanceSpace_World    = 0,
+	eParticleInstanceSpace_Local    = 1,
+} ParticleInstanceModifierSpace;
+
 typedef struct ParticleInstanceModifierData {
 	ModifierData modifier;
 
 	struct Object *ob;
-	short psys, flag, axis, pad;
+	short psys, flag, axis, space;
 	float position, random_position;
 } ParticleInstanceModifierData;
 
@@ -978,6 +1006,7 @@ typedef enum {
 	eWarp_Falloff_Linear = 5, /* PROP_LIN */
 	eWarp_Falloff_Const  = 6, /* PROP_CONST */
 	eWarp_Falloff_Sphere = 7, /* PROP_SPHERE */
+	eWarp_Falloff_InvSquare = 8, /* PROP_INVSQUARE */
 	/* PROP_RANDOM not used */
 } WarpModifierFalloff;
 

@@ -860,14 +860,14 @@ void BKE_image_memorypack(Image *ima)
 
 void BKE_image_tag_time(Image *ima)
 {
-	ima->lastused = (int)PIL_check_seconds_timer();
+	ima->lastused = PIL_check_seconds_timer_i();
 }
 
 #if 0
 static void tag_all_images_time()
 {
 	Image *ima;
-	int ctime = (int)PIL_check_seconds_timer();
+	int ctime = PIL_check_seconds_timer_i();
 
 	ima = G.main->image.first;
 	while (ima) {
@@ -2107,6 +2107,14 @@ void BKE_image_path_from_imtype(
 	image_path_makepicstring(string, base, relbase, frame, imtype, NULL, use_ext, use_frames);
 }
 
+struct anim *openanim_noload(const char *name, int flags, int streamindex, char colorspace[IMA_MAX_SPACE])
+{
+	struct anim *anim;
+
+	anim = IMB_open_anim(name, flags, streamindex, colorspace);
+	return anim;
+}
+
 /* used by sequencer too */
 struct anim *openanim(const char *name, int flags, int streamindex, char colorspace[IMA_MAX_SPACE])
 {
@@ -2600,6 +2608,10 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 
 	if (ima->anim == NULL) {
 		char str[FILE_MAX];
+		int flags = IB_rect;
+		if (ima->flag & IMA_DEINTERLACE) {
+			flags |= IB_animdeinterlace;
+		}
 
 		BKE_image_user_file_path(iuser, ima, str);
 

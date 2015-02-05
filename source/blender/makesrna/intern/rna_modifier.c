@@ -134,6 +134,22 @@ EnumPropertyItem modifier_triangulate_ngon_method_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+#ifndef RNA_RUNTIME
+/* use eWarp_Falloff_*** & eHook_Falloff_***, they're in sync */
+static EnumPropertyItem modifier_warp_falloff_items[] = {
+	{eWarp_Falloff_None,    "NONE", 0, "No Falloff", ""},
+	{eWarp_Falloff_Curve,   "CURVE", 0, "Curve", ""},
+	{eWarp_Falloff_Smooth,  "SMOOTH", ICON_SMOOTHCURVE, "Smooth", ""},
+	{eWarp_Falloff_Sphere,  "SPHERE", ICON_SPHERECURVE, "Sphere", ""},
+	{eWarp_Falloff_Root,    "ROOT", ICON_ROOTCURVE, "Root", ""},
+	{eWarp_Falloff_InvSquare, "INVERSE_SQUARE", ICON_ROOTCURVE, "Inverse Square", ""},
+	{eWarp_Falloff_Sharp,   "SHARP", ICON_SHARPCURVE, "Sharp", ""},
+	{eWarp_Falloff_Linear,  "LINEAR", ICON_LINCURVE, "Linear", ""},
+	{eWarp_Falloff_Const,   "CONSTANT", ICON_NOCURVE, "Constant", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+#endif
+
 /* ***** Data Transfer ***** */
 
 EnumPropertyItem DT_method_vertex_items[] = {
@@ -1111,18 +1127,6 @@ static void rna_def_modifier_warp(BlenderRNA *brna)
 	StructRNA *srna;
 	PropertyRNA *prop;
 
-	static EnumPropertyItem prop_falloff_items[] = {
-		{eWarp_Falloff_None,    "NONE", 0, "No Falloff", ""},
-		{eWarp_Falloff_Curve,   "CURVE", 0, "Curve", ""},
-		{eWarp_Falloff_Smooth,  "SMOOTH", ICON_SMOOTHCURVE, "Smooth", ""},
-		{eWarp_Falloff_Sphere,  "SPHERE", ICON_SPHERECURVE, "Sphere", ""},
-		{eWarp_Falloff_Root,    "ROOT", ICON_ROOTCURVE, "Root", ""},
-		{eWarp_Falloff_Sharp,   "SHARP", ICON_SHARPCURVE, "Sharp", ""},
-		{eWarp_Falloff_Linear,  "LINEAR", ICON_LINCURVE, "Linear", ""},
-		{eWarp_Falloff_Const,   "CONSTANT", ICON_NOCURVE, "Constant", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
-
 	srna = RNA_def_struct(brna, "WarpModifier", "Modifier");
 	RNA_def_struct_ui_text(srna, "Warp Modifier", "Warp modifier");
 	RNA_def_struct_sdna(srna, "WarpModifierData");
@@ -1145,7 +1149,7 @@ static void rna_def_modifier_warp(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "falloff_type", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, prop_falloff_items);
+	RNA_def_property_enum_items(prop, modifier_warp_falloff_items);
 	RNA_def_property_ui_text(prop, "Falloff Type", "");
 	RNA_def_property_translation_context(prop, BLF_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
@@ -1682,15 +1686,28 @@ static void rna_def_modifier_hook(BlenderRNA *brna)
 	RNA_def_struct_sdna(srna, "HookModifierData");
 	RNA_def_struct_ui_icon(srna, ICON_HOOK);
 
-	prop = RNA_def_property(srna, "falloff", PROP_FLOAT, PROP_DISTANCE);
-	RNA_def_property_range(prop, 0, FLT_MAX);
-	RNA_def_property_ui_range(prop, 0, 100, 100, 2);
-	RNA_def_property_ui_text(prop, "Falloff",  "If not zero, the distance from the hook where influence ends");
+	prop = RNA_def_property(srna, "strength", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "force");
+	RNA_def_property_range(prop, 0, 1);
+	RNA_def_property_ui_text(prop, "Strength",  "Relative force of the hook");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-	prop = RNA_def_property(srna, "force", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_range(prop, 0, 1);
-	RNA_def_property_ui_text(prop, "Force",  "Relative force of the hook");
+	prop = RNA_def_property(srna, "falloff_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, modifier_warp_falloff_items);  /* share the enum */
+	RNA_def_property_ui_text(prop, "Falloff Type", "");
+	RNA_def_property_translation_context(prop, BLF_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "falloff_radius", PROP_FLOAT, PROP_DISTANCE);
+	RNA_def_property_float_sdna(prop, NULL, "falloff");
+	RNA_def_property_range(prop, 0, FLT_MAX);
+	RNA_def_property_ui_range(prop, 0, 100, 100, 2);
+	RNA_def_property_ui_text(prop, "Radius",  "If not zero, the distance from the hook where influence ends");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "falloff_curve", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "curfalloff");
+	RNA_def_property_ui_text(prop, "Falloff Curve", "Custom Lamp Falloff Curve");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "center", PROP_FLOAT, PROP_NONE);
@@ -1709,6 +1726,11 @@ static void rna_def_modifier_hook(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Sub-Target",
 	                         "Name of Parent Bone for hook (if applicable), also recalculates and clears offset");
 	RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
+
+	prop = RNA_def_property(srna, "use_falloff_uniform", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_HOOK_UNIFORM_SPACE);
+	RNA_def_property_ui_text(prop, "Uniform Falloff", "Compensate for non-uniform object scale");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "vertex_group", PROP_STRING, PROP_NONE);
 	RNA_def_property_string_sdna(prop, NULL, "name");
@@ -2323,6 +2345,12 @@ static void rna_def_modifier_particleinstance(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem particleinstance_space[] = {
+		{eParticleInstanceSpace_Local, "LOCAL", 0, "Local", "Use offset from the particle object in the instance object"},
+		{eParticleInstanceSpace_World, "WORLD", 0, "World", "Use world space offset in the instance object"},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "ParticleInstanceModifier", "Modifier");
 	RNA_def_struct_ui_text(srna, "ParticleInstance Modifier", "Particle system instancing modifier");
 	RNA_def_struct_sdna(srna, "ParticleInstanceModifierData");
@@ -2345,7 +2373,13 @@ static void rna_def_modifier_particleinstance(BlenderRNA *brna)
 	RNA_def_property_enum_items(prop, particleinstance_axis);
 	RNA_def_property_ui_text(prop, "Axis", "Pole axis for rotation");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
-	
+
+	prop = RNA_def_property(srna, "space", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "space");
+	RNA_def_property_enum_items(prop, particleinstance_space);
+	RNA_def_property_ui_text(prop, "Space", "Space to use for copying mesh data");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
 	prop = RNA_def_property(srna, "use_normal", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", eParticleInstanceFlag_Parents);
 	RNA_def_property_ui_text(prop, "Normal", "Create instances from normal particles");

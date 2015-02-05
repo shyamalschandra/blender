@@ -422,8 +422,9 @@ static void PE_create_shape_tree(PEData *data, Object *shapeob)
 	
 	memset(&data->shape_bvh, 0, sizeof(data->shape_bvh));
 	
-	if (!shapeob || !shapeob->derivedFinal)
+	if (!dm) {
 		return;
+	}
 	
 	DM_ensure_tessface(dm);
 	bvhtree_from_mesh_faces(&data->shape_bvh, dm, 0.0f, 4, 8);
@@ -3255,7 +3256,7 @@ static void brush_puff(PEData *data, int point_index)
 
 static void BKE_brush_weight_get(PEData *data, float UNUSED(mat[4][4]), float UNUSED(imat[4][4]), int point_index, int key_index, PTCacheEditKey *UNUSED(key))
 {
-	/* roots have full weight allways */
+	/* roots have full weight always */
 	if (key_index) {
 		PTCacheEdit *edit = data->edit;
 		ParticleSystem *psys = edit->psys;
@@ -3705,6 +3706,7 @@ typedef struct BrushEdit {
 	int first;
 	int lastmouse[2];
 	float zfac;
+	bool done;
 
 	/* optional cached view settings to avoid setting on every mousemove */
 	PEData data;
@@ -3730,6 +3732,7 @@ static int brush_edit_init(bContext *C, wmOperator *op)
 
 	bedit= MEM_callocN(sizeof(BrushEdit), "BrushEdit");
 	bedit->first= 1;
+	bedit->done = false;
 	op->customdata= bedit;
 
 	bedit->scene= scene;
@@ -3885,13 +3888,16 @@ static void brush_edit_apply(bContext *C, wmOperator *op, PointerRNA *itemptr)
 				}
 				case PE_BRUSH_ADD:
 				{
-					if (edit->psys && edit->psys->part->from==PART_FROM_FACE) {
+					bool done = (brush->flag & PE_BRUSH_DATA_ADD_SINGLE) && bedit->done;
+					if (!done && edit->psys && edit->psys->part->from==PART_FROM_FACE) {
 						data.mval= mval;
 
 						added= brush_add(&data, brush->count);
 
 						if (pset->flag & PE_KEEP_LENGTHS)
 							recalc_lengths(edit);
+
+						bedit->done = true;
 					}
 					else
 						added= 0;

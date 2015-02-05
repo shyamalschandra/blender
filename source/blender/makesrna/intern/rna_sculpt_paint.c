@@ -737,6 +737,11 @@ static void rna_def_image_paint(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "stencil_col");
 	RNA_def_property_ui_text(prop, "Stencil Color", "Stencil color in the viewport");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_viewport_update");
+
+	prop = RNA_def_property(srna, "dither", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_range(prop, 0.0, 2.0);
+	RNA_def_property_ui_text(prop, "Dither", "Amount of dithering when painting on byte images");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 	
 	prop = RNA_def_property(srna, "use_clone_layer", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMAGEPAINT_PROJECT_LAYER_CLONE);
@@ -957,6 +962,10 @@ static void rna_def_particle_edit(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", PE_BRUSH_DATA_PUFF_VOLUME);
 	RNA_def_property_ui_text(prop, "Puff Volume",
 	                         "Apply puff to unselected end-points (helps maintain hair volume when puffing root)");
+
+	prop = RNA_def_property(srna, "use_add_stroke", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", PE_BRUSH_DATA_ADD_SINGLE);
+	RNA_def_property_ui_text(prop, "Add Stroke", "Add multiple particles per brush stroke");
 
 	prop = RNA_def_property(srna, "length_mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "invert");

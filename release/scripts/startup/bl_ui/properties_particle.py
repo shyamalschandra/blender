@@ -93,7 +93,7 @@ class PARTICLE_MT_hair_dynamics_presets(Menu):
     draw = Menu.draw_preset
 
 
-class ParticleButtonsPanel():
+class ParticleButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "particle"
@@ -108,6 +108,7 @@ def find_modifier(ob, psys):
         if md.type == 'PARTICLE_SYSTEM':
             if md.particle_system == psys:
                 return md
+
 
 class PARTICLE_UL_particle_systems(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index, flt_flag):
@@ -1333,6 +1334,9 @@ class PARTICLE_PT_children(ParticleButtonsPanel, Panel):
         subsub = sub.column()
         subsub.enabled = part.use_clump_noise
         subsub.prop(part, "clump_noise_size")
+        subsubsub = subsub.column(align=True)
+        subsubsub.prop(part, "clump_noise_random_size")
+        subsubsub.prop(part, "clump_noise_random")
 
         sub = col.column(align=True)
         sub.prop(part, "child_length", slider=True)

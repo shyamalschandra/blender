@@ -850,7 +850,7 @@ typedef struct ImagePaintSettings {
 	struct Image *clone;       /* clone layer for image mode for projective texture painting */
 	struct Image *canvas;      /* canvas when the explicit system is used for painting */
 	float stencil_col[3];
-	float pad1;
+	float dither;              /* dither amount used when painting on byte images */
 } ImagePaintSettings;
 
 /* ------------------------------------------- */
@@ -1654,7 +1654,8 @@ extern const char *RE_engine_id_CYCLES;
 #define PROP_LIN               4
 #define PROP_CONST             5
 #define PROP_RANDOM            6
-#define PROP_MODE_MAX          7
+#define PROP_INVSQUARE         7
+#define PROP_MODE_MAX          8
 
 /* toolsettings->proportional */
 #define PROP_EDIT_OFF			0
@@ -1852,6 +1853,7 @@ typedef enum eGPencil_Source_3D {
 
 /* ParticleBrushData->flag */
 #define PE_BRUSH_DATA_PUFF_VOLUME 1
+#define PE_BRUSH_DATA_ADD_SINGLE  2
 
 /* tooksettings->particle edittype */
 #define PE_TYPE_PARTICLES	0

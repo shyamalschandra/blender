@@ -735,7 +735,7 @@ void drawcircball(int mode, const float cent[3], float rad, float tmat[4][4])
 }
 
 /* circle for object centers, special_color is for library or ob users */
-static void drawcentercircle(View3D *v3d, RegionView3D *rv3d, const float co[3], int selstate, int special_color)
+static void drawcentercircle(View3D *v3d, RegionView3D *rv3d, const float co[3], int selstate, bool special_color)
 {
 	const float size = ED_view3d_pixel_size(rv3d, co) * (float)U.obcenter_dia * 0.5f;
 	float verts[CIRCLE_RESOL][3];
@@ -4331,8 +4331,8 @@ static bool drawDispList_nobackface(Scene *scene, View3D *v3d, RegionView3D *rv3
 	ListBase *lb = NULL;
 	DispList *dl;
 	Curve *cu;
-	const short render_only = (v3d->flag2 & V3D_RENDER_OVERRIDE);
-	const short solid = (dt > OB_WIRE);
+	const bool render_only = (v3d->flag2 & V3D_RENDER_OVERRIDE) != 0;
+	const bool solid = (dt > OB_WIRE);
 
 	if (drawCurveDerivedMesh(scene, v3d, rv3d, base, dt) == false) {
 		return false;
@@ -4483,6 +4483,43 @@ static bool drawDispList(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *ba
 
 /* *********** drawing for particles ************* */
 
+BLI_INLINE unsigned int hash_int_2d(unsigned int kx, unsigned int ky)
+{
+#define rot(x,k) (((x)<<(k)) | ((x)>>(32-(k))))
+
+	unsigned int a, b, c;
+
+	a = b = c = 0xdeadbeef + (2 << 2) + 13;
+	a += kx;
+	b += ky;
+
+	c ^= b; c -= rot(b,14);
+	a ^= c; a -= rot(c,11);
+	b ^= a; b -= rot(a,25);
+	c ^= b; c -= rot(b,16);
+	a ^= c; a -= rot(c,4);
+	b ^= a; b -= rot(a,14);
+	c ^= b; c -= rot(b,24);
+
+	return c;
+
+#undef rot
+}
+
+BLI_INLINE unsigned int hash_int(unsigned int k)
+{
+	return hash_int_2d(k, 0);
+}
+
+static void particle_path_color(int index, float col[3])
+{
+	unsigned seed = hash_int(index);
+	
+	BLI_srandom(seed);
+	hsv_to_rgb(BLI_frand(), 1.0f, 1.0f, col+0, col+1, col+2);
+}
+
+#ifdef USE_PARTICLE_HULL_DRAWING
 static void draw_particle_hull_section(ParticleCacheKey *path, ParticleCacheKey *npath)
 {
 	int segments = max_ii(path->segments, npath->segments);
@@ -4637,42 +4674,6 @@ BLI_INLINE int particle_path_prev(ParticleCacheKey **cache, int pmin, int p)
 	} while (true);
 	
 	return p;
-}
-
-BLI_INLINE unsigned int hash_int_2d(unsigned int kx, unsigned int ky)
-{
-#define rot(x,k) (((x)<<(k)) | ((x)>>(32-(k))))
-
-	unsigned int a, b, c;
-
-	a = b = c = 0xdeadbeef + (2 << 2) + 13;
-	a += kx;
-	b += ky;
-
-	c ^= b; c -= rot(b,14);
-	a ^= c; a -= rot(c,11);
-	b ^= a; b -= rot(a,25);
-	c ^= b; c -= rot(b,16);
-	a ^= c; a -= rot(c,4);
-	b ^= a; b -= rot(a,14);
-	c ^= b; c -= rot(b,24);
-
-	return c;
-
-#undef rot
-}
-
-BLI_INLINE unsigned int hash_int(unsigned int k)
-{
-	return hash_int_2d(k, 0);
-}
-
-static void particle_path_color(int index, float col[3])
-{
-	unsigned seed = hash_int(index);
-	
-	BLI_srandom(seed);
-	hsv_to_rgb(BLI_frand(), 1.0f, 1.0f, col+0, col+1, col+2);
 }
 
 static void draw_particle_hair_hull(Scene *UNUSED(scene), View3D *v3d, RegionView3D *rv3d,
@@ -4849,10 +4850,8 @@ static void draw_particle_hair_hull(Scene *UNUSED(scene), View3D *v3d, RegionVie
 	if ((base->flag & OB_FROMDUPLI) && (ob->flag & OB_FROMGROUP)) {
 		glLoadMatrixf(rv3d->viewmat);
 	}
-	
-#undef FOREACH_PATH_PAIR_BEGIN
-#undef FOREACH_PATH_PAIR_END
 }
+#endif
 
 static void draw_particle_arrays(int draw_as, int totpoint, int ob_dt, int select)
 {
@@ -5117,7 +5116,9 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 		return;
 	}
 	else if (draw_as == PART_DRAW_HULL) {
+#ifdef USE_PARTICLE_HULL_DRAWING
 		draw_particle_hair_hull(scene, v3d, rv3d, base, psys, ob_dt, dflag);
+#endif
 		return;
 	}
 
@@ -8339,7 +8340,7 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 		if (render_override) {
 			/* don't draw */
 		}
-		else if ((scene->basact) == base)
+		else if (is_obact)
 			do_draw_center = ACTIVE;
 		else if (base->flag & SELECT)
 			do_draw_center = SELECT;

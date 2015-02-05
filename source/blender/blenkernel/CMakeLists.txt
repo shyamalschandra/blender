@@ -142,6 +142,7 @@ set(SRC
 	intern/particle.c
 	intern/particle_child.c
 	intern/particle_distribute.c
+	intern/particle_interpolate.c
 	intern/particle_system.c
 	intern/pbvh.c
 	intern/pbvh_bmesh.c
