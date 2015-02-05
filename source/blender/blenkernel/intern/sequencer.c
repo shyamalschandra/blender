@@ -2137,12 +2137,14 @@ static ImBuf *input_preprocess(const SeqRenderData *context, Sequence *seq, floa
 		multibuf(ibuf, mul);
 	}
 
-	if (ibuf->x != context->rectx || ibuf->y != context->recty) {
-		if (scene->r.mode & R_OSA) {
-			IMB_scaleImBuf(ibuf, (short)context->rectx, (short)context->recty);
-		}
-		else {
-			IMB_scalefastImBuf(ibuf, (short)context->rectx, (short)context->recty);
+	if (!is_proxy_image) {
+		if (ibuf->x != context->rectx || ibuf->y != context->recty) {
+			if (scene->r.mode & R_OSA) {
+				IMB_scaleImBuf(ibuf, (short)context->rectx, (short)context->recty);
+			}
+			else {
+				IMB_scalefastImBuf(ibuf, (short)context->rectx, (short)context->recty);
+			}
 		}
 	}
 
@@ -2796,7 +2798,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 				                         seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
 				                         proxy_size);
 
-				/* fetching for requested proxy sze failed, try fetching the original isntead */
+				/* fetching for requested proxy size failed, try fetching the original instead */
 				if (!ibuf && proxy_size != IMB_PROXY_NONE) {
 					ibuf = IMB_anim_absolute(seq->anim, nr + seq->anim_startofs,
 					                         seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
