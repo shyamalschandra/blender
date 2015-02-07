@@ -59,6 +59,9 @@ typedef struct BMEditStrands {
 	unsigned int vertex_glbuf;
 	unsigned int elem_glbuf;
 	unsigned int dot_glbuf;
+	
+	/*temp variables for x-mirror editing*/
+	int mirror_cdlayer; /* -1 is invalid */
 } BMEditStrands;
 
 /* BMEditStrands->flag */
