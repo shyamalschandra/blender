@@ -2040,6 +2040,8 @@ static void ccgDM_drawFacesSolid(DerivedMesh *dm, float (*partial_redraw_planes)
 	int a;
 	CCGDerivedMesh *ccgdm = (CCGDerivedMesh *) dm;
 
+	ccgdm_pbvh_update(ccgdm);
+
 	if (ccgdm->pbvh && ccgdm->multires.mmd && !fast) {
 		if (dm->numTessFaceData) {
 			BKE_pbvh_draw(ccgdm->pbvh, partial_redraw_planes, NULL,
@@ -3774,6 +3776,7 @@ static CCGDerivedMesh *getCCGDerivedMesh(CCGSubSurf *ss,
 
 	ccgdm->dm.calcNormals = ccgDM_calcNormals;
 	ccgdm->dm.calcLoopNormals = CDDM_calc_loop_normals;
+	ccgdm->dm.calcLoopNormalsSpaceArray = CDDM_calc_loop_normals_spacearr;
 	ccgdm->dm.recalcTessellation = ccgDM_recalcTessellation;
 
 	ccgdm->dm.getVertCos = ccgdm_getVertCos;
