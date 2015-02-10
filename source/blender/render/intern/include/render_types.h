@@ -275,6 +275,9 @@ struct Render
 
 	struct ImagePool *pool;
 	struct EvaluationContext *eval_ctx;
+
+	/* current object being baked - used by Bake API only */
+	int baking_object_id;
 };
 
 /* ------------------------------------------------------------------------- */
