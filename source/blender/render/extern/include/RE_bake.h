@@ -49,13 +49,14 @@ typedef struct BakeImages {
 } BakeImages;
 
 typedef struct BakePixel {
-	int primitive_id, object_id;
+	int primitive_id;
 	float uv[2];
 	float du_dx, du_dy;
 	float dv_dx, dv_dy;
 } BakePixel;
 
 typedef struct BakeHighPolyData {
+	struct BakePixel *pixel_array;
 	struct Object *ob;
 	struct ModifierData *tri_mod;
 	struct Mesh *me;
@@ -68,8 +69,6 @@ typedef struct BakeHighPolyData {
 
 /* external_engine.c */
 bool RE_bake_has_engine(struct Render *re);
-void RE_bake_object_id_set(struct Render *re, int object_id);
-int RE_bake_object_id_get(struct Render *re);
 
 bool RE_bake_engine(
         struct Render *re, struct Object *object, const BakePixel pixel_array[],
@@ -82,7 +81,7 @@ bool RE_bake_internal(
         const size_t num_pixels, const int depth, const ScenePassType pass_type, float result[]);
 
 bool RE_bake_pixels_populate_from_objects(
-        struct Mesh *me_low, BakePixel pixel_array_from[], BakePixel pixel_array_to[],
+        struct Mesh *me_low, BakePixel pixel_array_from[],
         BakeHighPolyData highpoly[], const int tot_highpoly, const size_t num_pixels, const bool is_custom_cage,
         const float cage_extrusion, float mat_low[4][4], float mat_cage[4][4], struct Mesh *me_cage);
 
