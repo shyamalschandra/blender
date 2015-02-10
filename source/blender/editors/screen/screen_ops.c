@@ -3387,7 +3387,12 @@ static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEv
 		    (sad->flag & ANIMPLAY_FLAG_REVERSE) == false &&
 		    finite(time = sound_sync_scene(scene)))
 		{
-			scene->r.cfra = (double)time * FPS + 0.5;
+			double newfra = (double)time * FPS;
+			/* give some space here to avoid jumps */
+			if (newfra + 0.5 > scene->r.cfra && newfra - 0.5 < scene->r.cfra)
+				scene->r.cfra++;
+			else
+				scene->r.cfra = newfra + 0.5;
 		}
 		else {
 			if (sync) {
@@ -3464,11 +3469,29 @@ static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEv
 			for (sa = window->screen->areabase.first; sa; sa = sa->next) {
 				ARegion *ar;
 				for (ar = sa->regionbase.first; ar; ar = ar->next) {
+					bool redraw = false;
 					if (ar == sad->ar) {
-						ED_region_tag_redraw(ar);
+						redraw = true;
 					}
 					else if (match_region_with_redraws(sa->spacetype, ar->regiontype, sad->redraws)) {
+						redraw = true;
+					}
+
+					if (redraw) {
 						ED_region_tag_redraw(ar);
+						/* do follow here if editor type supports it */
+						if ((sad->redraws & TIME_FOLLOW)) {
+							if ((ar->regiontype == RGN_TYPE_WINDOW &&
+							    ELEM (sa->spacetype, SPACE_SEQ, SPACE_TIME, SPACE_IPO, SPACE_ACTION, SPACE_NLA)) ||
+							    (sa->spacetype == SPACE_CLIP && ar->regiontype == RGN_TYPE_PREVIEW))
+							{
+								float w = BLI_rctf_size_x(&ar->v2d.cur);
+								if (scene->r.cfra < ar->v2d.cur.xmin || scene->r.cfra > (ar->v2d.cur.xmax)) {
+									ar->v2d.cur.xmin = scene->r.cfra;
+									ar->v2d.cur.xmax = ar->v2d.cur.xmin + w;
+								}
+							}
+						}
 					}
 				}
 				
@@ -3534,6 +3557,8 @@ int ED_screen_animation_play(bContext *C, int sync, int mode)
 		/* stop playback now */
 		ED_screen_animation_timer(C, 0, 0, 0, 0);
 		sound_stop_scene(scene);
+
+		WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
 	}
 	else {
 		int refresh = SPACE_TIME; /* these settings are currently only available from a menu in the TimeLine */
@@ -3695,9 +3720,9 @@ static int fullscreen_back_exec(bContext *C, wmOperator *op)
 		BKE_report(op->reports, RPT_ERROR, "No fullscreen areas were found");
 		return OPERATOR_CANCELLED;
 	}
-	
-	ED_screen_full_restore(C, sa);
-	
+
+	ED_screen_full_prevspace(C, sa);
+
 	return OPERATOR_FINISHED;
 }
 

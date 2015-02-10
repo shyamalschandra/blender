@@ -1047,6 +1047,8 @@ void BKE_mesh_remap_calc_loops_from_dm(
 				}
 			}
 			if (need_lnors_dst) {
+				short (*custom_nors_dst)[2] = CustomData_get_layer(ldata_dst, CD_CUSTOMLOOPNORMAL);
+
 				/* Cache poly nors into a temp CDLayer. */
 				loop_nors_dst = CustomData_get_layer(ldata_dst, CD_NORMAL);
 				if (dirty_nors_dst || !loop_nors_dst) {
@@ -1056,8 +1058,8 @@ void BKE_mesh_remap_calc_loops_from_dm(
 					}
 					BKE_mesh_normals_loop_split(verts_dst, numverts_dst, edges_dst, numedges_dst,
 					                            loops_dst, loop_nors_dst, numloops_dst,
-					                            polys_dst, poly_nors_dst, numpolys_dst,
-					                            use_split_nors_dst, split_angle_dst);
+					                            polys_dst, (const float (*)[3])poly_nors_dst, numpolys_dst,
+					                            use_split_nors_dst, split_angle_dst, NULL, custom_nors_dst, NULL);
 				}
 			}
 			if (need_pnors_src || need_lnors_src) {
@@ -1427,7 +1429,7 @@ void BKE_mesh_remap_calc_loops_from_dm(
 					best_island = use_islands ? island_store.islands[best_island_index] : NULL;
 					as_graph = &as_graphdata[best_island_index];
 					poly_island_index_map = (int *)as_graph->custom_data;
-					BLI_astar_solution_init(as_graph, &as_solution, false);
+					BLI_astar_solution_init(as_graph, &as_solution, NULL);
 				}
 
 				for (plidx_dst = 0; plidx_dst < mp_dst->totloop; plidx_dst++) {
