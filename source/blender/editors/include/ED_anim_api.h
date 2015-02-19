@@ -490,7 +490,7 @@ void ANIM_flush_setting_anim_channels(bAnimContext *ac, ListBase *anim_data, bAn
 
 
 /* Deselect all animation channels */
-void ANIM_deselect_anim_channels(bAnimContext *ac, void *data, eAnimCont_Types datatype, bool test, eAnimChannels_SetFlag sel);
+short ANIM_deselect_anim_channels(bAnimContext *ac, void *data, eAnimCont_Types datatype, bool test, eAnimChannels_SetFlag sel);
 
 /* Set the 'active' channel of type channel_type, in the given action */
 void ANIM_set_active_channel(bAnimContext *ac, void *data, eAnimCont_Types datatype, eAnimFilter_Flags filter, void *channel_data, eAnim_ChannelType channel_type);
@@ -584,6 +584,8 @@ void ANIM_nla_mapping_apply_fcurve(struct AnimData *adt, struct FCurve *fcu, boo
 /* Perform auto-blending/extend refreshes after some operations */
 // NOTE: defined in space_nla/nla_edit.c, not in animation/
 void ED_nla_postop_refresh(bAnimContext *ac);
+
+void graph_channel_focus_selection(struct bContext *C, bAnimContext *ac, ListBase *anim_data, const bool unhide);
 
 /* ------------- Unit Conversion Mappings ------------- */
 /* anim_draw.c */

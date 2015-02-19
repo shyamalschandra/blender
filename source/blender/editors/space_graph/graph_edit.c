@@ -167,6 +167,51 @@ void get_graph_keyframe_extents(bAnimContext *ac, float *xmin, float *xmax, floa
 	}
 }
 
+
+/* ****************** Auto-Focus Channel ****************** */
+
+void graph_channel_focus_selection(bContext *C, bAnimContext *ac, ListBase *anim_data, const bool unhide)
+{
+	const SpaceIpo *sipo = CTX_wm_space_graph(C);
+	bAnimListElem *ale;
+	bool is_any_visible = false;
+
+	/* graph editor only */
+	if (sipo == NULL)
+		return;
+
+	/* only if auto-focus channels is enabled */
+	if ((sipo->flag & SIPO_AUTO_FOCUS_CHANNELS) == 0)
+		return;
+
+	for (ale = anim_data->first; ale; ale = ale->next) {
+		/* make selected elements visible */
+		if (ANIM_channel_setting_get(ac, ale, ACHANNEL_SETTING_SELECT)) {
+			/* unhiding selected channels and thereby overriding their visibility is not always wanted */
+			if (unhide) {
+				ANIM_channel_setting_set(ac, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_ADD);
+				ANIM_flush_setting_anim_channels(ac, anim_data, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_ADD);
+			}
+		}
+		/* make unselected elements hidden */
+		else {
+			ANIM_channel_setting_set(ac, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_CLEAR);
+			ANIM_flush_setting_anim_channels(ac, anim_data, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_CLEAR);
+		}
+
+		if (!(ELEM(ale->type, ANIMTYPE_OBJECT, ANIMTYPE_FILLACTD)) && /* XXX more cases? - need help! */
+		    (ANIM_channel_setting_get(ac, ale, ACHANNEL_SETTING_VISIBLE)))
+		{
+			is_any_visible = true;
+		}
+	}
+
+	/* align the view to visible curves using view_all operator, but only if there is a visible channel */
+	if (is_any_visible) {
+		WM_operator_name_call(C, "GRAPH_OT_view_all", WM_OP_EXEC_REGION_WIN, NULL);
+	}
+}
+
 /* ****************** Automatic Preview-Range Operator ****************** */
 
 static int graphkeys_previewrange_exec(bContext *C, wmOperator *UNUSED(op))

@@ -221,8 +221,9 @@ void ANIM_set_active_channel(bAnimContext *ac, void *data, eAnimCont_Types datat
  *	- datatype: the type of data that 'data' represents (eAnimCont_Types)
  *	- test: check if deselecting instead of selecting
  *	- sel: eAnimChannels_SetFlag;
+ * returns sel to give feedback on the type of the performed selection
  */
-void ANIM_deselect_anim_channels(bAnimContext *ac, void *data, eAnimCont_Types datatype, bool test, eAnimChannels_SetFlag sel)
+short ANIM_deselect_anim_channels(bAnimContext *ac, void *data, eAnimCont_Types datatype, bool test, eAnimChannels_SetFlag sel)
 {
 	ListBase anim_data = {NULL, NULL};
 	bAnimListElem *ale;
@@ -405,6 +406,8 @@ void ANIM_deselect_anim_channels(bAnimContext *ac, void *data, eAnimCont_Types d
 	
 	/* Cleanup */
 	ANIM_animdata_freelist(&anim_data);
+	
+	return sel;
 }
 
 /* ---------------------------- Graph Editor ------------------------------------- */
@@ -2222,24 +2225,40 @@ static void ANIM_OT_channels_find(wmOperatorType *ot)
 
 static int animchannels_deselectall_exec(bContext *C, wmOperator *op)
 {
+	ListBase anim_data = {NULL, NULL};
 	bAnimContext ac;
+	int filter;
 	
 	/* get editor data */
 	if (ANIM_animdata_get_context(C, &ac) == 0)
 		return OPERATOR_CANCELLED;
+	
+	filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_LIST_CHANNELS);
+	ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
 		
 	/* 'standard' behavior - check if selected, then apply relevant selection */
-	if (RNA_boolean_get(op->ptr, "invert"))
+	if (RNA_boolean_get(op->ptr, "invert")) {
 		ANIM_deselect_anim_channels(&ac, ac.data, ac.datatype, false, ACHANNEL_SETFLAG_INVERT);
-	else
-		ANIM_deselect_anim_channels(&ac, ac.data, ac.datatype, true, ACHANNEL_SETFLAG_ADD);
+		
+		graph_channel_focus_selection(C, &ac, &anim_data, true);
+	}
+	else {
+		short setflag = ANIM_deselect_anim_channels(&ac, ac.data, ac.datatype, true, ACHANNEL_SETFLAG_ADD);
+		
+		/* don't use "Auto-Focus Channels" after deselecting */
+		if (setflag != ACHANNEL_SETFLAG_CLEAR)
+			graph_channel_focus_selection(C, &ac, &anim_data, false);
+	}
+	
+	/* free channels */
+	ANIM_animdata_freelist(&anim_data);
 	
 	/* send notifier that things have changed */
 	WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_SELECTED, NULL);
 	
 	return OPERATOR_FINISHED;
 }
- 
+
 static void ANIM_OT_channels_select_all_toggle(wmOperatorType *ot)
 {
 	/* identifiers */
@@ -2260,7 +2279,7 @@ static void ANIM_OT_channels_select_all_toggle(wmOperatorType *ot)
 
 /* ******************** Borderselect Operator *********************** */
 
-static void borderselect_anim_channels(bAnimContext *ac, rcti *rect, short selectmode)
+static void borderselect_anim_channels(bContext *C, bAnimContext *ac, rcti *rect, short selectmode)
 {
 	ListBase anim_data = {NULL, NULL};
 	bAnimListElem *ale;
@@ -2354,6 +2373,8 @@ static void borderselect_anim_channels(bAnimContext *ac, rcti *rect, short selec
 		ymax = ymin;
 	}
 	
+	graph_channel_focus_selection(C, ac, &anim_data, false);
+	
 	/* cleanup */
 	ANIM_animdata_freelist(&anim_data);
 }
@@ -2387,7 +2408,7 @@ static int animchannels_borderselect_exec(bContext *C, wmOperator *op)
 		selectmode = ACHANNEL_SETFLAG_CLEAR;
 	
 	/* apply borderselect animation channels */
-	borderselect_anim_channels(&ac, &rect, selectmode);
+	borderselect_anim_channels(C, &ac, &rect, selectmode);
 	
 	/* send notifier that things have changed */
 	WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_SELECTED, NULL);
@@ -2838,6 +2859,8 @@ static int mouse_anim_channels(bContext *C, bAnimContext *ac, int channel_index,
 				printf("Error: Invalid channel type in mouse_anim_channels()\n");
 			break;
 	}
+	
+	graph_channel_focus_selection(C, ac, &anim_data, true);
 	
 	/* free channels */
 	ANIM_animdata_freelist(&anim_data);

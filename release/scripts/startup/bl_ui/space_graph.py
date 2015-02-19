@@ -94,6 +94,7 @@ class GRAPH_MT_view(Menu):
         layout.prop(st, "show_sliders")
         layout.prop(st, "show_group_colors")
         layout.prop(st, "use_auto_merge_keyframes")
+        layout.prop(st, "use_auto_focus_channels")
 
         layout.separator()
         layout.prop(st, "use_beauty_drawing")
