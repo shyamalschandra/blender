@@ -96,7 +96,7 @@ typedef struct intlists {       /* list of list of integers */
 
 typedef struct Box {			/* an AABB with pointer to metalelem */
 	float min[3], max[3];
-	MetaElem *ml;
+	const MetaElem *ml;
 } Box;
 
 typedef struct MetaballBVHNode {	/* BVH node */
@@ -154,7 +154,7 @@ static void make_union(const BoundBox *a, const Box *b, Box *r_out)
 	r_out->max[2] = max_ff(a->vec[6][2], b->max[2]);
 }
 
-static void make_box_from_ml(Box *r, MetaElem *ml)
+static void make_box_from_ml(Box *r, const MetaElem *ml)
 {
 	copy_v3_v3(r->max, ml->bb->vec[6]);
 	copy_v3_v3(r->min, ml->bb->vec[0]);
@@ -296,7 +296,7 @@ static void build_bvh_spatial(
  * R = metaball radius
  * s - metaball stiffness
  */
-static float densfunc(MetaElem *ball, float x, float y, float z)
+static float densfunc(const MetaElem *ball, float x, float y, float z)
 {
 	float dist2;
 	float dvec[3] = {x, y, z};
@@ -1003,7 +1003,7 @@ static void closest_latice(int r[3], const float pos[3], const float size)
  */
 static void find_first_points(PROCESS *process, const unsigned int em)
 {
-	MetaElem *ml;
+	const MetaElem *ml;
 	int center[3], lbn[3], rtf[3], it[3], dir;
 	float tmp[3], a, b;
 
@@ -1070,7 +1070,7 @@ static void init_meta(EvaluationContext *eval_ctx, PROCESS *process, Scene *scen
 	Base *base;
 	Object *bob;
 	MetaBall *mb;
-	MetaElem *ml;
+	const MetaElem *ml;
 	float obinv[4][4], obmat[4][4];
 	unsigned int i;
 	int obnr, zero_size = 0;
