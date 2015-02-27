@@ -51,8 +51,9 @@
 #include "BKE_depsgraph.h"
 #include "BKE_scene.h"
 #include "BKE_displist.h"
-#include "BKE_mball.h"
 #include "BKE_mball_tessellate.h"  /* own include */
+
+#include "BLI_strict_flags.h"
 
 /* Data types */
 
@@ -106,16 +107,16 @@ typedef struct MetaballBVHNode {	/* BVH node */
 typedef struct process {        /* parameters, storage */
 	float thresh, size;			/* mball threshold, single cube size */
 	float delta;				/* small delta for calculating normals */
-	int converge_res;			/* converge procedure resolution (more = slower) */
+	unsigned int converge_res;	/* converge procedure resolution (more = slower) */
 
 	MetaElem **mainb;			/* array of all metaelems */
-	int totelem, mem;			/* number of metaelems */
+	unsigned int totelem, mem;	/* number of metaelems */
 
 	MetaballBVHNode metaball_bvh; /* The simplest bvh */
 	Box allbb;                   /* Bounding box of all metaelems */
 
 	MetaballBVHNode **bvh_queue; /* Queue used during bvh traversal */
-	int bvh_queue_size;
+	unsigned int bvh_queue_size;
 
 	CUBES *cubes;               /* stack of cubes waiting for polygonization */
 	CENTERLIST **centers;       /* cube center hash table */
@@ -123,11 +124,12 @@ typedef struct process {        /* parameters, storage */
 	EDGELIST **edges;           /* edge and vertex id hash table */
 
 	int *indices;				/* output indices */
-	int totindex;				/* size of memory allocated for indices */
-	int curindex;				/* number of currently added indices */
+	unsigned int totindex;		/* size of memory allocated for indices */
+	unsigned int curindex;		/* number of currently added indices */
 
 	float *co, *no;				/* surface vertices - positions and normals */
-	int totvertex, curvertex;	/* memory size, currently added vertices */
+	unsigned int totvertex;		/* memory size */
+	unsigned int curvertex;		/* currently added vertices */
 
 	/* memory allocation from common pool */
 	MemArena *pgn_elements;
@@ -164,16 +166,17 @@ static void make_box_from_ml(Box *r, MetaElem *ml)
  * where centroids of elements in the [start, i) segment lie "on the right side" of div,
  * and elements in the [i, end) segment lie "on the left"
  */
-static int partition_mainb(PROCESS *process, int start, int end, int s, float div)
+static unsigned int partition_mainb(PROCESS *process, unsigned int start, unsigned int end, unsigned int s, float div)
 {
-	int i = start, j = end - 1;
+	unsigned int i = start, j = end - 1;
 	div *= 2.0f;
 
 	while (1) {
 		while (i < j && process->mainb[i]->bb->vec[6][s] + process->mainb[i]->bb->vec[0][s] < div) i++;
 		while (j > i && div < process->mainb[j]->bb->vec[6][s] + process->mainb[j]->bb->vec[0][s]) j--;
 
-		if (i >= j)	break;
+		if (i >= j)
+			break;
 
 		SWAP(MetaElem *, process->mainb[i], process->mainb[j]);
 		i++; j--;
@@ -187,9 +190,9 @@ static int partition_mainb(PROCESS *process, int start, int end, int s, float di
 /**
  * Recursively builds a BVH, dividing elements along the middle of the longest axis of allbox.
  */
-static void build_bvh_spatial(PROCESS *process, MetaballBVHNode *node, int start, int end, Box allbox)
+static void build_bvh_spatial(PROCESS *process, MetaballBVHNode *node, unsigned int start, unsigned int end, Box allbox)
 {
-	int part, j, s;
+	unsigned int part, j, s;
 	float dim[3], div;
 
 	/* Maximum bvh queue size is number of nodes which are made, equals calls to this function. */
@@ -387,7 +390,7 @@ static void make_face(PROCESS *process, int i1, int i2, int i3, int i4)
 
 	if (process->totindex == process->curindex) {
 		process->totindex += 4096;
-		newi = MEM_mallocN(4 * sizeof(int) * process->totindex, "vertindex");
+		newi = MEM_mallocN(sizeof(int[4]) * process->totindex, "vertindex");
 
 		if (process->indices) {
 			memcpy(newi, process->indices, 4 * sizeof(int) * process->curindex);
@@ -759,7 +762,7 @@ static void setedge(
         int i2, int j2, int k2,
         int vid)
 {
-	unsigned int index;
+	int index;
 	EDGELIST *newe;
 
 	if (i1 > i2 || (i1 == i2 && (j1 > j2 || (j1 == j2 && k1 > k2)))) {
@@ -909,7 +912,7 @@ static int vertid(PROCESS *process, const CORNER *c1, const CORNER *c2)
 #endif
 
 	addtovertices(process, v, no);            /* save vertex */
-	vid = process->curvertex - 1;
+	vid = (int)process->curvertex - 1;
 	setedge(process, c1->i, c1->j, c1->k, c2->i, c2->j, c2->k, vid);
 
 	return vid;
@@ -922,9 +925,11 @@ static int vertid(PROCESS *process, const CORNER *c1, const CORNER *c2)
 static void converge(PROCESS *process, CORNER c1, CORNER c2, float r_p[3])
 {
 	float tmp, dens;
-	int i;
+	unsigned int i;
 
-	if (c1.value < c2.value) SWAP(CORNER, c1, c2);
+	if (c1.value < c2.value) {
+		SWAP(CORNER, c1, c2);
+	}
 
 	for (i = 0; i < process->converge_res; i++) {
 		interp_v3_v3v3(r_p, c1.co, c2.co, 0.5f);
@@ -994,7 +999,7 @@ static void closest_latice(int r[3], const float pos[3], const float size)
  * it would have to search for 26 cubes (not only along the axes,
  * but also on cube diagonals and through the middle of edges).
  */
-static void find_first_points(PROCESS *process, int em)
+static void find_first_points(PROCESS *process, const unsigned int em)
 {
 	MetaElem *ml;
 	int center[3], lbn[3], rtf[3], it[3], dir;
@@ -1032,7 +1037,7 @@ static void find_first_points(PROCESS *process, int em)
 static void polygonize(PROCESS *process)
 {
 	CUBE c;
-	int i;
+	unsigned int i;
 
 	process->centers = MEM_callocN(HASHSIZE * sizeof(CENTERLIST *), "mbproc->centers");
 	process->corners = MEM_callocN(HASHSIZE * sizeof(CORNER *), "mbproc->corners");
@@ -1065,7 +1070,8 @@ static void init_meta(EvaluationContext *eval_ctx, PROCESS *process, Scene *scen
 	MetaBall *mb;
 	MetaElem *ml;
 	float obinv[4][4], obmat[4][4];
-	int i, obnr, zero_size = 0;
+	unsigned int i;
+	int obnr, zero_size = 0;
 	char obname[MAX_ID_NAME];
 	SceneBaseIter iter;
 
@@ -1242,7 +1248,7 @@ void BKE_mball_polygonize(EvaluationContext *eval_ctx, Scene *scene, Object *ob,
 {
 	MetaBall *mb;
 	DispList *dl;
-	int a;
+	unsigned int a;
 	PROCESS process = {0};
 
 	mb = ob->data;
@@ -1290,12 +1296,14 @@ void BKE_mball_polygonize(EvaluationContext *eval_ctx, Scene *scene, Object *ob,
 				dl = MEM_callocN(sizeof(DispList), "mballdisp");
 				BLI_addtail(dispbase, dl);
 				dl->type = DL_INDEX4;
-				dl->nr = process.curvertex;
-				dl->parts = process.curindex;
+				dl->nr = (int)process.curvertex;
+				dl->parts = (int)process.curindex;
 
 				dl->index = process.indices;
 
-				for (a = 0; a < process.curvertex; a++) normalize_v3(&process.no[a * 3]);
+				for (a = 0; a < process.curvertex; a++) {
+					normalize_v3(&process.no[a * 3]);
+				}
 
 				dl->verts = process.co;
 				dl->nors = process.no;
