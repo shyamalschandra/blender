@@ -123,7 +123,7 @@ typedef struct process {        /* parameters, storage */
 	CORNER **corners;           /* corner value hash table */
 	EDGELIST **edges;           /* edge and vertex id hash table */
 
-	int *indices;				/* output indices */
+	int (*indices)[4];          /* output indices */
 	unsigned int totindex;		/* size of memory allocated for indices */
 	unsigned int curindex;		/* number of currently added indices */
 
@@ -389,24 +389,18 @@ static float metaball(PROCESS *process, float x, float y, float z)
  */
 static void make_face(PROCESS *process, int i1, int i2, int i3, int i4)
 {
-	int *newi, *cur;
+	int *cur;
 
 #ifdef MB_ACCUM_NORMAL
 	float n[3];
 #endif
 
-	if (process->totindex == process->curindex) {
+	if (UNLIKELY(process->totindex == process->curindex)) {
 		process->totindex += 4096;
-		newi = MEM_mallocN(sizeof(int[4]) * process->totindex, "vertindex");
-
-		if (process->indices) {
-			memcpy(newi, process->indices, 4 * sizeof(int) * process->curindex);
-			MEM_freeN(process->indices);
-		}
-		process->indices = newi;
+		process->indices = MEM_reallocN(process->indices, sizeof(int[4]) * process->totindex);
 	}
 
-	cur = process->indices + 4 * process->curindex++;
+	cur = process->indices[process->curindex++];
 
 	/* displists now support array drawing, we treat tri's as fake quad */
 
@@ -1301,7 +1295,7 @@ void BKE_mball_polygonize(EvaluationContext *eval_ctx, Scene *scene, Object *ob,
 				dl->nr = (int)process.curvertex;
 				dl->parts = (int)process.curindex;
 
-				dl->index = process.indices;
+				dl->index = (int *)process.indices;
 
 				for (a = 0; a < process.curvertex; a++) {
 					normalize_v3(process.no[a]);
