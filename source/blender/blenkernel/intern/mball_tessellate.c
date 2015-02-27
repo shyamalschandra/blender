@@ -139,19 +139,19 @@ typedef struct process {        /* parameters, storage */
 static int vertid(PROCESS *process, const CORNER *c1, const CORNER *c2);
 static void add_cube(PROCESS *process, int i, int j, int k);
 static void make_face(PROCESS *process, int i1, int i2, int i3, int i4);
-static void converge(PROCESS *process, CORNER c1, CORNER c2, float r_p[3]);
+static void converge(PROCESS *process, const CORNER *c1, const CORNER *c2, float r_p[3]);
 
 /* ******************* SIMPLE BVH ********************* */
 
-static void make_union(BoundBox *a, Box *b, Box *out)
+static void make_union(const BoundBox *a, const Box *b, Box *r_out)
 {
-	out->min[0] = min_ff(a->vec[0][0], b->min[0]);
-	out->min[1] = min_ff(a->vec[0][1], b->min[1]);
-	out->min[2] = min_ff(a->vec[0][2], b->min[2]);
+	r_out->min[0] = min_ff(a->vec[0][0], b->min[0]);
+	r_out->min[1] = min_ff(a->vec[0][1], b->min[1]);
+	r_out->min[2] = min_ff(a->vec[0][2], b->min[2]);
 
-	out->max[0] = max_ff(a->vec[6][0], b->max[0]);
-	out->max[1] = max_ff(a->vec[6][1], b->max[1]);
-	out->max[2] = max_ff(a->vec[6][2], b->max[2]);
+	r_out->max[0] = max_ff(a->vec[6][0], b->max[0]);
+	r_out->max[1] = max_ff(a->vec[6][1], b->max[1]);
+	r_out->max[2] = max_ff(a->vec[6][2], b->max[2]);
 }
 
 static void make_box_from_ml(Box *r, MetaElem *ml)
@@ -190,7 +190,9 @@ static unsigned int partition_mainb(PROCESS *process, unsigned int start, unsign
 /**
  * Recursively builds a BVH, dividing elements along the middle of the longest axis of allbox.
  */
-static void build_bvh_spatial(PROCESS *process, MetaballBVHNode *node, unsigned int start, unsigned int end, Box allbox)
+static void build_bvh_spatial(
+        PROCESS *process, MetaballBVHNode *node,
+        unsigned int start, unsigned int end, const Box *allbox)
 {
 	unsigned int part, j, s;
 	float dim[3], div;
@@ -198,15 +200,15 @@ static void build_bvh_spatial(PROCESS *process, MetaballBVHNode *node, unsigned 
 	/* Maximum bvh queue size is number of nodes which are made, equals calls to this function. */
 	process->bvh_queue_size++;
 
-	dim[0] = allbox.max[0] - allbox.min[0];
-	dim[1] = allbox.max[1] - allbox.min[1];
-	dim[2] = allbox.max[2] - allbox.min[2];
+	dim[0] = allbox->max[0] - allbox->min[0];
+	dim[1] = allbox->max[1] - allbox->min[1];
+	dim[2] = allbox->max[2] - allbox->min[2];
 
 	s = 0;
 	if (dim[1] > dim[0] && dim[1] > dim[2]) s = 1;
 	else if (dim[2] > dim[1] && dim[2] > dim[0]) s = 2;
 
-	div = allbox.min[s] + (dim[s] / 2.0f);
+	div = allbox->min[s] + (dim[s] / 2.0f);
 
 	part = partition_mainb(process, start, end, s, div);
 
@@ -218,7 +220,7 @@ static void build_bvh_spatial(PROCESS *process, MetaballBVHNode *node, unsigned 
 			make_union(process->mainb[j]->bb, &node->bb[0], &node->bb[0]);
 
 		node->child[0] = BLI_memarena_alloc(process->pgn_elements, sizeof(MetaballBVHNode));
-		build_bvh_spatial(process, node->child[0], start, part, node->bb[0]);
+		build_bvh_spatial(process, node->child[0], start, part, &node->bb[0]);
 	}
 
 	node->child[1] = NULL;
@@ -230,7 +232,7 @@ static void build_bvh_spatial(PROCESS *process, MetaballBVHNode *node, unsigned 
 				make_union(process->mainb[j]->bb, &node->bb[1], &node->bb[1]);
 
 			node->child[1] = BLI_memarena_alloc(process->pgn_elements, sizeof(MetaballBVHNode));
-			build_bvh_spatial(process, node->child[1], part, end, node->bb[1]);
+			build_bvh_spatial(process, node->child[1], part, end, &node->bb[1]);
 		}
 	}
 	else INIT_MINMAX(node->bb[1].min, node->bb[1].max);
@@ -903,7 +905,7 @@ static int vertid(PROCESS *process, const CORNER *c1, const CORNER *c2)
 
 	if (vid != -1) return vid;  /* previously computed */
 
-	converge(process, *c1, *c2, v); /* position */
+	converge(process, c1, c2, v);  /* position */
 
 #ifdef MB_ACCUM_NORMAL
 	no[0] = no[1] = no[2] = 0.0f;
@@ -922,31 +924,43 @@ static int vertid(PROCESS *process, const CORNER *c1, const CORNER *c2)
  * Given two corners, computes approximation of surface intersection point between them.
  * In case of small threshold, do bisection.
  */
-static void converge(PROCESS *process, CORNER c1, CORNER c2, float r_p[3])
+static void converge(PROCESS *process, const CORNER *c1, const CORNER *c2, float r_p[3])
 {
 	float tmp, dens;
 	unsigned int i;
+	float c1_value, c1_co[3];
+	float c2_value, c2_co[3];
 
-	if (c1.value < c2.value) {
-		SWAP(CORNER, c1, c2);
+	if (c1->value < c2->value) {
+		c1_value = c2->value;
+		copy_v3_v3(c1_co, c2->co);
+		c2_value = c1->value;
+		copy_v3_v3(c2_co, c1->co);
+	}
+	else {
+		c1_value = c1->value;
+		copy_v3_v3(c1_co, c1->co);
+		c2_value = c2->value;
+		copy_v3_v3(c2_co, c2->co);
 	}
 
+
 	for (i = 0; i < process->converge_res; i++) {
-		interp_v3_v3v3(r_p, c1.co, c2.co, 0.5f);
+		interp_v3_v3v3(r_p, c1_co, c2_co, 0.5f);
 		dens = metaball(process, r_p[0], r_p[1], r_p[2]);
 
 		if (dens > 0.0f) {
-			c1.value = dens;
-			copy_v3_v3(c1.co, r_p);
+			c1_value = dens;
+			copy_v3_v3(c1_co, r_p);
 		}
 		else {
-			c2.value = dens;
-			copy_v3_v3(c2.co, r_p);
+			c2_value = dens;
+			copy_v3_v3(c2_co, r_p);
 		}
 	}
 
-	tmp = -c1.value / (c2.value - c1.value);
-	interp_v3_v3v3(r_p, c1.co, c2.co, tmp);
+	tmp = -c1_value / (c2_value - c1_value);
+	interp_v3_v3v3(r_p, c1_co, c2_co, tmp);
 }
 
 /**
@@ -1281,7 +1295,7 @@ void BKE_mball_polygonize(EvaluationContext *eval_ctx, Scene *scene, Object *ob,
 	init_meta(eval_ctx, &process, scene, ob);
 
 	if (process.totelem > 0) {
-		build_bvh_spatial(&process, &process.metaball_bvh, 0, process.totelem, process.allbb);
+		build_bvh_spatial(&process, &process.metaball_bvh, 0, process.totelem, &process.allbb);
 
 		/* don't polygonize metaballs with too high resolution (base mball to small)
 		* note: Eps was 0.0001f but this was giving problems for blood animation for durian, using 0.00001f */
