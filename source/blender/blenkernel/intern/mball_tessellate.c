@@ -93,13 +93,13 @@ typedef struct intlists {       /* list of list of integers */
 	struct intlists *next;      /* remaining elements */
 } INTLISTS;
 
-typedef struct Box{				/* an AABB with pointer to metalelem */
+typedef struct Box {			/* an AABB with pointer to metalelem */
 	float min[3], max[3];
 	MetaElem *ml;
 } Box;
 
-typedef struct MetaballBVHNode{	/* BVH node */
-	Box bb[2];					/* AABB of children */
+typedef struct MetaballBVHNode {	/* BVH node */
+	Box bb[2];						/* AABB of children */
 	struct MetaballBVHNode *child[2];
 } MetaballBVHNode;
 
@@ -159,9 +159,11 @@ static void make_box_from_ml(Box *r, MetaElem *ml)
 	r->ml = ml;
 }
 
-/* Partitions part of mainb array [start, end) along axis s. Returns i,
-* where centroids of elements in the [start, i) segment lie "on the right side" of div,
-* and elements in the [i, end) segment lie "on the left" */
+/**
+ * Partitions part of mainb array [start, end) along axis s. Returns i,
+ * where centroids of elements in the [start, i) segment lie "on the right side" of div,
+ * and elements in the [i, end) segment lie "on the left"
+ */
 static int partition_mainb(PROCESS *process, int start, int end, int s, float div)
 {
 	int i = start, j = end - 1;
@@ -173,7 +175,7 @@ static int partition_mainb(PROCESS *process, int start, int end, int s, float di
 
 		if (i >= j)	break;
 
-		SWAP(MetaElem*, process->mainb[i], process->mainb[j]);
+		SWAP(MetaElem *, process->mainb[i], process->mainb[j]);
 		i++; j--;
 	}
 
@@ -182,7 +184,9 @@ static int partition_mainb(PROCESS *process, int start, int end, int s, float di
 	return i;
 }
 
-/* Recursively builds a BVH, dividing elements along the middle of the longest axis of allbox. */
+/**
+ * Recursively builds a BVH, dividing elements along the middle of the longest axis of allbox.
+ */
 static void build_bvh_spatial(PROCESS *process, MetaballBVHNode *node, int start, int end, Box allbox)
 {
 	int part, j, s;
@@ -231,7 +235,8 @@ static void build_bvh_spatial(PROCESS *process, MetaballBVHNode *node, int start
 
 /* ******************** ARITH ************************* */
 
-/* BASED AT CODE (but mostly rewritten) :
+/**
+ * BASED AT CODE (but mostly rewritten) :
  * C code from the article
  * "An Implicit Surface Polygonizer"
  * by Jules Bloomenthal, jbloom@beauty.gmu.edu
@@ -240,7 +245,8 @@ static void build_bvh_spatial(PROCESS *process, MetaballBVHNode *node, int start
  * Authored by Jules Bloomenthal, Xerox PARC.
  * Copyright (c) Xerox Corporation, 1991.  All rights reserved.
  * Permission is granted to reproduce, use and distribute this code for
- * any and all purposes, provided that this notice appears in all copies. */
+ * any and all purposes, provided that this notice appears in all copies.
+ */
 
 #define L   0  /* left direction:	-x, -i */
 #define R   1  /* right direction:	+x, +i */
@@ -257,8 +263,10 @@ static void build_bvh_spatial(PROCESS *process, MetaballBVHNode *node, int start
 #define RTN 6  /* right top near corner    */
 #define RTF 7  /* right top far corner     */
 
-/* the LBN corner of cube (i, j, k), corresponds with location
- * (i-0.5)*size, (j-0.5)*size, (k-0.5)*size) */
+/**
+ * the LBN corner of cube (i, j, k), corresponds with location
+ * (i-0.5)*size, (j-0.5)*size, (k-0.5)*size)
+ */
 
 #define HASHBIT     (5)
 #define HASHSIZE    (size_t)(1 << (3 * HASHBIT))   /*! < hash table size (32768) */
@@ -266,16 +274,18 @@ static void build_bvh_spatial(PROCESS *process, MetaballBVHNode *node, int start
 #define HASH(i, j, k) ((((( (i) & 31) << 5) | ( (j) & 31)) << 5) | ( (k) & 31) )
 
 #define MB_BIT(i, bit) (((i) >> (bit)) & 1)
-#define FLIP(i, bit) ((i) ^ 1 << (bit)) /* flip the given bit of i */
+// #define FLIP(i, bit) ((i) ^ 1 << (bit)) /* flip the given bit of i */
 
 /* ******************** DENSITY COPMPUTATION ********************* */
 
-/* Computes density from given metaball at given position.
-* Metaball equation is: (1 - r^2 / R^2)^3 * s
-* r = distance from center
-* R = metaball radius
-* s - metaball stiffness
-**/
+/**
+ * Computes density from given metaball at given position.
+ * Metaball equation is: ``(1 - r^2 / R^2)^3 * s``
+ *
+ * r = distance from center
+ * R = metaball radius
+ * s - metaball stiffness
+ */
 static float densfunc(MetaElem *ball, float x, float y, float z)
 {
 	float dist2;
@@ -334,8 +344,10 @@ static float densfunc(MetaElem *ball, float x, float y, float z)
 	return (dist2 < 0.0f) ? 0.0f : (ball->s * dist2 * dist2 * dist2);
 }
 
-/* Computes density at given position form all metaballs which contain this point in their box.
-* Traverses BVH using a queue. */
+/**
+ * Computes density at given position form all metaballs which contain this point in their box.
+ * Traverses BVH using a queue.
+ */
 static float metaball(PROCESS *process, float x, float y, float z)
 {
 	int i;
@@ -349,9 +361,9 @@ static float metaball(PROCESS *process, float x, float y, float z)
 		node = process->bvh_queue[back++];
 
 		for (i = 0; i < 2; i++) {
-			if (node->bb[i].min[0] <= x && node->bb[i].max[0] >= x &&
-				node->bb[i].min[1] <= y && node->bb[i].max[1] >= y &&
-				node->bb[i].min[2] <= z && node->bb[i].max[2] >= z)
+			if ((node->bb[i].min[0] <= x) && (node->bb[i].max[0] >= x) &&
+			    (node->bb[i].min[1] <= y) && (node->bb[i].max[1] >= y) &&
+			    (node->bb[i].min[2] <= z) && (node->bb[i].max[2] >= z))
 			{
 				if (node->child[i])	process->bvh_queue[front++] = node->child[i];
 				else dens += densfunc(node->bb[i].ml, x, y, z);
@@ -362,7 +374,9 @@ static float metaball(PROCESS *process, float x, float y, float z)
 	return process->thresh - dens;
 }
 
-/* Adds face to indices, expands memory if needed. */
+/**
+ * Adds face to indices, expands memory if needed.
+ */
 static void make_face(PROCESS *process, int i1, int i2, int i3, int i4)
 {
 	int *newi, *cur;
@@ -400,13 +414,15 @@ static void make_face(PROCESS *process, int i1, int i2, int i3, int i4)
 #ifdef MB_ACCUM_NORMAL
 	if (i4 == 0) {
 		normal_tri_v3(n, &process->co[i1 * 3], &process->co[i2 * 3], &process->co[i3 * 3]);
-		accumulate_vertex_normals(&process->no[i1 * 3], &process->no[i2 * 3], &process->no[i3 * 3], NULL, n,
-								  &process->co[i1 * 3], &process->co[i2 * 3], &process->co[i3 * 3], NULL);
+		accumulate_vertex_normals(
+		        &process->no[i1 * 3], &process->no[i2 * 3], &process->no[i3 * 3], NULL, n,
+		        &process->co[i1 * 3], &process->co[i2 * 3], &process->co[i3 * 3], NULL);
 	}
 	else {
 		normal_quad_v3(n, &process->co[i1 * 3], &process->co[i2 * 3], &process->co[i3 * 3], &process->co[i4 * 3]);
-		accumulate_vertex_normals(&process->no[i1 * 3], &process->no[i2 * 3], &process->no[i3 * 3], &process->no[i4 * 3], n,
-								  &process->co[i1 * 3], &process->co[i2 * 3], &process->co[i3 * 3], &process->co[i4 * 3]);
+		accumulate_vertex_normals(
+		        &process->no[i1 * 3], &process->no[i2 * 3], &process->no[i3 * 3], &process->no[i4 * 3], n,
+		        &process->co[i1 * 3], &process->co[i2 * 3], &process->co[i3 * 3], &process->co[i4 * 3]);
 	}
 #endif
 
@@ -459,7 +475,9 @@ static int rightface[12] = {
 };
 /* face on right when going corner1 to corner2 */
 
-/* docube: triangulate the cube directly, without decomposition */
+/**
+ * triangulate the cube directly, without decomposition
+ */
 static void docube(PROCESS *process, CUBE *cube)
 {
 	INTLISTS *polys;
@@ -539,8 +557,10 @@ static void docube(PROCESS *process, CUBE *cube)
 	}
 }
 
-/* setcorner: return corner with the given lattice location
-* set (and cache) its function value */
+/**
+ * return corner with the given lattice location
+ * set (and cache) its function value
+ */
 static CORNER *setcorner(PROCESS *process, int i, int j, int k)
 {
 	/* for speed, do corner value caching here */
@@ -557,7 +577,7 @@ static CORNER *setcorner(PROCESS *process, int i, int j, int k)
 		}
 	}
 
-	c = (CORNER *)BLI_memarena_alloc(process->pgn_elements, sizeof(CORNER));
+	c = BLI_memarena_alloc(process->pgn_elements, sizeof(CORNER));
 
 	c->i = i;
 	c->co[0] = ((float)i - 0.5f) * process->size;
@@ -574,7 +594,9 @@ static CORNER *setcorner(PROCESS *process, int i, int j, int k)
 	return c;
 }
 
-/* nextcwedge: return next clockwise edge from given edge around given face */
+/**
+ * return next clockwise edge from given edge around given face
+ */
 static int nextcwedge(int edge, int face)
 {
 	switch (edge) {
@@ -606,14 +628,18 @@ static int nextcwedge(int edge, int face)
 	return 0;
 }
 
-/* otherface: return face adjoining edge that is not the given face */
+/**
+ * \return the face adjoining edge that is not the given face
+ */
 static int otherface(int edge, int face)
 {
 	int other = leftface[edge];
 	return face == other ? rightface[edge] : other;
 }
 
-/* makecubetable: create the 256 entry table for cubical polygonization */
+/**
+ * create the 256 entry table for cubical polygonization
+ */
 static void makecubetable(void)
 {
 	static bool is_done = false;
@@ -628,7 +654,7 @@ static void makecubetable(void)
 		for (e = 0; e < 12; e++)
 			if (!done[e] && (pos[corner1[e]] != pos[corner2[e]])) {
 				INTLIST *ints = NULL;
-				INTLISTS *lists = (INTLISTS *)MEM_callocN(sizeof(INTLISTS), "mball_intlist");
+				INTLISTS *lists = MEM_callocN(sizeof(INTLISTS), "mball_intlist");
 				int start = e, edge = e;
 
 				/* get face that is to right of edge from pos to neg corner: */
@@ -640,7 +666,7 @@ static void makecubetable(void)
 					if (pos[corner1[edge]] != pos[corner2[edge]]) {
 						INTLIST *tmp = ints;
 
-						ints = (INTLIST *)MEM_callocN(sizeof(INTLIST), "mball_intlist");
+						ints = MEM_callocN(sizeof(INTLIST), "mball_intlist");
 						ints->i = edge;
 						ints->next = tmp; /* add edge to head of list */
 
@@ -654,7 +680,7 @@ static void makecubetable(void)
 			}
 	}
 
-	for (i = 0; i < 256; i++){
+	for (i = 0; i < 256; i++) {
 		INTLISTS *polys;
 		faces[i] = 0;
 		for (polys = cubetable[i]; polys; polys = polys->next) {
@@ -699,7 +725,9 @@ void BKE_mball_cubeTable_free(void)
 
 /**** Storage ****/
 
-/* Inserts cube at lattice i, j, k into hash table, marking it as "done" */
+/**
+ * Inserts cube at lattice i, j, k into hash table, marking it as "done"
+ */
 static int setcenter(PROCESS *process, CENTERLIST *table[], const int i, const int j, const int k)
 {
 	int index;
@@ -712,7 +740,7 @@ static int setcenter(PROCESS *process, CENTERLIST *table[], const int i, const i
 		if (l->i == i && l->j == j && l->k == k) return 1;
 	}
 
-	newc = (CENTERLIST *)BLI_memarena_alloc(process->pgn_elements, sizeof(CENTERLIST));
+	newc = BLI_memarena_alloc(process->pgn_elements, sizeof(CENTERLIST));
 	newc->i = i;
 	newc->j = j;
 	newc->k = k;
@@ -722,11 +750,14 @@ static int setcenter(PROCESS *process, CENTERLIST *table[], const int i, const i
 	return 0;
 }
 
-/* Sets vid of vertex lying on given edge.*/
-static void setedge(PROCESS *process,
-					int i1, int j1, int k1,
-					int i2, int j2, int k2,
-					int vid)
+/**
+ * Sets vid of vertex lying on given edge.
+ */
+static void setedge(
+        PROCESS *process,
+        int i1, int j1, int k1,
+        int i2, int j2, int k2,
+        int vid)
 {
 	unsigned int index;
 	EDGELIST *newe;
@@ -743,7 +774,7 @@ static void setedge(PROCESS *process,
 		k2 = t;
 	}
 	index = HASH(i1, j1, k1) + HASH(i2, j2, k2);
-	newe = (EDGELIST *)BLI_memarena_alloc(process->pgn_elements, sizeof(EDGELIST));
+	newe = BLI_memarena_alloc(process->pgn_elements, sizeof(EDGELIST));
 
 	newe->i1 = i1;
 	newe->j1 = j1;
@@ -756,7 +787,9 @@ static void setedge(PROCESS *process,
 	process->edges[index] = newe;
 }
 
-/* getedge: return vertex id for edge; return -1 if not set */
+/**
+ * \return vertex id for edge; return -1 if not set
+ */
 static int getedge(EDGELIST *table[],
                    int i1, int j1, int k1,
                    int i2, int j2, int k2)
@@ -785,15 +818,17 @@ static int getedge(EDGELIST *table[],
 	return -1;
 }
 
-/* Adds a vertex, expands memory if needed. */
+/**
+ * Adds a vertex, expands memory if needed.
+ */
 static void addtovertices(PROCESS *process, float v[3], float no[3])
 {
 	float *newco, *newno;
 
 	if (process->curvertex == process->totvertex) {
 		process->totvertex += 4096;
-		newco = (float *)MEM_callocN(process->totvertex * sizeof(float) * 3, "addtovertices");
-		newno = (float *)MEM_callocN(process->totvertex * sizeof(float) * 3, "addtovertices");
+		newco = MEM_callocN(process->totvertex * sizeof(float) * 3, "addtovertices");
+		newno = MEM_callocN(process->totvertex * sizeof(float) * 3, "addtovertices");
 
 		if (process->co) {
 			memcpy(newco, process->co, process->curvertex * sizeof(float) * 3);
@@ -817,8 +852,11 @@ static void addtovertices(PROCESS *process, float v[3], float no[3])
 	process->curvertex++;
 }
 
-/* Computes normal from density field at given point.
-* Doesn't do normalization! */
+/**
+ * Computes normal from density field at given point.
+ *
+ * \note Doesn't do normalization!
+ */
 static void vnormal(PROCESS *process, const float point[3], float r_no[3])
 {
 	const float delta = process->delta;
@@ -850,8 +888,11 @@ static void vnormal(PROCESS *process, const float point[3], float r_no[3])
 #endif
 }
 
-/* Returns id of vertex between two corners.
-* If it wasn't previously computed, does converge() and adds vertex to process. */
+/**
+ * \return the id of vertex between two corners.
+ *
+ * If it wasn't previously computed, does #converge() and adds vertex to process.
+ */
 static int vertid(PROCESS *process, const CORNER *c1, const CORNER *c2)
 {
 	float v[3], no[3];
@@ -874,8 +915,10 @@ static int vertid(PROCESS *process, const CORNER *c1, const CORNER *c2)
 	return vid;
 }
 
-/* Given two corners, computes approximation of surface intersection point between them.
-* In case of small threshold, do bisection. */
+/**
+ * Given two corners, computes approximation of surface intersection point between them.
+ * In case of small threshold, do bisection.
+ */
 static void converge(PROCESS *process, CORNER c1, CORNER c2, float r_p[3])
 {
 	float tmp, dens;
@@ -901,7 +944,9 @@ static void converge(PROCESS *process, CORNER c1, CORNER c2, float r_p[3])
 	interp_v3_v3v3(r_p, c1.co, c2.co, tmp);
 }
 
-/* Adds cube at given lattice position to cube stack of process. */
+/**
+ * Adds cube at given lattice position to cube stack of process.
+ */
 static void add_cube(PROCESS *process, int i, int j, int k)
 {
 	CUBES *ncube;
@@ -910,7 +955,7 @@ static void add_cube(PROCESS *process, int i, int j, int k)
 	/* test if cube has been found before */
 	if (setcenter(process, process->centers, i, j, k) == 0) {
 		/* push cube on stack: */
-		ncube = (CUBES *)BLI_memarena_alloc(process->pgn_elements, sizeof(CUBES));
+		ncube = BLI_memarena_alloc(process->pgn_elements, sizeof(CUBES));
 		ncube->next = process->cubes;
 		process->cubes = ncube;
 
@@ -942,11 +987,13 @@ static void closest_latice(int r[3], const float pos[3], const float size)
 	r[2] = (int)floorf(pos[2] / size + 1.0f);
 }
 
-/* Find at most 6 cubes to start polygonization from.
-* This may be too little only in very rare cases.
-* To make this algorithm equivalent to the previous one,
-* it would have to search for 26 cubes (not only along the axes,
-* but also on cube diagonals and through the middle of edges). */
+/**
+ * Find at most 6 cubes to start polygonization from.
+ * This may be too little only in very rare cases.
+ * To make this algorithm equivalent to the previous one,
+ * it would have to search for 26 cubes (not only along the axes,
+ * but also on cube diagonals and through the middle of edges).
+ */
 static void find_first_points(PROCESS *process, int em)
 {
 	MetaElem *ml;
@@ -960,12 +1007,12 @@ static void find_first_points(PROCESS *process, int em)
 	prev_lattice(lbn, ml->bb->vec[0], process->size);
 	next_lattice(rtf, ml->bb->vec[6], process->size);
 
-	for (dir = 0; dir < 3; dir++){
+	for (dir = 0; dir < 3; dir++) {
 		copy_v3_v3_int(it, center);
 		it[dir] = lbn[dir];
 
 		b = setcorner(process, it[0], it[1], it[2])->value;
-		for (it[dir]++; it[dir] <= rtf[dir]; it[dir]++){
+		for (it[dir]++; it[dir] <= rtf[dir]; it[dir]++) {
 			a = b;
 			b = setcorner(process, it[0], it[1], it[2])->value;
 
@@ -976,10 +1023,12 @@ static void find_first_points(PROCESS *process, int em)
 	}
 }
 
-/* The main polygonization proc.
-* Allocates memory, makes cubetable,
-* finds starting surface points
-* and processes cubes on the stack until none left. */
+/**
+ * The main polygonization proc.
+ * Allocates memory, makes cubetable,
+ * finds starting surface points
+ * and processes cubes on the stack until none left.
+ */
 static void polygonize(PROCESS *process)
 {
 	CUBE c;
@@ -988,7 +1037,7 @@ static void polygonize(PROCESS *process)
 	process->centers = MEM_callocN(HASHSIZE * sizeof(CENTERLIST *), "mbproc->centers");
 	process->corners = MEM_callocN(HASHSIZE * sizeof(CORNER *), "mbproc->corners");
 	process->edges = MEM_callocN(2 * HASHSIZE * sizeof(EDGELIST *), "mbproc->edges");
-	process->bvh_queue = MEM_callocN(sizeof(MetaballBVHNode*) * process->bvh_queue_size, "Metaball BVH Queue");
+	process->bvh_queue = MEM_callocN(sizeof(MetaballBVHNode *) * process->bvh_queue_size, "Metaball BVH Queue");
 
 	makecubetable();
 
@@ -1004,9 +1053,10 @@ static void polygonize(PROCESS *process)
 	}
 }
 
-/* Iterates over ALL objects in the scene and all of its sets, including
-* making all duplis(not only metas). Copies metas to mainb array.
-* Computes bounding boxes for building BVH. */
+/**
+ * Iterates over ALL objects in the scene and all of its sets, including
+ * making all duplis(not only metas). Copies metas to mainb array.
+ * Computes bounding boxes for building BVH. */
 static void init_meta(EvaluationContext *eval_ctx, PROCESS *process, Scene *scene, Object *ob)
 {
 	Scene *sce_iter = scene;
@@ -1165,9 +1215,9 @@ static void init_meta(EvaluationContext *eval_ctx, PROCESS *process, Scene *scen
 						if (process->totelem == process->mem) {
 							MetaElem **newelem;
 							process->mem = process->mem * 2 + 10;
-							newelem = MEM_mallocN(sizeof(MetaElem*) * process->mem, "metaballs");
+							newelem = MEM_mallocN(sizeof(MetaElem *) * process->mem, "metaballs");
 
-							memcpy(newelem, process->mainb, sizeof(MetaElem*) * process->totelem);
+							memcpy(newelem, process->mainb, sizeof(MetaElem *) * process->totelem);
 							if (process->mainb) MEM_freeN(process->mainb);
 							process->mainb = newelem;
 						}
@@ -1230,8 +1280,8 @@ void BKE_mball_polygonize(EvaluationContext *eval_ctx, Scene *scene, Object *ob,
 		/* don't polygonize metaballs with too high resolution (base mball to small)
 		* note: Eps was 0.0001f but this was giving problems for blood animation for durian, using 0.00001f */
 		if (ob->size[0] > 0.00001f * (process.allbb.max[0] - process.allbb.min[0]) ||
-			ob->size[1] > 0.00001f * (process.allbb.max[1] - process.allbb.min[1]) ||
-			ob->size[2] > 0.00001f * (process.allbb.max[2] - process.allbb.min[2]))
+		    ob->size[1] > 0.00001f * (process.allbb.max[1] - process.allbb.min[1]) ||
+		    ob->size[2] > 0.00001f * (process.allbb.max[2] - process.allbb.min[2]))
 		{
 			polygonize(&process);
 
