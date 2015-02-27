@@ -55,6 +55,9 @@
 
 #include "BLI_strict_flags.h"
 
+/* experimental (faster) normal calculation */
+// #define USE_ACCUM_NORMAL
+
 /* Data types */
 
 typedef struct corner {         /* corner of a cube */
@@ -391,7 +394,7 @@ static void make_face(PROCESS *process, int i1, int i2, int i3, int i4)
 {
 	int *cur;
 
-#ifdef MB_ACCUM_NORMAL
+#ifdef USE_ACCUM_NORMAL
 	float n[3];
 #endif
 
@@ -415,18 +418,18 @@ static void make_face(PROCESS *process, int i1, int i2, int i3, int i4)
 		cur[3] = i4;
 	}
 
-#ifdef MB_ACCUM_NORMAL
+#ifdef USE_ACCUM_NORMAL
 	if (i4 == 0) {
-		normal_tri_v3(n, &process->co[i1 * 3], &process->co[i2 * 3], &process->co[i3 * 3]);
+		normal_tri_v3(n, process->co[i1], process->co[i2], process->co[i3]);
 		accumulate_vertex_normals(
-		        &process->no[i1 * 3], &process->no[i2 * 3], &process->no[i3 * 3], NULL, n,
-		        &process->co[i1 * 3], &process->co[i2 * 3], &process->co[i3 * 3], NULL);
+		        process->no[i1], process->no[i2], process->no[i3], NULL, n,
+		        process->co[i1], process->co[i2], process->co[i3], NULL);
 	}
 	else {
-		normal_quad_v3(n, &process->co[i1 * 3], &process->co[i2 * 3], &process->co[i3 * 3], &process->co[i4 * 3]);
+		normal_quad_v3(n, process->co[i1], process->co[i2], process->co[i3], process->co[i4]);
 		accumulate_vertex_normals(
-		        &process->no[i1 * 3], &process->no[i2 * 3], &process->no[i3 * 3], &process->no[i4 * 3], n,
-		        &process->co[i1 * 3], &process->co[i2 * 3], &process->co[i3 * 3], &process->co[i4 * 3]);
+		        process->no[i1], process->no[i2], process->no[i3], process->no[i4], n,
+		        process->co[i1], process->co[i2], process->co[i3], process->co[i4]);
 	}
 #endif
 
@@ -839,6 +842,7 @@ static void addtovertices(PROCESS *process, const float v[3], const float no[3])
 	process->curvertex++;
 }
 
+#ifndef USE_ACCUM_NORMAL
 /**
  * Computes normal from density field at given point.
  *
@@ -874,6 +878,7 @@ static void vnormal(PROCESS *process, const float point[3], float r_no[3])
 	}
 #endif
 }
+#endif  /* USE_ACCUM_NORMAL */
 
 /**
  * \return the id of vertex between two corners.
@@ -889,8 +894,8 @@ static int vertid(PROCESS *process, const CORNER *c1, const CORNER *c2)
 
 	converge(process, c1, c2, v);  /* position */
 
-#ifdef MB_ACCUM_NORMAL
-	no[0] = no[1] = no[2] = 0.0f;
+#ifdef USE_ACCUM_NORMAL
+	zero_v3(no);
 #else
 	vnormal(process, v, no);
 #endif
