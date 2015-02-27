@@ -127,7 +127,7 @@ typedef struct process {        /* parameters, storage */
 	unsigned int totindex;		/* size of memory allocated for indices */
 	unsigned int curindex;		/* number of currently added indices */
 
-	float *co, *no;				/* surface vertices - positions and normals */
+	float (*co)[3], (*no)[3];   /* surface vertices - positions and normals */
 	unsigned int totvertex;		/* memory size */
 	unsigned int curvertex;		/* currently added vertices */
 
@@ -826,33 +826,16 @@ static int getedge(EDGELIST *table[],
 /**
  * Adds a vertex, expands memory if needed.
  */
-static void addtovertices(PROCESS *process, float v[3], float no[3])
+static void addtovertices(PROCESS *process, const float v[3], const float no[3])
 {
-	float *newco, *newno;
-
 	if (process->curvertex == process->totvertex) {
 		process->totvertex += 4096;
-		newco = MEM_callocN(process->totvertex * sizeof(float) * 3, "addtovertices");
-		newno = MEM_callocN(process->totvertex * sizeof(float) * 3, "addtovertices");
-
-		if (process->co) {
-			memcpy(newco, process->co, process->curvertex * sizeof(float) * 3);
-			memcpy(newno, process->no, process->curvertex * sizeof(float) * 3);
-			MEM_freeN(process->co);
-			MEM_freeN(process->no);
-		}
-
-		process->co = newco;
-		process->no = newno;
+		process->co = MEM_reallocN(process->co, process->totvertex * sizeof(float[3]));
+		process->no = MEM_reallocN(process->no, process->totvertex * sizeof(float[3]));
 	}
 
-	process->co[3 * process->curvertex] = v[0];
-	process->co[3 * process->curvertex + 1] = v[1];
-	process->co[3 * process->curvertex + 2] = v[2];
-
-	process->no[3 * process->curvertex] = no[0];
-	process->no[3 * process->curvertex + 1] = no[1];
-	process->no[3 * process->curvertex + 2] = no[2];
+	copy_v3_v3(process->co[process->curvertex], v);
+	copy_v3_v3(process->no[process->curvertex], no);
 
 	process->curvertex++;
 }
@@ -1316,11 +1299,11 @@ void BKE_mball_polygonize(EvaluationContext *eval_ctx, Scene *scene, Object *ob,
 				dl->index = process.indices;
 
 				for (a = 0; a < process.curvertex; a++) {
-					normalize_v3(&process.no[a * 3]);
+					normalize_v3(process.no[a]);
 				}
 
-				dl->verts = process.co;
-				dl->nors = process.no;
+				dl->verts = (float *)process.co;
+				dl->nors = (float *)process.no;
 			}
 		}
 	}
