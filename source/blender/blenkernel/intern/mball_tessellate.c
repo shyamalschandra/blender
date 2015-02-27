@@ -166,23 +166,26 @@ static void make_box_from_ml(Box *r, MetaElem *ml)
  * where centroids of elements in the [start, i) segment lie "on the right side" of div,
  * and elements in the [i, end) segment lie "on the left"
  */
-static unsigned int partition_mainb(PROCESS *process, unsigned int start, unsigned int end, unsigned int s, float div)
+static unsigned int partition_mainb(MetaElem **mainb, unsigned int start, unsigned int end, unsigned int s, float div)
 {
 	unsigned int i = start, j = end - 1;
 	div *= 2.0f;
 
 	while (1) {
-		while (i < j && process->mainb[i]->bb->vec[6][s] + process->mainb[i]->bb->vec[0][s] < div) i++;
-		while (j > i && div < process->mainb[j]->bb->vec[6][s] + process->mainb[j]->bb->vec[0][s]) j--;
+		while (i < j && div > (mainb[i]->bb->vec[6][s] + mainb[i]->bb->vec[0][s])) i++;
+		while (j > i && div < (mainb[j]->bb->vec[6][s] + mainb[j]->bb->vec[0][s])) j--;
 
 		if (i >= j)
 			break;
 
-		SWAP(MetaElem *, process->mainb[i], process->mainb[j]);
-		i++; j--;
+		SWAP(MetaElem *, mainb[i], mainb[j]);
+		i++;
+		j--;
 	}
 
-	if (i == start) i++;
+	if (i == start) {
+		i++;
+	}
 
 	return i;
 }
@@ -210,7 +213,7 @@ static void build_bvh_spatial(
 
 	div = allbox->min[s] + (dim[s] / 2.0f);
 
-	part = partition_mainb(process, start, end, s, div);
+	part = partition_mainb(process->mainb, start, end, s, div);
 
 	make_box_from_ml(&node->bb[0], process->mainb[start]);
 	node->child[0] = NULL;
@@ -235,7 +238,9 @@ static void build_bvh_spatial(
 			build_bvh_spatial(process, node->child[1], part, end, &node->bb[1]);
 		}
 	}
-	else INIT_MINMAX(node->bb[1].min, node->bb[1].max);
+	else {
+		INIT_MINMAX(node->bb[1].min, node->bb[1].max);
+	}
 }
 
 /* ******************** ARITH ************************* */
