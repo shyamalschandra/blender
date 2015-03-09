@@ -211,13 +211,15 @@ static void file_refresh(const bContext *C, ScrArea *sa)
 	}
 	if (!sfile->files) {
 		sfile->files = filelist_new(params->type);
-		filelist_setdir(sfile->files, params->dir);
 		params->active_file = -1; /* added this so it opens nicer (ton) */
 	}
+	filelist_setdir(sfile->files, params->dir);
+	filelist_setrecursion(sfile->files, params->recursion_level);
 	filelist_setsorting(sfile->files, params->sort);
 	filelist_setfilter_options(sfile->files, params->flag & FILE_HIDE_DOT,
 	                                         false, /* TODO hide_parent, should be controllable? */
 	                                         params->flag & FILE_FILTER ? params->filter : 0,
+	                                         params->filter_id,
 	                                         params->filter_glob,
 	                                         params->filter_search);
 
@@ -227,11 +229,16 @@ static void file_refresh(const bContext *C, ScrArea *sa)
 	sfile->bookmarknr = fsmenu_get_active_indices(fsmenu, FS_CATEGORY_BOOKMARKS, params->dir);
 	sfile->recentnr = fsmenu_get_active_indices(fsmenu, FS_CATEGORY_RECENT, params->dir);
 
+	if (filelist_force_reset(sfile->files)) {
+		filelist_readjob_stop(wm, sfile->files);
+		filelist_clear(sfile->files);
+	}
+
 	if (filelist_empty(sfile->files)) {
 		thumbnails_stop(wm, sfile->files);
-		filelist_readdir(sfile->files);
-		filelist_sort(sfile->files);
-		BLI_strncpy(params->dir, filelist_dir(sfile->files), FILE_MAX);
+		if (!filelist_pending(sfile->files)) {
+			filelist_readjob_start(sfile->files, C);
+		}
 	}
 	else if (filelist_need_sorting(sfile->files)) {
 		thumbnails_stop(wm, sfile->files);
@@ -253,7 +260,7 @@ static void file_refresh(const bContext *C, ScrArea *sa)
 	if (params->renamefile[0] != '\0') {
 		int idx = filelist_find(sfile->files, params->renamefile);
 		if (idx >= 0) {
-			struct direntry *file = filelist_file(sfile->files, idx);
+			FileDirEntry *file = filelist_file(sfile->files, idx);
 			if (file) {
 				file->selflag |= FILE_SEL_EDITING;
 			}
@@ -265,6 +272,8 @@ static void file_refresh(const bContext *C, ScrArea *sa)
 	if (sfile->layout) {
 		sfile->layout->dirty = true;
 	}
+
+	filelist_clear_refresh(sfile->files);
 
 	/* Might be called with NULL sa, see file_main_area_draw() below. */
 	if (sa && BKE_area_find_region_type(sa, RGN_TYPE_TOOLS) == NULL) {

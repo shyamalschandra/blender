@@ -756,7 +756,7 @@ static void init_iconfile_list(struct ListBase *list)
 		}
 	}
 
-	BLI_filelist_free(dir, totfile, NULL);
+	BLI_filelist_free(dir, totfile);
 	dir = NULL;
 }
 
@@ -904,8 +904,8 @@ void UI_icons_init(int first_dyn_id)
 static int preview_render_size(enum eIconSizes size)
 {
 	switch (size) {
-		case ICON_SIZE_ICON:    return 32;
-		case ICON_SIZE_PREVIEW: return PREVIEW_DEFAULT_HEIGHT;
+		case ICON_SIZE_ICON:    return ICON_RENDER_DEFAULT_HEIGHT;
+		case ICON_SIZE_PREVIEW: return PREVIEW_RENDER_DEFAULT_HEIGHT;
 	}
 	return 0;
 }
@@ -937,6 +937,11 @@ static void icon_set_image(
 	if (!prv_img) {
 		if (G.debug & G_DEBUG)
 			printf("%s: no preview image for this ID: %s\n", __func__, id->name);
+		return;
+	}
+
+	if (prv_img->user_edited[size]) {
+		/* user-edited preview, do not auto-update! */
 		return;
 	}
 
@@ -982,6 +987,72 @@ PreviewImage *UI_icon_to_preview(int icon_id)
 	}
 	return NULL;
 }
+
+#if 0  /* Unused in the end, is it worth keeping it still? */
+/* Shall always return straight alpha! */
+ImBuf *UI_icon_to_imbuf(int icon_id)
+{
+	Icon *icon = BKE_icon_get(icon_id);
+	DrawInfo *di;
+	ImBuf *imbuf = NULL;
+
+	if (!icon) {
+		return imbuf;
+	}
+
+	di = (DrawInfo *)icon->drawinfo;
+	if (!di) {
+		return imbuf;
+	}
+
+	if (di->type == ICON_TYPE_VECTOR) {
+		/* vector icons use the uiBlock transformation, they are not drawn
+		 * with untransformed coordinates like the other icons */
+		/* TODO */
+	}
+	else if (di->type == ICON_TYPE_TEXTURE) {
+		/* We have to go searching in OpenGL texture... */
+		ImBuf *icons = IMB_allocImBuf(icongltex.w, icongltex.h, 32, IB_rect);
+
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, icongltex.id);
+
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, icons->rect);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glDisable(GL_TEXTURE_2D);
+
+		imbuf = IMB_allocImBuf(di->data.texture.w, di->data.texture.h, 32, IB_rect);
+		IMB_rectcpy(imbuf, icons, 0, 0, di->data.texture.x, di->data.texture.y, di->data.texture.w, di->data.texture.h);
+		IMB_unpremultiply_alpha(imbuf);  /* those were premultiplied in init_internal_icons() */
+
+		IMB_freeImBuf(icons);
+	}
+	else if (di->type == ICON_TYPE_BUFFER) {
+		/* it is a builtin icon */
+		IconImage *iimg = di->data.buffer.image;
+#ifndef WITH_HEADLESS
+		icon_verify_datatoc(iimg);
+#endif
+
+		if (iimg->rect) {
+			imbuf = IMB_allocImBuf(iimg->w, iimg->h, 32, IB_rect);
+			memcpy(imbuf->rect, iimg->rect, sizeof(unsigned int) * imbuf->x * imbuf->y);
+			IMB_unpremultiply_alpha(imbuf);  /* those were premultiplied in init_internal_icons() */
+		}
+	}
+	else if (di->type == ICON_TYPE_PREVIEW) {
+		PreviewImage *pi = BKE_previewimg_get((ID *)icon->obj);
+
+		if (pi && pi->rect[ICON_SIZE_ICON]) {
+			imbuf = IMB_allocImBuf(pi->w[ICON_SIZE_ICON], pi->h[ICON_SIZE_ICON], 32, IB_rect);
+			memcpy(imbuf->rect, pi->rect[ICON_SIZE_ICON], sizeof(unsigned int) * imbuf->x * imbuf->y);
+		}
+	}
+
+	return imbuf;
+}
+#endif
 
 static void icon_draw_rect(float x, float y, int w, int h, float UNUSED(aspect), int rw, int rh,
                            unsigned int *rect, float alpha, const float rgb[3], const bool is_preview)

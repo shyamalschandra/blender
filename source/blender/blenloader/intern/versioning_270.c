@@ -59,6 +59,8 @@
 #include "BLI_listbase.h"
 #include "BLI_string.h"
 
+#include "MEM_guardedalloc.h"
+
 #include "BLO_readfile.h"
 
 #include "readfile.h"

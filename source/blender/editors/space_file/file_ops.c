@@ -169,7 +169,7 @@ static FileSelect file_select_do(bContext *C, int selected_idx, bool do_diropen)
 	SpaceFile *sfile = CTX_wm_space_file(C);
 	FileSelectParams *params = ED_fileselect_get_params(sfile);
 	int numfiles = filelist_numfiles(sfile->files);
-	struct direntry *file;
+	FileDirEntry *file;
 
 	/* make the selected file active */
 	if ((selected_idx >= 0) &&
@@ -178,25 +178,31 @@ static FileSelect file_select_do(bContext *C, int selected_idx, bool do_diropen)
 	{
 		params->active_file = selected_idx;
 
-		if (S_ISDIR(file->type)) {
-			const bool is_parent_dir = FILENAME_IS_PARENT(file->relname);
+		if (file->typeflag & FILE_TYPE_DIR) {
+			const bool is_parent_dir = FILENAME_IS_PARENT(file->relpath);
 
 			if (do_diropen == false) {
 				params->file[0] = '\0';
 				retval = FILE_SELECT_DIR;
 			}
 			/* the path is too long and we are not going up! */
-			else if (!is_parent_dir && strlen(params->dir) + strlen(file->relname) >= FILE_MAX) {
+			else if (!is_parent_dir && strlen(params->dir) + strlen(file->relpath) >= FILE_MAX) {
 				// XXX error("Path too long, cannot enter this directory");
 			}
 			else {
 				if (is_parent_dir) {
 					/* avoids /../../ */
 					BLI_parent_dir(params->dir);
+
+					if (params->recursion_level > 1) {
+						/* Disable 'dirtree' recursion when going up in tree! */
+						params->recursion_level = 1;
+						filelist_setrecursion(sfile->files, params->recursion_level);
+					}
 				}
 				else {
 					BLI_cleanup_dir(G.main->name, params->dir);
-					strcat(params->dir, file->relname);
+					strcat(params->dir, file->relpath);
 					BLI_add_slash(params->dir);
 				}
 
@@ -205,8 +211,8 @@ static FileSelect file_select_do(bContext *C, int selected_idx, bool do_diropen)
 			}
 		}
 		else {
-			if (file->relname) {
-				BLI_strncpy(params->file, file->relname, FILE_MAXFILE);
+			if (file->relpath) {
+				BLI_strncpy(params->file, file->relpath, FILE_MAXFILE);
 			}
 			retval = FILE_SELECT_FILE;
 		}
@@ -270,9 +276,9 @@ static int file_border_select_modal(bContext *C, wmOperator *op, const wmEvent *
 
 			/* dont highlight readonly file (".." or ".") on border select */
 			for (idx = sel.last; idx >= 0; idx--) {
-				struct direntry *file = filelist_file(sfile->files, idx);
+				struct FileDirEntry *file = filelist_file(sfile->files, idx);
 
-				if (FILENAME_IS_CURRPAR(file->relname)) {
+				if (FILENAME_IS_CURRPAR(file->relpath)) {
 					file->selflag &= ~FILE_SEL_HIGHLIGHTED;
 				}
 
@@ -364,8 +370,8 @@ static int file_select_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 		int idx = sfile->params->active_file;
 
 		if (idx >= 0) {
-			struct direntry *file = filelist_file(sfile->files, idx);
-			if (FILENAME_IS_CURRPAR(file->relname)) {
+			struct FileDirEntry *file = filelist_file(sfile->files, idx);
+			if (FILENAME_IS_CURRPAR(file->relpath)) {
 				/* skip - If a readonly file (".." or ".") is selected, skip deselect all! */
 			}
 			else {
@@ -867,9 +873,9 @@ void file_sfile_to_operator(wmOperator *op, SpaceFile *sfile, char *filepath)
 			RNA_property_collection_clear(op->ptr, prop);
 			for (i = 0; i < numfiles; i++) {
 				if (filelist_is_selected(sfile->files, i, CHECK_FILES)) {
-					struct direntry *file = filelist_file(sfile->files, i);
+					FileDirEntry *file = filelist_file(sfile->files, i);
 					RNA_property_collection_add(op->ptr, prop, &itemptr);
-					RNA_string_set(&itemptr, "name", file->relname);
+					RNA_string_set(&itemptr, "name", file->relpath);
 					num_files++;
 				}
 			}
@@ -886,9 +892,9 @@ void file_sfile_to_operator(wmOperator *op, SpaceFile *sfile, char *filepath)
 			RNA_property_collection_clear(op->ptr, prop);
 			for (i = 0; i < numfiles; i++) {
 				if (filelist_is_selected(sfile->files, i, CHECK_DIRS)) {
-					struct direntry *file = filelist_file(sfile->files, i);
+					FileDirEntry *file = filelist_file(sfile->files, i);
 					RNA_property_collection_add(op->ptr, prop, &itemptr);
-					RNA_string_set(&itemptr, "name", file->relname);
+					RNA_string_set(&itemptr, "name", file->relpath);
 					num_dirs++;
 				}
 			}
@@ -1047,8 +1053,8 @@ int file_parent_exec(bContext *C, wmOperator *UNUSED(unused))
 			BLI_cleanup_dir(G.main->name, sfile->params->dir);
 			/* if not browsing in .blend file, we still want to check whether the path is a directory */
 			if (sfile->params->type == FILE_LOADLIB) {
-				char tdir[FILE_MAX], tgroup[FILE_MAX];
-				if (BLO_is_a_library(sfile->params->dir, tdir, tgroup)) {
+				char tdir[FILE_MAX];
+				if (BLO_library_path_explode(sfile->params->dir, tdir, NULL, NULL)) {
 					ED_file_change_dir(C, false);
 				}
 				else {
@@ -1057,6 +1063,11 @@ int file_parent_exec(bContext *C, wmOperator *UNUSED(unused))
 			}
 			else {
 				ED_file_change_dir(C, true);
+			}
+			if (sfile->params->recursion_level > 1) {
+				/* Disable 'dirtree' recursion when going up in tree! */
+				sfile->params->recursion_level = 1;
+				filelist_setrecursion(sfile->files, sfile->params->recursion_level);
 			}
 			WM_event_add_notifier(C, NC_SPACE | ND_SPACE_FILE_LIST, NULL);
 		}
@@ -1523,9 +1534,9 @@ void file_filename_enter_handle(bContext *C, void *UNUSED(arg_unused), void *arg
 				WM_event_add_notifier(C, NC_SPACE | ND_SPACE_FILE_PARAMS, NULL);
 			}
 			else if (sfile->params->type == FILE_LOADLIB) {
-				char tdir[FILE_MAX], tgroup[FILE_MAX];
+				char tdir[FILE_MAX];
 				BLI_add_slash(filepath);
-				if (BLO_is_a_library(filepath, tdir, tgroup)) {
+				if (BLO_library_path_explode(filepath, tdir, NULL, NULL)) {
 					BLI_cleanup_dir(G.main->name, filepath);
 					BLI_strncpy(sfile->params->dir, filepath, sizeof(sfile->params->dir));
 					sfile->params->file[0] = '\0';
@@ -1672,9 +1683,9 @@ static int file_rename_exec(bContext *C, wmOperator *UNUSED(op))
 		int idx = sfile->params->active_file;
 		int numfiles = filelist_numfiles(sfile->files);
 		if ( (0 <= idx) && (idx < numfiles) ) {
-			struct direntry *file = filelist_file(sfile->files, idx);
+			FileDirEntry *file = filelist_file(sfile->files, idx);
 			filelist_select_file(sfile->files, idx, FILE_SEL_ADD, FILE_SEL_EDITING, CHECK_ALL);
-			BLI_strncpy(sfile->params->renameedit, file->relname, FILE_MAXFILE);
+			BLI_strncpy(sfile->params->renameedit, file->relpath, FILE_MAXFILE);
 			sfile->params->renamefile[0] = '\0';
 		}
 		ED_area_tag_redraw(sa);
@@ -1693,8 +1704,8 @@ static int file_rename_poll(bContext *C)
 		int idx = sfile->params->active_file;
 
 		if (idx >= 0) {
-			struct direntry *file = filelist_file(sfile->files, idx);
-			if (FILENAME_IS_CURRPAR(file->relname)) {
+			FileDirEntry *file = filelist_file(sfile->files, idx);
+			if (FILENAME_IS_CURRPAR(file->relpath)) {
 				poll = 0;
 			}
 		}
@@ -1703,8 +1714,8 @@ static int file_rename_poll(bContext *C)
 			poll = 0;
 		}
 		else {
-			char dir[FILE_MAX], group[FILE_MAX];
-			if (filelist_islibrary(sfile->files, dir, group)) poll = 0;
+			char dir[FILE_MAX];
+			if (filelist_islibrary(sfile->files, dir, NULL)) poll = 0;
 		}
 	}
 	else
@@ -1731,12 +1742,12 @@ static int file_delete_poll(bContext *C)
 	SpaceFile *sfile = CTX_wm_space_file(C);
 
 	if (sfile && sfile->params) {
-		char dir[FILE_MAX], group[FILE_MAX];
+		char dir[FILE_MAX];
 		int numfiles = filelist_numfiles(sfile->files);
 		int i;
 		int num_selected = 0;
 
-		if (filelist_islibrary(sfile->files, dir, group)) poll = 0;
+		if (filelist_islibrary(sfile->files, dir, NULL)) poll = 0;
 		for (i = 0; i < numfiles; i++) {
 			if (filelist_is_selected(sfile->files, i, CHECK_FILES)) {
 				num_selected++;
@@ -1757,14 +1768,14 @@ int file_delete_exec(bContext *C, wmOperator *UNUSED(op))
 	char str[FILE_MAX];
 	wmWindowManager *wm = CTX_wm_manager(C);
 	SpaceFile *sfile = CTX_wm_space_file(C);
-	struct direntry *file;	
+	FileDirEntry *file;
 	int numfiles = filelist_numfiles(sfile->files);
 	int i;
 
 	for (i = 0; i < numfiles; i++) {
 		if (filelist_is_selected(sfile->files, i, CHECK_FILES)) {
 			file = filelist_file(sfile->files, i);
-			BLI_make_file_string(G.main->name, str, sfile->params->dir, file->relname);
+			BLI_make_file_string(G.main->name, str, sfile->params->dir, file->relpath);
 			BLI_delete(str, false, false);
 		}
 	}
