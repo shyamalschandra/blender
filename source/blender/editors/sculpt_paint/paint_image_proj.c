@@ -1320,7 +1320,7 @@ static float project_paint_uvpixel_mask(
 
 		ca_mask = w[0] * ca1 + w[1] * ca2 + w[2] * ca3;
 		ca_mask = curvemapping_evaluateF(ps->cavity_curve, 0, ca_mask);
-		CLAMP(ca_mask, 0.0, 1.0);
+		CLAMP(ca_mask, 0.0f, 1.0f);
 		mask *= ca_mask;
 	}
 
@@ -2004,24 +2004,32 @@ static bool line_rect_clip(
         float uv[2], bool is_ortho)
 {
 	float min = FLT_MAX, tmp;
-	if ((l1[0] - rect->xmin) * (l2[0] - rect->xmin) < 0) {
-		tmp = rect->xmin;
-		min = min_ff((tmp - l1[0]) / (l2[0] - l1[0]), min);
+	float xlen = l2[0] - l1[0];
+	float ylen = l2[1] - l1[1];
+
+	/* 0.1 might seem too much, but remember, this is pixels! */
+	if (xlen > 0.1f) {
+		if ((l1[0] - rect->xmin) * (l2[0] - rect->xmin) <= 0) {
+			tmp = rect->xmin;
+			min = min_ff((tmp - l1[0]) / xlen, min);
+		}
+		else if ((l1[0] - rect->xmax) * (l2[0] - rect->xmax) < 0) {
+			tmp = rect->xmax;
+			min = min_ff((tmp - l1[0]) / xlen, min);
+		}
 	}
-	else if ((l1[0] - rect->xmax) * (l2[0] - rect->xmax) < 0) {
-		tmp = rect->xmax;
-		min = min_ff((tmp - l1[0]) / (l2[0] - l1[0]), min);
+
+	if (ylen > 0.1f) {
+		if ((l1[1] - rect->ymin) * (l2[1] - rect->ymin) <= 0) {
+			tmp = rect->ymin;
+			min = min_ff((tmp - l1[1]) / ylen, min);
+		}
+		else if ((l1[1] - rect->ymax) * (l2[1] - rect->ymax) < 0) {
+			tmp = rect->ymax;
+			min = min_ff((tmp - l1[1]) / ylen, min);
+		}
 	}
-	if ((l1[1] - rect->ymin) * (l2[1] - rect->ymin) < 0) {
-		tmp = rect->ymin;
-		min = min_ff((tmp - l1[1]) / (l2[1] - l1[1]), min);
-	}
-	else if ((l1[1] - rect->ymax) * (l2[1] - rect->ymax) < 0) {
-		tmp = rect->ymax;
-		min = min_ff((tmp - l1[1]) / (l2[1] - l1[1]), min);
-	}
-	
-	/* it's rare but it can happen if l1 == l2 */
+
 	if (min == FLT_MAX)
 		return false;
 
@@ -2052,8 +2060,10 @@ static void project_bucket_clip_face(
 	/* detect pathological case where face the three vertices are almost colinear in screen space.
 	 * mostly those will be culled but when flood filling or with smooth shading it's a possibility */
 	if (dist_squared_to_line_v2(v1coSS, v2coSS, v3coSS) < 0.5f ||
-		dist_squared_to_line_v2(v2coSS, v3coSS, v1coSS) < 0.5f)
+	    dist_squared_to_line_v2(v2coSS, v3coSS, v1coSS) < 0.5f)
+	{
 		colinear = true;
+	}
 	
 	/* get the UV space bounding box */
 	inside_bucket_flag |= BLI_rctf_isect_pt_v(bucket_bounds, v1coSS);
@@ -2085,7 +2095,7 @@ static void project_bucket_clip_face(
 		int flag;
 		
 		(*tot) = 0;
-		
+
 		if (cull)
 			return;
 		
@@ -3263,7 +3273,7 @@ static void proj_paint_state_cavity_init(ProjPaintState *ps)
 				mul_v3_fl(edges[a], 1.0f / counter[a]);
 				normal_short_to_float_v3(no, mv->no);
 				/* augment the diffe*/
-				cavities[a] = saacos(10.0f * dot_v3v3(no, edges[a])) * M_1_PI;
+				cavities[a] = saacos(10.0f * dot_v3v3(no, edges[a])) * (float)M_1_PI;
 			}
 			else
 				cavities[a] = 0.0;
