@@ -1322,8 +1322,6 @@ typedef struct Scene {
 	
 	/* RigidBody simulation world+settings */
 	struct RigidBodyWorld *rigidbody_world;
-
-	struct PreviewImage *preview;
 } Scene;
 
 /* **************** RENDERDATA ********************* */

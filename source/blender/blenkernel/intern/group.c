@@ -49,7 +49,6 @@
 #include "BKE_depsgraph.h"
 #include "BKE_global.h"
 #include "BKE_group.h"
-#include "BKE_icons.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
@@ -65,9 +64,7 @@ void BKE_group_free(Group *group)
 {
 	/* don't free group itself */
 	GroupObject *go;
-
-	BKE_previewimg_free(&group->preview);
-
+	
 	while ((go = BLI_pophead(&group->gobject))) {
 		free_group_object(go);
 	}
@@ -142,9 +139,6 @@ Group *BKE_group_add(Main *bmain, const char *name)
 	
 	group = BKE_libblock_alloc(bmain, ID_GR, name);
 	group->layer = (1 << 20) - 1;
-
-	group->preview = NULL;
-
 	return group;
 }
 
@@ -154,10 +148,6 @@ Group *BKE_group_copy(Group *group)
 
 	groupn = BKE_libblock_copy(&group->id);
 	BLI_duplicatelist(&groupn->gobject, &group->gobject);
-
-	if (group->preview) {
-		groupn->preview = BKE_previewimg_copy(group->preview);
-	}
 
 	if (group->id.lib) {
 		BKE_id_lib_local_paths(G.main, group->id.lib, &groupn->id);

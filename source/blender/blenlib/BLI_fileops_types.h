@@ -39,6 +39,8 @@
 typedef unsigned int mode_t;
 #endif
 
+struct ImBuf;
+
 struct direntry {
 	mode_t  type;
 	char   *relname;
@@ -54,6 +56,7 @@ struct direntry {
 #else
 	struct stat s;
 #endif
+	unsigned int flags;
 	char    size[16];
 	char    mode1[4];
 	char    mode2[4];
@@ -61,6 +64,11 @@ struct direntry {
 	char    owner[16];
 	char    time[8];
 	char    date[16];
+	char    extra[16];
+	void   *poin;
+	int     nr;
+	struct ImBuf *image;
+	unsigned int selflag; /* selection flag */
 };
 
 struct dirlink {

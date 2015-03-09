@@ -161,8 +161,6 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 		params->filter = 0;
 		if ((prop = RNA_struct_find_property(op->ptr, "filter_blender")))
 			params->filter |= RNA_property_boolean_get(op->ptr, prop) ? FILE_TYPE_BLENDER : 0;
-		if ((prop = RNA_struct_find_property(op->ptr, "filter_blenlib")))
-			params->filter |= RNA_property_boolean_get(op->ptr, prop) ? FILE_TYPE_BLENDERLIB : 0;
 		if ((prop = RNA_struct_find_property(op->ptr, "filter_backup")))
 			params->filter |= RNA_property_boolean_get(op->ptr, prop) ? FILE_TYPE_BLENDER_BACKUP : 0;
 		if ((prop = RNA_struct_find_property(op->ptr, "filter_image")))
@@ -199,13 +197,6 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 				params->flag &= ~FILE_FILTER;
 			}
 		}
-
-		/* For now, always init filterid to 'all true' */
-		params->filter_id = FILTER_ID_AC | FILTER_ID_AR | FILTER_ID_BR | FILTER_ID_CA | FILTER_ID_CU | FILTER_ID_GD |
-		                    FILTER_ID_GR | FILTER_ID_IM | FILTER_ID_LA | FILTER_ID_LS | FILTER_ID_LT | FILTER_ID_MA |
-		                    FILTER_ID_MB | FILTER_ID_MC | FILTER_ID_ME | FILTER_ID_MSK | FILTER_ID_NT | FILTER_ID_OB |
-		                    FILTER_ID_PAL | FILTER_ID_PC | FILTER_ID_SCE | FILTER_ID_SPK | FILTER_ID_SO | FILTER_ID_TE |
-		                    FILTER_ID_TXT | FILTER_ID_VF | FILTER_ID_WO;
 
 		if (U.uiflag & USER_HIDE_DOT) {
 			params->flag |= FILE_HIDE_DOT;
@@ -490,27 +481,25 @@ static void column_widths(struct FileList *files, struct FileLayout *layout)
 	}
 
 	for (i = 0; (i < numfiles); ++i) {
-		FileDirEntry *file = filelist_file(files, i);
+		struct direntry *file = filelist_file(files, i);
 		if (file) {
 			float len;
-			len = file_string_width(file->relpath);
+			len = file_string_width(file->relname);
 			if (len > layout->column_widths[COLUMN_NAME]) layout->column_widths[COLUMN_NAME] = len;
-			len = file_string_width(file->entry->date_str);
+			len = file_string_width(file->date);
 			if (len > layout->column_widths[COLUMN_DATE]) layout->column_widths[COLUMN_DATE] = len;
-			len = file_string_width(file->entry->time_str);
+			len = file_string_width(file->time);
 			if (len > layout->column_widths[COLUMN_TIME]) layout->column_widths[COLUMN_TIME] = len;
-			len = file_string_width(file->entry->size_str);
+			len = file_string_width(file->size);
 			if (len > layout->column_widths[COLUMN_SIZE]) layout->column_widths[COLUMN_SIZE] = len;
-#if 0
-			len = file_string_width(file->entry->mode1);
+			len = file_string_width(file->mode1);
 			if (len > layout->column_widths[COLUMN_MODE1]) layout->column_widths[COLUMN_MODE1] = len;
-			len = file_string_width(file->entry->mode2);
+			len = file_string_width(file->mode2);
 			if (len > layout->column_widths[COLUMN_MODE2]) layout->column_widths[COLUMN_MODE2] = len;
-			len = file_string_width(file->entry->mode3);
+			len = file_string_width(file->mode3);
 			if (len > layout->column_widths[COLUMN_MODE3]) layout->column_widths[COLUMN_MODE3] = len;
-			len = file_string_width(file->entry->owner);
+			len = file_string_width(file->owner);
 			if (len > layout->column_widths[COLUMN_OWNER]) layout->column_widths[COLUMN_OWNER] = len;
-#endif
 		}
 	}
 }
@@ -645,7 +634,7 @@ int file_select_match(struct SpaceFile *sfile, const char *pattern, char *matche
 	int match = 0;
 	
 	int i;
-	FileDirEntry *file;
+	struct direntry *file;
 	int n = filelist_numfiles(sfile->files);
 
 	/* select any file that matches the pattern, this includes exact match 
@@ -653,10 +642,11 @@ int file_select_match(struct SpaceFile *sfile, const char *pattern, char *matche
 	 */
 	for (i = 0; i < n; i++) {
 		file = filelist_file(sfile->files, i);
-		if (!(file->typeflag & FILE_TYPE_DIR) && (fnmatch(pattern, file->relpath, 0) == 0)) {
+		/* use same rule as 'FileCheckType.CHECK_FILES' */
+		if (S_ISREG(file->type) && (fnmatch(pattern, file->relname, 0) == 0)) {
 			file->selflag |= FILE_SEL_SELECTED;
 			if (!match) {
-				BLI_strncpy(matched_file, file->relpath, FILE_MAX);
+				BLI_strncpy(matched_file, file->relname, FILE_MAX);
 			}
 			match++;
 		}
@@ -730,8 +720,10 @@ int autocomplete_file(struct bContext *C, char *str, void *UNUSED(arg_v))
 		int i;
 
 		for (i = 0; i < nentries; ++i) {
-			FileDirEntry *file = filelist_file(sfile->files, i);
-			UI_autocomplete_update_name(autocpl, file->relpath);
+			struct direntry *file = filelist_file(sfile->files, i);
+			if (file && (S_ISREG(file->type) || S_ISDIR(file->type))) {
+				UI_autocomplete_update_name(autocpl, file->relname);
+			}
 		}
 		match = UI_autocomplete_end(autocpl, str);
 	}
@@ -743,7 +735,6 @@ void ED_fileselect_clear(struct wmWindowManager *wm, struct SpaceFile *sfile)
 {
 	/* only NULL in rare cases - [#29734] */
 	if (sfile->files) {
-		filelist_readjob_stop(wm, sfile->files);
 		thumbnails_stop(wm, sfile->files);
 		filelist_freelib(sfile->files);
 		filelist_free(sfile->files);
