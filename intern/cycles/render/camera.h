@@ -58,12 +58,6 @@ public:
 	float longitude_min;
 	float longitude_max;
 
-	/* panorama stereo */
-	StereoEye stereo_eye;
-	bool use_spherical_stereo;
-	float interocular_distance;
-	float convergence_distance;
-
 	/* anamorphic lens bokeh */
 	float aperture_ratio;
 
