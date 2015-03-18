@@ -135,6 +135,51 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
         col.prop(cam, "clip_end", text="End")
 
 
+class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
+    bl_label = "Stereoscopy"
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
+
+    @classmethod
+    def poll(cls, context):
+        render = context.scene.render
+        return (super().poll(context) and render.use_multiview)
+
+    def draw(self, context):
+        layout = self.layout
+        render = context.scene.render
+        cam = context.camera
+        engine = context.scene.render.engine
+        is_panorama = cam.type == 'PANO' and engine == 'CYCLES'
+
+        layout.active = render.views_format == 'STEREO_3D'
+
+        if is_panorama:
+            layout.prop(cam.cycles, "use_spherical_stereo")
+
+        col = layout.column()
+
+        st = context.camera.stereo
+        row = col.row(align=True)
+        row.prop(st, "interocular_distance")
+
+        if is_panorama or st.convergence_mode != 'PARALLEL':
+            row.prop(st, "convergence_distance")
+        else:
+            row.prop(st, "viewport_convergence")
+
+        traditional_stereo = not (is_panorama and cam.cycles.use_spherical_stereo)
+
+        row = col.row()
+        row.active = traditional_stereo
+        row.prop(st, "convergence_mode", expand=True)
+
+        col.separator()
+        col.label(text="Pivot:")
+        row = col.row()
+        row.active = traditional_stereo
+        row.prop(st, "pivot", expand=True)
+
+
 class DATA_PT_camera(CameraButtonsPanel, Panel):
     bl_label = "Camera"
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
