@@ -23,7 +23,6 @@
 #include "COM_RenderLayersProg.h"
 
 #include "BLI_listbase.h"
-#include "BKE_scene.h"
 #include "DNA_scene_types.h"
 
 extern "C" {
@@ -58,10 +57,11 @@ void RenderLayersBaseProg::initExecution()
 		if (srl) {
 
 			RenderLayer *rl = RE_GetRenderLayer(rr, srl->name);
-			if (rl) {
-				this->m_inputBuffer = RE_RenderLayerGetPass(rl, this->m_renderpass, this->m_viewName);
+			if (rl && rl->rectf) {
+				this->m_inputBuffer = RE_RenderLayerGetPass(rl, this->m_renderpass);
+
 				if (this->m_inputBuffer == NULL && this->m_renderpass == SCE_PASS_COMBINED) {
-					this->m_inputBuffer = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, this->m_viewName);
+					this->m_inputBuffer = rl->rectf;
 				}
 			}
 		}
@@ -195,7 +195,7 @@ void RenderLayersBaseProg::determineResolution(unsigned int resolution[2], unsig
 		SceneRenderLayer *srl   = (SceneRenderLayer *)BLI_findlink(&sce->r.layers, getLayerId());
 		if (srl) {
 			RenderLayer *rl = RE_GetRenderLayer(rr, srl->name);
-			if (rl) {
+			if (rl && rl->rectf) {
 				resolution[0] = rl->rectx;
 				resolution[1] = rl->recty;
 			}

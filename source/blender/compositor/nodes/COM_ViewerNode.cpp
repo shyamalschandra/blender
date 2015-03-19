@@ -22,9 +22,6 @@
 
 #include "COM_ViewerNode.h"
 #include "BKE_global.h"
-#include "BKE_image.h"
-#include "BLI_listbase.h"
-#include "BKE_scene.h"
 
 #include "COM_ViewerOperation.h"
 #include "COM_ExecutionSystem.h"
@@ -54,8 +51,6 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 	viewerOperation->setCenterY(editorNode->custom4);
 	/* alpha socket gives either 1 or a custom alpha value if "use alpha" is enabled */
 	viewerOperation->setUseAlphaInput(ignore_alpha || alphaSocket->isLinked());
-	viewerOperation->setRenderData(context.getRenderData());
-	viewerOperation->setViewName(context.getViewName());
 
 	viewerOperation->setViewSettings(context.getViewSettings());
 	viewerOperation->setDisplaySettings(context.getDisplaySettings());
@@ -80,8 +75,4 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 
 	if (do_output)
 		converter.registerViewer(viewerOperation);
-
-	if (image && BKE_scene_multiview_is_render_view_first(context.getRenderData(), context.getViewName())) {
-		BKE_image_verify_viewer_views(context.getRenderData(), image, imageUser);
-	}
 }

@@ -57,9 +57,6 @@ struct BlenderCamera {
 	float latitude_max;
 	float longitude_min;
 	float longitude_max;
-	bool use_spherical_stereo;
-	float interocular_distance;
-	float convergence_distance;
 
 	enum { AUTO, HORIZONTAL, VERTICAL } sensor_fit;
 	float sensor_width;
@@ -98,24 +95,7 @@ static void blender_camera_init(BlenderCamera *bcam, BL::RenderSettings b_render
 	bcam->full_height = render_resolution_y(b_render);
 }
 
-static float camera_shift_x(BL::RenderEngine b_engine, BL::Object b_ob, BL::Camera b_camera, bool use_spherical_stereo)
-{
-	if(use_spherical_stereo)
-		return b_camera.shift_x();
-	else
-		return b_engine.camera_shift_x(b_ob);
-}
-
-static void camera_model_matrix(BL::RenderEngine b_engine, BL::Object b_ob, bool use_spherical_stereo,
-                                BL::Array<float, 16> &r_matrix)
-{
-	if(use_spherical_stereo)
-		memcpy(r_matrix, b_ob.matrix_world(), sizeof(float)*16);
-	else
-		b_engine.camera_model_matrix(b_ob, r_matrix);
-}
-
-static float blender_camera_focal_distance(BL::RenderEngine b_engine, BL::Object b_ob, BL::Camera b_camera, bool use_spherical_stereo)
+static float blender_camera_focal_distance(BL::Object b_ob, BL::Camera b_camera)
 {
 	BL::Object b_dof_object = b_camera.dof_object();
 
@@ -123,29 +103,14 @@ static float blender_camera_focal_distance(BL::RenderEngine b_engine, BL::Object
 		return b_camera.dof_distance();
 	
 	/* for dof object, return distance along camera Z direction */
-	BL::Array<float, 16> b_ob_matrix;
-	camera_model_matrix(b_engine, b_ob, use_spherical_stereo, b_ob_matrix);
-	Transform obmat = transform_clear_scale(get_transform(b_ob_matrix));
+	Transform obmat = transform_clear_scale(get_transform(b_ob.matrix_world()));
 	Transform dofmat = get_transform(b_dof_object.matrix_world());
 	Transform mat = transform_inverse(obmat) * dofmat;
 
 	return fabsf(transform_get_column(&mat, 3).z);
 }
 
-static bool blender_camera_use_spherical_stereo(BL::RenderSettings b_render, BlenderCamera *bcam, PointerRNA *ccamera)
-{
-	if(b_render.use_multiview() &&
-	   b_render.views_format() == 0 && /* STEREO_3D */
-	   bcam->type == CAMERA_PANORAMA &&
-	   RNA_boolean_get(ccamera, "use_spherical_stereo"))
-	{
-		return true;
-	}
-	return false;
-}
-
-static void blender_camera_from_object(BlenderCamera *bcam, BL::RenderEngine b_engine, BL::RenderSettings b_render,
-                                       BL::Object b_ob, bool skip_panorama = false)
+static void blender_camera_from_object(BlenderCamera *bcam, BL::Object b_ob, bool skip_panorama = false)
 {
 	BL::ID b_ob_data = b_ob.data();
 
@@ -194,10 +159,6 @@ static void blender_camera_from_object(BlenderCamera *bcam, BL::RenderEngine b_e
 		bcam->longitude_min = RNA_float_get(&ccamera, "longitude_min");
 		bcam->longitude_max = RNA_float_get(&ccamera, "longitude_max");
 
-		bcam->interocular_distance = b_camera.stereo().interocular_distance();
-		bcam->convergence_distance = b_camera.stereo().convergence_distance();
-		bcam->use_spherical_stereo = blender_camera_use_spherical_stereo(b_render, bcam, &ccamera);
-
 		bcam->ortho_scale = b_camera.ortho_scale();
 
 		bcam->lens = b_camera.lens();
@@ -220,10 +181,10 @@ static void blender_camera_from_object(BlenderCamera *bcam, BL::RenderEngine b_e
 
 		bcam->apertureblades = RNA_int_get(&ccamera, "aperture_blades");
 		bcam->aperturerotation = RNA_float_get(&ccamera, "aperture_rotation");
-		bcam->focaldistance = blender_camera_focal_distance(b_engine, b_ob, b_camera, bcam->use_spherical_stereo);
+		bcam->focaldistance = blender_camera_focal_distance(b_ob, b_camera);
 		bcam->aperture_ratio = RNA_float_get(&ccamera, "aperture_ratio");
 
-		bcam->shift.x = camera_shift_x(b_engine, b_ob, b_camera, bcam->use_spherical_stereo);
+		bcam->shift.x = b_camera.shift_x();
 		bcam->shift.y = b_camera.shift_y();
 
 		bcam->sensor_width = b_camera.sensor_width();
@@ -388,11 +349,6 @@ static void blender_camera_sync(Camera *cam, BlenderCamera *bcam, int width, int
 	cam->longitude_min = bcam->longitude_min;
 	cam->longitude_max = bcam->longitude_max;
 
-	/* panorama stereo */
-	cam->use_spherical_stereo = bcam->use_spherical_stereo;
-	cam->interocular_distance = bcam->interocular_distance;
-	cam->convergence_distance = bcam->convergence_distance;
-
 	/* anamorphic lens bokeh */
 	cam->aperture_ratio = bcam->aperture_ratio;
 
@@ -446,38 +402,20 @@ void BlenderSync::sync_camera(BL::RenderSettings b_render, BL::Object b_override
 		b_ob = b_override;
 
 	if(b_ob) {
-		BL::Array<float, 16> b_ob_matrix;
-		blender_camera_from_object(&bcam, b_engine, b_render, b_ob);
-		camera_model_matrix(b_engine, b_ob, bcam.use_spherical_stereo, b_ob_matrix);
-		bcam.matrix = get_transform(b_ob_matrix);
+		blender_camera_from_object(&bcam, b_ob);
+		bcam.matrix = get_transform(b_ob.matrix_world());
 	}
 
 	/* sync */
 	Camera *cam = scene->camera;
 	blender_camera_sync(cam, &bcam, width, height);
-
-	/* multiview panorama */
-	if(cam->use_spherical_stereo) {
-		const char *active_view = b_engine.active_view_get();
-
-		if(strcmp(active_view, "left") == 0)
-			cam->stereo_eye = STEREO_LEFT;
-		else if(strcmp(active_view, "right") == 0)
-			cam->stereo_eye = STEREO_RIGHT;
-		else
-			cam->stereo_eye = STEREO_NONE;
-	}
-
-	/* force update to update the kernel camera */
-	cam->tag_update();
 }
 
 void BlenderSync::sync_camera_motion(BL::Object b_ob, float motion_time)
 {
 	Camera *cam = scene->camera;
-	BL::Array<float, 16> b_ob_matrix;
-	camera_model_matrix(b_engine, b_ob, cam->use_spherical_stereo, b_ob_matrix);
-	Transform tfm = get_transform(b_ob_matrix);
+
+	Transform tfm = get_transform(b_ob.matrix_world());
 	tfm = blender_camera_matrix(tfm, cam->type);
 
 	if(tfm != cam->matrix) {
@@ -495,12 +433,10 @@ void BlenderSync::sync_camera_motion(BL::Object b_ob, float motion_time)
 
 /* Sync 3D View Camera */
 
-static void blender_camera_view_subset(BL::RenderEngine b_engine, BL::RenderSettings b_render, BL::Scene b_scene, BL::Object b_ob, BL::SpaceView3D b_v3d,
+static void blender_camera_view_subset(BL::RenderSettings b_render, BL::Scene b_scene, BL::Object b_ob, BL::SpaceView3D b_v3d,
 	BL::RegionView3D b_rv3d, int width, int height, BoundBox2D *view_box, BoundBox2D *cam_box);
 
-static void blender_camera_from_view(BlenderCamera *bcam, BL::RenderEngine b_engine, BL::RenderSettings b_render,
-                                     BL::Scene b_scene, BL::SpaceView3D b_v3d, BL::RegionView3D b_rv3d,
-                                     int width, int height, bool skip_panorama = false)
+static void blender_camera_from_view(BlenderCamera *bcam, BL::Scene b_scene, BL::SpaceView3D b_v3d, BL::RegionView3D b_rv3d, int width, int height, bool skip_panorama = false)
 {
 	/* 3d view parameters */
 	bcam->nearclip = b_v3d.clip_start();
@@ -513,13 +449,13 @@ static void blender_camera_from_view(BlenderCamera *bcam, BL::RenderEngine b_eng
 		BL::Object b_ob = (b_v3d.lock_camera_and_layers())? b_scene.camera(): b_v3d.camera();
 
 		if(b_ob) {
-			blender_camera_from_object(bcam, b_engine, b_render, b_ob, skip_panorama);
+			blender_camera_from_object(bcam, b_ob, skip_panorama);
 
 			if(!skip_panorama && bcam->type == CAMERA_PANORAMA) {
 				/* in panorama camera view, we map viewplane to camera border */
 				BoundBox2D view_box, cam_box;
 
-				blender_camera_view_subset(b_engine, b_scene.render(), b_scene, b_ob, b_v3d, b_rv3d, width, height,
+				blender_camera_view_subset(b_scene.render(), b_scene, b_ob, b_v3d, b_rv3d, width, height,
 					&view_box, &cam_box);
 
 				bcam->pano_viewplane = view_box.make_relative_to(cam_box);
@@ -557,7 +493,7 @@ static void blender_camera_from_view(BlenderCamera *bcam, BL::RenderEngine b_eng
 	bcam->matrix = transform_inverse(get_transform(b_rv3d.view_matrix()));
 }
 
-static void blender_camera_view_subset(BL::RenderEngine b_engine, BL::RenderSettings b_render, BL::Scene b_scene, BL::Object b_ob, BL::SpaceView3D b_v3d,
+static void blender_camera_view_subset(BL::RenderSettings b_render, BL::Scene b_scene, BL::Object b_ob, BL::SpaceView3D b_v3d,
 	BL::RegionView3D b_rv3d, int width, int height, BoundBox2D *view_box, BoundBox2D *cam_box)
 {
 	BoundBox2D cam, view;
@@ -566,7 +502,7 @@ static void blender_camera_view_subset(BL::RenderEngine b_engine, BL::RenderSett
 	/* get viewport viewplane */
 	BlenderCamera view_bcam;
 	blender_camera_init(&view_bcam, b_render, b_scene);
-	blender_camera_from_view(&view_bcam, b_engine, b_render, b_scene, b_v3d, b_rv3d, width, height, true);
+	blender_camera_from_view(&view_bcam, b_scene, b_v3d, b_rv3d, width, height, true);
 
 	blender_camera_viewplane(&view_bcam, width, height,
 		&view, &view_aspect, &sensor_size);
@@ -574,7 +510,7 @@ static void blender_camera_view_subset(BL::RenderEngine b_engine, BL::RenderSett
 	/* get camera viewplane */
 	BlenderCamera cam_bcam;
 	blender_camera_init(&cam_bcam, b_render, b_scene);
-	blender_camera_from_object(&cam_bcam, b_engine, b_render, b_ob, true);
+	blender_camera_from_object(&cam_bcam, b_ob, true);
 
 	blender_camera_viewplane(&cam_bcam, cam_bcam.full_width, cam_bcam.full_height,
 		&cam, &cam_aspect, &sensor_size);
@@ -584,8 +520,7 @@ static void blender_camera_view_subset(BL::RenderEngine b_engine, BL::RenderSett
 	*cam_box = cam * (1.0f/cam_aspect);
 }
 
-static void blender_camera_border_subset(BL::RenderEngine b_engine,
-                                         BL::RenderSettings b_render,
+static void blender_camera_border_subset(BL::RenderSettings b_render,
                                          BL::Scene b_scene,
                                          BL::SpaceView3D b_v3d,
                                          BL::RegionView3D b_rv3d,
@@ -596,7 +531,7 @@ static void blender_camera_border_subset(BL::RenderEngine b_engine,
 {
 	/* Determine camera viewport subset. */
 	BoundBox2D view_box, cam_box;
-	blender_camera_view_subset(b_engine, b_render, b_scene, b_ob, b_v3d, b_rv3d, width, height,
+	blender_camera_view_subset(b_render, b_scene, b_ob, b_v3d, b_rv3d, width, height,
 	                           &view_box, &cam_box);
 
 	/* Determine viewport subset matching given border. */
@@ -604,7 +539,7 @@ static void blender_camera_border_subset(BL::RenderEngine b_engine,
 	*result = cam_box.subset(border);
 }
 
-static void blender_camera_border(BlenderCamera *bcam, BL::RenderEngine b_engine, BL::RenderSettings b_render, BL::Scene b_scene, BL::SpaceView3D b_v3d,
+static void blender_camera_border(BlenderCamera *bcam, BL::RenderSettings b_render, BL::Scene b_scene, BL::SpaceView3D b_v3d,
 	BL::RegionView3D b_rv3d, int width, int height)
 {
 	bool is_camera_view;
@@ -633,8 +568,7 @@ static void blender_camera_border(BlenderCamera *bcam, BL::RenderEngine b_engine
 
 	/* Determine camera border inside the viewport. */
 	BoundBox2D full_border;
-	blender_camera_border_subset(b_engine,
-	                             b_render,
+	blender_camera_border_subset(b_render,
 	                             b_scene,
 	                             b_v3d,
 	                             b_rv3d,
@@ -653,8 +587,7 @@ static void blender_camera_border(BlenderCamera *bcam, BL::RenderEngine b_engine
 	bcam->border.top = b_render.border_max_y();
 
 	/* Determine viewport subset matching camera border. */
-	blender_camera_border_subset(b_engine,
-	                             b_render,
+	blender_camera_border_subset(b_render,
 	                             b_scene,
 	                             b_v3d,
 	                             b_rv3d,
@@ -669,8 +602,8 @@ void BlenderSync::sync_view(BL::SpaceView3D b_v3d, BL::RegionView3D b_rv3d, int 
 {
 	BlenderCamera bcam;
 	blender_camera_init(&bcam, b_scene.render(), b_scene);
-	blender_camera_from_view(&bcam, b_engine, b_scene.render(), b_scene, b_v3d, b_rv3d, width, height);
-	blender_camera_border(&bcam, b_engine, b_scene.render(), b_scene, b_v3d, b_rv3d, width, height);
+	blender_camera_from_view(&bcam, b_scene, b_v3d, b_rv3d, width, height);
+	blender_camera_border(&bcam, b_scene.render(), b_scene, b_v3d, b_rv3d, width, height);
 
 	blender_camera_sync(scene->camera, &bcam, width, height);
 }
